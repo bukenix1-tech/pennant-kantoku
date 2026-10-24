@@ -1,0 +1,276 @@
+'use strict';
+
+// ボタンや選択の操作を受けて、状態を変えて描き直す
+
+const ACTIONS = {
+  pickTeam(el) { UI.newTeam = +el.dataset.i; },
+  newGame() {
+    const n = UI.newSlot, m = slotMeta(n);
+    if (m && !confirm(`スロット${n}の「${m.team} ${m.year}年」のデータを消して、新しく始めます。
+本当によろしいですか？（元に戻せません）`)) return 'keep';
+    newGame(UI.newTeam, UI.newGames);
+    currentSlot = n;
+    UI.newSlot = null;
+    UI.tab = 'home';
+  },
+  continue(el) {
+    if (!loadGame(+el.dataset.n)) UI.toast = 'セーブデータを読めませんでした。';
+    UI.tab = 'home';
+  },
+  slotNew(el) { UI.newSlot = +el.dataset.n; },
+  slotBack() { UI.newSlot = null; },
+  slotDelete(el) {
+    const n = +el.dataset.n, m = slotMeta(n);
+    if (!m || !confirm(`スロット${n}の「${m.team} ${m.year}年」のデータを消します。
+本当によろしいですか？（元に戻せません）`)) return 'keep';
+    deleteSlot(n);
+    UI.toast = `スロット${n}を消しました。`;
+  },
+  copySlot(el) {
+    const n = +el.dataset.n, m = slotMeta(n);
+    if (m && !confirm(`スロット${n}の「${m.team} ${m.year}年」のデータに上書きして、いまのデータをコピーします。よろしいですか？`)) return 'keep';
+    UI.toast = copyToSlot(n) ? `スロット${n}にコピーしました。` : '保存できませんでした（ブラウザの保存容量がいっぱいかもしれません）。';
+    closeModal();
+  },
+  tab(el) { UI.tab = el.dataset.tab; if (UI.tab === 'team') UI.viewTeam = null; },
+  adv(el) {
+    const n = el.dataset.n;
+    const before = S.phase;
+    if (n === 'game') {
+      const k = S.myGames.length;
+      while (S.phase === 'season' && S.myGames.length === k) if (!advanceDay()) break;
+    } else if (n === 'week') {
+      for (let i = 0; i < 7; i++) if (!advanceDay()) break;
+    } else if (n === 'all') {
+      while (advanceDay());
+    } else if (n === 'post1') {
+      advancePost();
+    } else if (n === 'postall') {
+      while (advancePost());
+    }
+    if (before !== S.phase) { UI.tab = S.phase === 'post' ? 'post' : S.phase === 'off' ? 'off' : 'home'; window.scrollTo(0, 0); }
+  },
+  lg(el) { UI.lg = el.dataset.lg; },
+  closeModal() { closeModal(); },
+  player(el) { openModal(renderPlayerModal(S.players[+el.dataset.pid])); return 'keep'; },
+  release(el) {
+    const p = S.players[+el.dataset.pid];
+    if (!confirm(`${p.name}を自由契約にしますか？（元に戻せません）`)) return 'keep';
+    const err = releasePlayer(p.id);
+    if (err) UI.toast = err; else closeModal();
+  },
+  promote(el) {
+    const t = myTeam(), p = S.players[+el.dataset.pid];
+    const why = cannotPromote(t, p);
+    if (why) { UI.toast = why; return; }
+    promote(t, p);
+    addNews(`${p.name}を一軍に登録しました。`);
+    if (!document.getElementById('modal').classList.contains('hidden')) openModal(renderPlayerModal(p));
+  },
+  demote(el) {
+    const t = myTeam(), p = S.players[+el.dataset.pid];
+    demote(t, p);
+    ensureLineup(S, t);
+    addNews(`${p.name}の登録を抹消しました。`);
+    if (!document.getElementById('modal').classList.contains('hidden')) openModal(renderPlayerModal(p));
+  },
+  tryTwoWay(el) {
+    const p = S.players[+el.dataset.pid];
+    if (ovr(p) < TWO_WAY_MIN_OVR) { UI.toast = `二刀流に挑戦できるのは総合${TWO_WAY_MIN_OVR}以上の選手です。`; return; }
+    if (!confirm(`${p.name}に二刀流を挑戦させますか？`)) return 'keep';
+    makeTwoWay(p, U.rnd(35, 45)); // 力のある選手なので、もう片方もそこそこから始まる
+    refreshRoles(myTeam());
+    addNews(`${p.name}が二刀流に挑戦！`, 'good');
+    openModal(renderPlayerModal(p));
+  },
+  dropTwoWay(el) {
+    const p = S.players[+el.dataset.pid];
+    if (!confirm(`${p.name}の二刀流をやめさせますか？（${p.isP ? '打撃' : '投球'}の能力はなくなります）`)) return 'keep';
+    dropTwoWay(p);
+    const t = myTeam();
+    ensureLineup(S, t); refreshRoles(t);
+    openModal(renderPlayerModal(p));
+  },
+  autoActive() {
+    const t = myTeam();
+    autoActive(t); autoLineup(t); autoRotation(t);
+    UI.toast = '一軍をおまかせで組みました。';
+  },
+  autoOrder() {
+    const t = myTeam();
+    autoLineup(t); autoRotation(t);
+    UI.toast = 'おまかせでオーダーを組みました。';
+  },
+  lmove(el) {
+    const t = myTeam(), i = +el.dataset.i, j = i + +el.dataset.d;
+    if (j < 0 || j >= t.lineup.length) return;
+    [t.lineup[i], t.lineup[j]] = [t.lineup[j], t.lineup[i]];
+  },
+  intensity(el) { myTeam().intensity = el.dataset.k; },
+  upgrade(el) { upgradeFacility(el.dataset.k); },
+  devGoods() { const err = developGoods(UI.goodsType, UI.goodsPid); UI.toast = err || '開発を始めました！'; },
+  stopGoods(el) {
+    if (!confirm('このグッズの販売を終了しますか？')) return 'keep';
+    stopGoods(+el.dataset.id);
+  },
+  scoutForeign() {
+    if (myTeam().money < FOREIGN_SCOUT_COST) { UI.toast = 'お金が足りません。'; return; }
+    scoutForeign();
+  },
+  signFA(el) { const err = signFreeAgentMine(+el.dataset.pid); UI.toast = err || '契約しました！'; },
+  signForeign(el) { const err = signForeign(+el.dataset.pid); UI.toast = err || '契約しました！'; },
+  propose() {
+    const T = UI.trade;
+    const r = proposeTrade(T.team, T.give, T.get);
+    UI.toast = r.msg;
+    if (r.ok) { T.give = []; T.get = []; }
+  },
+  offNext() {
+    const step = S.off.step;
+    if (step === 'awards') offFAStart();
+    else if (step === 'fa') offContract();
+    else if (step === 'contract') offDraftStart();
+    else if (step === 'draft') offCampStart();
+    else if (step === 'camp') {
+      if (myTeam().players.length > ROSTER_MAX) return;
+      offNewSeason();
+      UI.tab = 'home';
+    }
+    window.scrollTo(0, 0);
+  },
+  draftPick(el) { draftMyPick(+el.dataset.pid); },
+  draftBid(el) {
+    const p = S.players[+el.dataset.pid];
+    if (!confirm(`${p.name}を1位で入札しますか？`)) return 'keep';
+    const logs = draftMyBid(p.id);
+    saveGame();
+    render();
+    openModal(renderLotteryPopup(logs));
+    return 'keep';
+  },
+  draftPass() {
+    if (!confirm('選択終了しますか？ このあとのドラフトでは指名できません。')) return 'keep';
+    draftPass();
+  },
+  faDeclare() { offFADeclare(); window.scrollTo(0, 0); },
+  faResolve() {
+    if (!confirm('交渉を締め切って、FA の結果を発表します。よろしいですか？')) return 'keep';
+    offFAResolve(); window.scrollTo(0, 0);
+  },
+  faBid(el) {
+    const pid = +el.dataset.pid, d = UI.faDraft[pid] || {};
+    const p = S.players[pid];
+    const err = setMyBid(pid, d.mul || 1, d.years || (p.age <= 30 ? 3 : 1));
+    UI.toast = err || '条件を出しました。';
+  },
+  faBidCancel(el) { setMyBid(+el.dataset.pid, null); },
+  watch(el) { toggleWatch(+el.dataset.pid); },
+  posf(el) { UI.posf[el.dataset.key] = el.dataset.g; },
+  menu() { openModal(renderMenu()); return 'keep'; },
+  saveNow() { closeModal(); UI.toast = saveGame() ? `スロット${currentSlot}に保存しました。` : '保存できませんでした。'; },
+  toTitle() { saveGame(); closeModal(); S = null; currentSlot = null; },
+  reset() {
+    if (!confirm(`スロット${currentSlot}のデータを消して、タイトルに戻ります。
+本当によろしいですか？（元に戻せません）`)) return 'keep';
+    deleteSlot(currentSlot); closeModal(); S = null; currentSlot = null;
+  },
+};
+
+const CHANGES = {
+  games(el) { UI.newGames = +el.value; },
+  watchOnly(el) { UI.watchOnly = el.checked; },
+  geniusOnly(el) { UI.geniusOnly = el.checked; },
+  histYear(el) { UI.histYear = +el.value; },
+  retain(el) { setRetain(+el.dataset.pid, +el.value); },
+  faMul(el) { const pid = +el.dataset.pid; UI.faDraft[pid] = { ...(UI.faDraft[pid] || { years: 3 }), mul: +el.value }; return 'keep'; },
+  faYears(el) { const pid = +el.dataset.pid; UI.faDraft[pid] = { ...(UI.faDraft[pid] || { mul: 1 }), years: +el.value }; return 'keep'; },
+  viewTeam(el) { UI.viewTeam = +el.value; },
+  focus(el) { S.players[+el.dataset.pid].focus = el.value; return 'keep'; },
+  lpos(el) {
+    const t = myTeam(), i = +el.dataset.i, pos = el.value;
+    const j = t.lineup.findIndex((s, k) => k !== i && s.pos === pos);
+    if (j >= 0) t.lineup[j].pos = t.lineup[i].pos;
+    t.lineup[i].pos = pos;
+  },
+  lplayer(el) {
+    const t = myTeam(), i = +el.dataset.i, pid = +el.value;
+    const j = t.lineup.findIndex((s, k) => k !== i && s.pid === pid);
+    if (j >= 0) t.lineup[j].pid = t.lineup[i].pid;
+    t.lineup[i].pid = pid;
+  },
+  rot(el) {
+    const t = myTeam(), i = +el.dataset.i, pid = +el.value;
+    const j = t.rotation.indexOf(pid);
+    if (j >= 0) t.rotation[j] = t.rotation[i];
+    t.rotation[i] = pid;
+    if (t.closer === pid) t.closer = null;
+    if (t.setup === pid) t.setup = null;
+    refreshRoles(t);
+  },
+  closer(el) {
+    const t = myTeam();
+    t.closer = el.value === '' ? null : +el.value;
+    if (t.setup === t.closer) t.setup = null;
+    refreshRoles(t);
+  },
+  setup(el) {
+    const t = myTeam();
+    t.setup = el.value === '' ? null : +el.value;
+    if (t.closer === t.setup) t.closer = null;
+    refreshRoles(t);
+  },
+  goodsType(el) { UI.goodsType = el.value; },
+  goodsPid(el) { UI.goodsPid = +el.value; },
+  tteam(el) { UI.trade = { team: +el.value, give: [], get: [] }; },
+  tsel(el) {
+    const arr = UI.trade[el.dataset.side], pid = +el.dataset.pid;
+    const k = arr.indexOf(pid);
+    if (el.checked && k < 0) arr.push(pid);
+    if (!el.checked && k >= 0) arr.splice(k, 1);
+  },
+};
+
+document.addEventListener('click', e => {
+  if (e.target.id === 'modal' || e.target.closest('.modal-close')) { closeModal(); render(); return; }
+  const el = e.target.closest('[data-act]');
+  if (!el || el.disabled) return;
+  e.preventDefault();
+  const fn = ACTIONS[el.dataset.act];
+  if (!fn) return;
+  const r = fn(el, e);
+  if (S && !saveGame()) UI.toast = '保存できませんでした（ブラウザの保存容量がいっぱいかもしれません）。';
+  if (r !== 'keep') render();
+  showPopups();
+});
+
+// 覚醒などの知らせを大きく出す
+function showPopups() {
+  if (!S || !S.popups || !S.popups.length) return;
+  openModal(renderAwaken(S.popups));
+  S.popups = [];
+  saveGame();
+}
+
+document.addEventListener('change', e => {
+  const el = e.target.closest('[data-chg]');
+  if (!el) return;
+  const fn = CHANGES[el.dataset.chg];
+  if (!fn) return;
+  const r = fn(el, e);
+  if (S) saveGame();
+  if (r !== 'keep') render();
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeModal(); render(); }
+});
+
+migrateOldSave();
+render();
+// スマホとパソコンの幅をまたいだら描き直す（画面を回したときなど）
+window.matchMedia('(max-width: 700px)').addEventListener('change', () => render());
+
+// ネットに置いたとき（https）は、一度開けば電波がなくても遊べるようにする。ファイルを直接開いたときは何もしない
+if ('serviceWorker' in navigator && window.isSecureContext && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').catch(e => console.warn('オフライン用の準備ができませんでした', e));
+}
