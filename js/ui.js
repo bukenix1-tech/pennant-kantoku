@@ -4,7 +4,7 @@
 
 const UI = {
   tab: 'home', viewTeam: null, trade: { team: null, give: [], get: [] }, toast: '',
-  sortKey: null, newTeam: 0, newGames: 143, lg: null, newSlot: null, watchOnly: false, pkind: '', faDraft: {}, histYear: null, posf: { team: '', draft: '', fa: '' }, geniusOnly: false, goodsType: 'towel', goodsPid: null,
+  sortKey: null, newTeam: 0, newGames: 143, lg: null, newSlot: null, watchOnly: false, pkind: '', faDraft: {}, histYear: null, posf: { team: '', draft: '', fa: '' }, geniusOnly: false, teamView: 'list', statSort: { bat: 'avg', pit: 'era' }, goodsType: 'towel', goodsPid: null,
 };
 
 const TABS = [
@@ -289,14 +289,63 @@ function renderTeam() {
   <section class="card">
     <div class="row"><h2>${teamChip(t)} ${h(t.name)}</h2>${sel}</div>
     <p class="muted">支配下 ${ps.length}人（上限${ROSTER_MAX}）・ 一軍 ${t.active.length}人 ・ 年俸総額 ${U.money(payroll(t))} ・ 名前を押すと詳しく見られます</p>
+    <div class="seg">${[['list', '選手一覧'], ['stats', '今季の成績']].map(([k, n]) => `<button class="${UI.teamView === k ? 'on' : ''}" data-act="teamView" data-k="${k}">${n}</button>`).join('')}</div>
     ${posFilter('team')}
-    ${showBat ? `<h3>野手${g ? `（${g}）` : ''}</h3>${batTable(bats.filter(p => posMatch(p, g)))}` : ''}
-    ${showPit ? `<h3>投手${g ? `（${g}）` : ''}</h3>${pitTable(pits.filter(p => posMatch(p, g)))}` : ''}
+    ${UI.teamView === 'stats' ? teamStats(t, g, showBat, showPit) : `${showBat ? `<h3>野手${g ? `（${g}）` : ''}</h3>${batTable(bats.filter(p => posMatch(p, g)))}` : ''}
+    ${showPit ? `<h3>投手${g ? `（${g}）` : ''}</h3>${pitTable(pits.filter(p => posMatch(p, g)))}` : ''}`}
   </section>
   ${t.id === S.myTeamId ? `<section class="card genius-box"><h2>✨ 天才</h2>
     ${geniuses.length ? `<p>${geniuses.map(p => `${nameCell(p)}（${posBadge(p)}・${p.age}歳・総合${Math.round(ovr(p))}）`).join('　')}</p>`
       : '<p class="muted">いまはいません。天才は伸びが段ちがいの選手で、自分のチームで 1 年過ごすと分かります。</p>'}
   </section>` : ''}`;
+}
+
+// ---------- 今季の成績（チームの選手の一覧） ----------
+const r3 = v => (isFinite(v) ? v.toFixed(3).replace(/^0/, '') : '-');
+const BAT_COLS = [
+  ['g', '試合', s => s.g], ['pa', '打席', s => s.pa], ['ab', '打数', s => s.ab], ['h', '安打', s => s.h],
+  ['d', '二塁打', s => s.d], ['t', '三塁打', s => s.t], ['hr', '本塁打', s => s.hr], ['rbi', '打点', s => s.rbi],
+  ['r', '得点', s => s.r], ['sb', '盗塁', s => s.sb], ['bb', '四球', s => s.bb], ['k', '三振', s => s.k],
+  ['avg', '打率', s => (s.ab ? s.h / s.ab : -1), r3], ['obp', '出塁率', s => (s.pa ? (s.h + s.bb) / s.pa : -1), r3],
+  ['slg', '長打率', s => (s.ab ? (s.h + s.d + s.t * 2 + s.hr * 3) / s.ab : -1), r3], ['ops', 'OPS', s => (s.pa ? ops(s) : -1), r3],
+];
+const PIT_COLS = [
+  ['pg', '登板', s => s.pg], ['gs', '先発', s => s.gs], ['w', '勝', s => s.w], ['l', '敗', s => s.l], ['sv', 'S', s => s.sv],
+  ['ip', '投球回', s => s.outs, v => U.ip(v)], ['ph', '被安打', s => s.ph], ['phr', '被本塁打', s => s.phr], ['pbb', '四球', s => s.pbb],
+  ['pk', '奪三振', s => s.pk], ['per', '失点', s => s.per],
+  ['era', '防御率', s => (s.outs ? s.per * 27 / s.outs : 99), v => (v >= 99 ? '-.--' : v.toFixed(2))],
+  ['whip', 'WHIP', s => (s.outs ? (s.ph + s.pbb) * 3 / s.outs : 99), v => (v >= 99 ? '-' : v.toFixed(2))],
+  ['k9', '奪三振率', s => (s.outs ? s.pk * 27 / s.outs : -1), v => (v < 0 ? '-' : v.toFixed(2))],
+];
+// 小さいほうが良い数字は、小さい順に並べる
+const LOW_IS_GOOD = new Set(['era', 'whip', 'per', 'ph', 'phr', 'pbb', 'l', 'k']);
+
+function statTable(kind, list, gp) {
+  const cols = kind === 'bat' ? BAT_COLS : PIT_COLS;
+  const key = UI.statSort[kind];
+  const col = cols.find(c => c[0] === key) || cols[0];
+  const qual = p => (kind === 'bat' ? p.stats.pa >= gp * 3.1 : p.stats.outs >= gp * 3);
+  // 率の並べ替えは、規定に届いた選手を先に
+  const isRate = ['avg', 'obp', 'slg', 'ops', 'era', 'whip', 'k9'].includes(key);
+  const rows = list.slice().sort((a, b) => (isRate ? qual(b) - qual(a) : 0)
+    || (LOW_IS_GOOD.has(key) ? col[2](a.stats) - col[2](b.stats) : col[2](b.stats) - col[2](a.stats)));
+  const fmt = c => c[3] || (v => v);
+  return `<div class="scroll"><table class="tbl stats"><tr><th>名前</th><th>守</th>${cols.map(c => `<th><a href="#" class="sorth ${c[0] === key ? 'on' : ''}" data-act="statSort" data-kind="${kind}" data-k="${c[0]}">${c[1]}${c[0] === key ? (LOW_IS_GOOD.has(key) ? '▲' : '▼') : ''}</a></th>`).join('')}</tr>
+    ${rows.map(p => `<tr class="${qual(p) ? 'qual' : ''}"><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td>${cols.map(c => `<td class="${c[0] === key ? 'sortcol' : ''}">${fmt(c)(c[2](p.stats))}</td>`).join('')}</tr>`).join('')}
+  </table></div>`;
+}
+
+function teamStats(t, g, showBat, showPit) {
+  const gp = Math.max(1, gamesPlayed(t));
+  const ps = teamPlayers(t).filter(p => posMatch(p, g));
+  const bats = ps.filter(p => canBat(p) && p.stats.pa > 0);
+  const pits = ps.filter(p => canPitch(p) && p.stats.pg > 0);
+  const S0 = list => list.reduce((a, p) => { Object.keys(p.stats).forEach(k => { a[k] = (a[k] || 0) + p.stats[k]; }); return a; }, {});
+  const tb = S0(bats), tp = S0(pits);
+  return `
+    <p class="muted">見出しを押すと並べ替えます。色のついた行は規定（打席 ${Math.ceil(gp * 3.1)}・投球回 ${gp}）に届いている選手です。今季まだ出ていない選手は出していません。</p>
+    ${showBat ? `<h3>打撃（${bats.length}人）　チーム打率 ${U.avg(tb.h || 0, tb.ab || 0)}・${tb.hr || 0}本塁打・${tb.sb || 0}盗塁</h3>${bats.length ? statTable('bat', bats, gp) : '<p class="muted">まだいません</p>'}` : ''}
+    ${showPit ? `<h3>投球（${pits.length}人）　チーム防御率 ${U.era(tp.per || 0, tp.outs || 0)}・${tp.pk || 0}奪三振</h3>${pits.length ? statTable('pit', pits, gp) : '<p class="muted">まだいません</p>'}` : ''}`;
 }
 
 function batTable(list) {
@@ -756,6 +805,7 @@ function renderFA() {
     <p class="muted">他球団から戦力外になった選手や、独立リーグの選手です。希望年俸は安めですが、2 年続けて決まらないと引退します。
       他球団も人数が足りないとここから選手を取ります。</p>
     ${posCounts()}
+    ${needsCard('fa')}
     ${posFilter('fa')}
     ${list.length ? `${list.some(p => !p.isP) ? `<h3>野手</h3>${block(list.filter(p => !p.isP))}` : ''}
       ${list.some(p => p.isP) ? `<h3>投手</h3>${block(list.filter(p => p.isP))}` : ''}` : '<p class="muted">該当する選手はいません。</p>'}
@@ -860,6 +910,43 @@ function scoutNote() {
     スカウトの段階を上げるほどずれが小さくなり、Lv5 ではほぼ正確です（Lv1 ±15 → Lv2 ±10 → Lv3 ±6 → Lv4 ±3 → Lv5 ±1）。成績とタイトルは事実なので、見立てと見比べてください。`;
 }
 
+// ---------- 補強のおすすめ（ドラフト・自由契約） ----------
+// ポジションごとに「人数・主力の力（リーグ平均とくらべて）・主力の年齢・若手の数」を見て点をつける
+const NEED_TARGET = { 先発: 12, 中継ぎ: 16, 捕: 4, 一: 3, 二: 4, 三: 4, 遊: 4, 外: 10 }; // 70 人のときの目安の人数
+function posValue(p, g) { return g === '先発' ? starterVal(p) : g === '中継ぎ' ? relVal(p) : batOvr(p); }
+
+function draftNeeds() {
+  const my = myTeam();
+  const top = (t, g, n) => teamPlayers(t).filter(p => posMatch(p, g)).sort((a, b) => posValue(b, g) - posValue(a, g)).slice(0, n);
+  return POS_GROUPS.map(g => {
+    const all = teamPlayers(my).filter(p => posMatch(p, g));
+    const n = g === '先発' ? 6 : g === '中継ぎ' ? 6 : g === '外' ? 3 : 1;   // 主力として見る人数
+    const mine = top(my, g, n);
+    const avg = list => (list.length ? U.sum(list, p => posValue(p, g)) / list.length : 0);
+    const myLevel = avg(mine);
+    const league = U.sum(S.teams, t => avg(top(t, g, n))) / S.teams.length;
+    const old = mine.filter(p => p.age >= 32).length;
+    const young = all.filter(p => p.age <= 23).length;
+    const short = Math.max(0, NEED_TARGET[g] - all.length);
+    const reasons = [];
+    let score = 0;
+    if (short > 0) { score += short * 2; reasons.push(`人数が少ない（${all.length}人・目安${NEED_TARGET[g]}人）`); }
+    if (myLevel < league - 2) { score += (league - myLevel) / 2; reasons.push(`主力の力がリーグ平均より下（${Math.round(myLevel)}・平均${Math.round(league)}）`); }
+    if (old > 0 && old >= Math.ceil(n / 2)) { score += old * 1.5; reasons.push(`主力の${old}人が32歳以上`); }
+    if (young === 0) { score += 2; reasons.push('23歳以下の若手がいない'); } else if (young === 1) { score += 1; reasons.push('23歳以下の若手が1人だけ'); }
+    return { g, score, reasons, count: all.length };
+  }).sort((a, b) => b.score - a.score);
+}
+
+function needsCard(filterKey) {
+  const needs = draftNeeds().filter(x => x.score > 0).slice(0, 3);
+  if (!needs.length) return '<div class="needs"><b>📋 補強のおすすめ</b>：どのポジションもそろっています。いちばん力のある選手を取りましょう。</div>';
+  return `<div class="needs"><b>📋 補強のおすすめ</b>（スカウト部長より）
+    <ol>${needs.map(x => `<li><a href="#" data-act="posf" data-key="${filterKey}" data-g="${x.g}"><span class="pb pb-${x.g === '先発' || x.g === '中継ぎ' ? '投' : x.g}">${x.g}</span></a>
+      ${x.reasons.map(h).join('・')}</li>`).join('')}</ol>
+    <p class="muted small">ポジションの印を押すと、その候補だけに絞り込めます。</p></div>`;
+}
+
 function renderProspects() {
   if (S.phase === 'off' && S.off.step !== 'awards' && S.off.step !== 'contract') {
     return `<section class="card"><h2>ドラフト候補</h2><p>${S.off.step === 'draft' ? 'ドラフト会議中です。「オフシーズン」の画面で指名してください。' : '今年のドラフトは終わりました。次の候補は開幕のときに発表されます。'}</p></section>`;
@@ -869,6 +956,7 @@ function renderProspects() {
   <section class="card"><h2>${S.year}年 ドラフト候補</h2>
     <p>シーズンのあとのドラフト会議に出てくる選手です。☆を押すと「気になる選手」に入り、ドラフトで上に並びます。他球団に先に指名されるとニュースで知らせます。</p>
     <p class="muted">${scoutNote()}</p>
+    ${needsCard('draft')}
     ${prospectTable(ids, false)}
   </section>`;
 }
@@ -902,7 +990,7 @@ function renderDraft() {
     <section class="card"><h2>1 巡目の結果</h2>${lotteryHtml || '<p class="muted">これから入札です</p>'}
       ${res ? `<h3>2 巡目から</h3><ul class="news">${res}</ul>` : ''}</section>
   </div>
-  ${done ? renderReleasePanel() : `<section class="card"><h2>候補選手</h2><p class="muted">${scoutNote()}</p>${prospectTable(D.pool, D.stage === 'r1' ? 'bid' : 'pick')}</section>`}`;
+  ${done ? renderReleasePanel() : `<section class="card"><h2>候補選手</h2><p class="muted">${scoutNote()}</p>${needsCard('draft')}${prospectTable(D.pool, D.stage === 'r1' ? 'bid' : 'pick')}</section>`}`;
 }
 
 // 1 巡目の入札と抽選の結果

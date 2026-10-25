@@ -166,6 +166,8 @@ const ACTIONS = {
   faBidCancel(el) { setMyBid(+el.dataset.pid, null); },
   watch(el) { toggleWatch(+el.dataset.pid); },
   posf(el) { UI.posf[el.dataset.key] = el.dataset.g; },
+  teamView(el) { UI.teamView = el.dataset.k; },
+  statSort(el) { UI.statSort[el.dataset.kind] = el.dataset.k; },
   menu() { openModal(renderMenu()); return 'keep'; },
   saveNow() { closeModal(); UI.toast = saveGame() ? `スロット${currentSlot}に保存しました。` : '保存できませんでした。'; },
   toTitle() { saveGame(); closeModal(); S = null; currentSlot = null; },
