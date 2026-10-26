@@ -34,11 +34,27 @@ function statLine(p) {
 function playerCard(p, o = {}) {
   return `<div class="pcard ${o.cls || ''}">
     <div class="pc-top">${o.lead || ''}<div class="pc-name">${o.name || nameCell(p)}</div><div class="pc-ovr"><small>総合</small>${o.ovr != null ? o.ovr : Math.round(ovr(p))}</div></div>
-    <div class="pc-sub">${posBadge(p)}<span>${p.age}歳</span>${o.noCond ? '' : condCell(p)}${o.sub || ''}</div>
+    <div class="pc-sub">${posBadge(p)}<span>${p.age}歳</span>${o.view ? '' : phaseMark(p)}${o.noCond ? '' : condCell(p)}${o.sub || ''}</div>
     <div class="pc-abil">${abilSum(p, o.view)}</div>
     ${o.lines || ''}
     ${o.action ? `<div class="pc-act">${o.action}</div>` : ''}
   </div>`;
+}
+
+// 成長の時期の印（成長期・ピーク・衰退期）
+function phaseMark(p) {
+  const g = growthPhase(p);
+  return `<span class="phase ph-${g.k}" title="${g.name}">${g.short}</span>`;
+}
+
+// 18〜40 歳の帯に、成長期・ピーク・衰退期と、いまの歳を描く
+function growthBar(p) {
+  const g = growthSpan(p), A0 = 18, A1 = 40;
+  const pc = a => ((U.clamp(a, A0, A1 + 1) - A0) / (A1 + 1 - A0)) * 100;
+  const seg = (from, to, k, name) => (to < from ? '' : `<span class="gb-seg ph-${k}" style="left:${pc(from)}%;width:${pc(to + 1) - pc(from)}%">${name}</span>`);
+  return `<div class="gbar">${seg(A0, g.growEnd, 'grow', '成長期')}${seg(g.peakFrom, g.peakTo, 'peak', 'ピーク')}${seg(g.declineFrom, A1, 'decline', '衰退期')}
+    <span class="gb-now" style="left:${pc(p.age + 0.5)}%"><b>${p.age}歳</b></span></div>
+    <div class="gb-ages"><span>${A0}</span><span>${A1}歳</span></div>`;
 }
 
 function cardList(list, fn) { return `<div class="pcards">${list.map(fn).join('') || '<p class="muted">いません</p>'}</div>`; }
@@ -384,7 +400,7 @@ function batTable(list) {
   <th>試合</th><th>打率</th><th>本</th><th>点</th><th>盗</th><th>OPS</th><th>年俸</th></tr>
   ${list.map(p => {
     const s = p.stats;
-    return `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td>${p.age}</td><td>${condCell(p)}</td>
+    return `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${condCell(p)}</td>
     ${BAT_KEYS.map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}<td>${Math.round(ovr(p))}</td><td>${Math.round(p.fame)}</td>
     <td>${s.g}</td><td>${U.avg(s.h, s.ab)}</td><td>${s.hr}</td><td>${s.rbi}</td><td>${s.sb}</td><td>${s.pa ? ops(s).toFixed(3) : '-'}</td><td>${U.money(p.salary)}</td></tr>`;
   }).join('')}</table></div>`;
@@ -397,10 +413,19 @@ function pitTable(list) {
   <th>登板</th><th>勝</th><th>敗</th><th>S</th><th>防御率</th><th>回</th><th>三振</th><th>年俸</th></tr>
   ${list.map(p => {
     const s = p.stats;
-    return `<tr><td class="l">${nameCell(p)}</td><td class="nowrap">${p.role || '-'} ${aptBadge(p)}</td><td>${p.age}</td><td>${condCell(p)}</td>
+    return `<tr><td class="l">${nameCell(p)}</td><td class="nowrap">${p.role || '-'} ${aptBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${condCell(p)}</td>
     <td class="num">${veloKmh(p.a.velo)}km</td>${PIT_KEYS.slice(1).map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}<td>${Math.round(ovr(p))}</td><td>${Math.round(p.fame)}</td>
     <td>${s.pg}</td><td>${s.w}</td><td>${s.l}</td><td>${s.sv}</td><td>${U.era(s.per, s.outs)}</td><td>${U.ip(s.outs)}</td><td>${s.pk}</td><td>${U.money(p.salary)}</td></tr>`;
   }).join('')}</table></div>`;
+}
+
+function growthBox(p) {
+  const g = growthSpan(p), ph = growthPhase(p);
+  const now = ph.k === 'grow' ? `あと${ph.left + 1}年はよく伸びます。`
+    : ph.k === 'peak' ? (ph.left > 0 ? `あと${ph.left}年はピークが続き、${g.declineFrom}歳から衰え始めます。` : `来年（${g.declineFrom}歳）から衰え始めます。`)
+      : `毎年オフに能力が少しずつ下がります（年を取るほど大きく）。`;
+  return `<div class="growth"><p><b>${p.type}型</b> ・ 成長期 〜${g.growEnd}歳 ・ ピーク ${g.peakFrom}〜${g.peakTo}歳 ・ 衰退期 ${g.declineFrom}歳〜
+    ・ いま <span class="phase ph-${ph.k}">${ph.name}</span> ${now}</p>${growthBar(p)}</div>`;
 }
 
 function renderPlayerModal(p) {
@@ -426,6 +451,7 @@ function renderPlayerModal(p) {
   <h2>${h(p.name)} ${p.foreign ? '<span class="tag">外国人</span>' : ''}</h2>
   <p>${team ? teamChip(team) : ''} ${p.twoWay ? `二刀流（投手：${p.role || '-'}・野手：${p.isP ? p.pos2 : p.pos}）` : p.isP ? `投手（${p.role}）` : `野手（${p.pos}）`} ${posBadge(p)} ・ ${p.age}歳 ・ ${p.type}型 ・ 才能 <span class="stars">${potStars(p.pot)}</span>
    ・ 調子 ${condCell(p)} ${COND_LABEL[p.cond]} ・ 年俸 ${U.money(p.salary)} ${p.inj ? `<span class="tag bad">故障 残り${p.inj}日</span>` : ''}${p.awakened ? `<span class="tag awaken-tag">覚醒×${p.awakened}</span>` : ''}${p.bigAwakened ? `<span class="tag awaken-tag big">大覚醒×${p.bigAwakened}</span>` : ''}</p>
+  ${growthBox(p)}
   <div class="bars">${bars}</div>
   <p>総合 <b>${Math.round(ovr(p))}</b>　トレード価値 ${tradeValue(p).toLocaleString()}</p>
   <p>出身 ${p.home ? h(p.home) : '海外'}${team && isHomeTeam(p, team) ? ' <span class="tag">地元</span>' : ''}
@@ -466,7 +492,7 @@ function benchTable(list) {
   if (isMobile()) return cardList(list, p => playerCard(p, { sub: `<span class="muted">打率${U.avg(p.stats.h, p.stats.ab)} ${p.stats.hr}本</span>` }));
   if (!list.length) return '<p class="muted">なし</p>';
   return `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>調</th>${BAT_KEYS.map(k => `<th>${BAT_LABEL[k]}</th>`).join('')}<th>総合</th><th>打率</th><th>本</th></tr>
-    ${list.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td>${p.age}</td><td>${condCell(p)}</td>${BAT_KEYS.map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}
+    ${list.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${condCell(p)}</td>${BAT_KEYS.map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}
       <td>${Math.round(batOvr(p))}</td><td>${U.avg(p.stats.h, p.stats.ab)}</td><td>${p.stats.hr}</td></tr>`).join('')}</table></div>`;
 }
 function penTable(list, t) {
@@ -474,7 +500,7 @@ function penTable(list, t) {
   if (isMobile()) return cardList(list, p => playerCard(p, { sub: `<span>${role(p)}</span><span class="muted">${p.stats.pg}登板 防${U.era(p.stats.per, p.stats.outs)} ${p.stats.sv}S</span>` }));
   if (!list.length) return '<p class="muted">なし</p>';
   return `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>役割</th><th>年</th><th>調</th><th>球速</th>${PIT_KEYS.slice(1).map(k => `<th>${PIT_LABEL[k]}</th>`).join('')}<th>総合</th><th>登板</th><th>防御率</th><th>S</th></tr>
-    ${list.map(p => `<tr><td class="l">${nameCell(p)}</td><td class="nowrap">${role(p)} ${aptBadge(p)}</td><td>${p.age}</td><td>${condCell(p)}</td><td class="num">${veloKmh(p.a.velo)}km</td>
+    ${list.map(p => `<tr><td class="l">${nameCell(p)}</td><td class="nowrap">${role(p)} ${aptBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${condCell(p)}</td><td class="num">${veloKmh(p.a.velo)}km</td>
       ${PIT_KEYS.slice(1).map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}<td>${Math.round(ovr(p))}</td><td>${p.stats.pg}</td><td>${U.era(p.stats.per, p.stats.outs)}</td><td>${p.stats.sv}</td></tr>`).join('')}</table></div>`;
 }
 
@@ -542,7 +568,7 @@ function renderFAStep() {
     const rows = mine.map(p => {
       const r = F.retain[p.id] || 0;
       const c = declareChance(p, r);
-      return `<tr><td class="l">${nameCell(p)}${isHomeTeam(p, t) ? '<span class="tag">地元</span>' : ''}</td><td>${posBadge(p)}</td><td>${p.age}</td><td>${Math.round(ovr(p))}</td>
+      return `<tr><td class="l">${nameCell(p)}${isHomeTeam(p, t) ? '<span class="tag">地元</span>' : ''}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${Math.round(ovr(p))}</td>
         <td>${U.money(p.salary)}</td><td>${U.money(faMarket(p))}</td><td>${Math.round(p.loyalty)}</td><td><b>${faMood(c)}</b></td>
         <td><select data-chg="retain" data-pid="${p.id}">${[[0, 'しない'], [1.2, '年俸1.2倍を約束'], [1.5, '年俸1.5倍を約束']].map(([v, n]) => `<option value="${v}" ${r === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td></tr>`;
     }).join('');
@@ -560,7 +586,7 @@ function renderFAStep() {
       const my = F.myBids[d.pid];
       const dr = UI.faDraft[d.pid] || { mul: 1, years: p.age <= 30 ? 3 : 1 };
       const comp = d.from === t.id ? 0 : Math.round(d.oldSalary * FA_COMP[d.rank]);
-      return `<tr class="${my ? 'sel' : ''}"><td class="l">${nameCell(p)}${isHomeTeam(p, t) ? '<span class="tag">地元</span>' : ''}</td><td>${posBadge(p)}</td><td>${p.age}</td><td>${Math.round(ovr(p))}</td>
+      return `<tr class="${my ? 'sel' : ''}"><td class="l">${nameCell(p)}${isHomeTeam(p, t) ? '<span class="tag">地元</span>' : ''}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${Math.round(ovr(p))}</td>
         <td>${teamChip(from)}</td><td>${d.rank}</td><td>${U.money(d.mv)}</td><td>${comp ? U.money(comp) : '-'}</td><td>${d.bids.length ? `${d.bids.length}球団` : 'なし'}</td>
         <td class="l nowrap">${my ? `<b>年俸${U.money(my.salary)}・${my.years}年</b> <button class="sm" data-act="faBidCancel" data-pid="${d.pid}">取り消す</button>` : `
           <select data-chg="faMul" data-pid="${d.pid}">${[0.9, 1, 1.2, 1.5].map(v => `<option value="${v}" ${dr.mul === v ? 'selected' : ''}>相場×${v}（${U.money(Math.round(d.mv * v / 10) * 10)}）</option>`).join('')}</select>
@@ -594,9 +620,9 @@ function renderRoster() {
     const why = cannotPromote(t, p);
     return why ? `<span class="muted small">${h(why)}</span>` : `<button class="sm primary" data-act="promote" data-pid="${p.id}">登録</button>`;
   };
-  const actRow = p => `<tr><td class="l">${nameCell(p)}</td><td>${pos(p)}</td><td>${p.age}</td><td>${condCell(p)}</td><td class="l">${sum(p)}</td><td>${Math.round(ovr(p))}</td>
+  const actRow = p => `<tr><td class="l">${nameCell(p)}</td><td>${pos(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${condCell(p)}</td><td class="l">${sum(p)}</td><td>${Math.round(ovr(p))}</td>
     <td>${actAct(p)}</td></tr>`;
-  const farmRow = p => `<tr><td class="l">${nameCell(p)}</td><td>${pos(p)}</td><td>${p.age}</td><td>${condCell(p)}</td><td class="l">${sum(p)}</td><td>${Math.round(ovr(p))}</td>
+  const farmRow = p => `<tr><td class="l">${nameCell(p)}</td><td>${pos(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${condCell(p)}</td><td class="l">${sum(p)}</td><td>${Math.round(ovr(p))}</td>
     <td>${farmAct(p)}</td></tr>`;
   const head = '<tr><th>名前</th><th>守</th><th>年</th><th>調</th><th>能力</th><th>総合</th><th></th></tr>';
   const byOvr = (a, b) => ovr(b) - ovr(a);
@@ -631,7 +657,7 @@ function renderTrain() {
   <section class="card">
     <h2>選手ごとの重点</h2>
     <div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>型</th><th>才能</th><th>総合</th><th>重点</th></tr>
-    ${ps.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td>${p.age}</td><td>${p.type}</td><td class="stars">${potStars(p.pot)}</td><td>${Math.round(ovr(p))}</td>
+    ${ps.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${p.type}</td><td class="stars">${potStars(p.pot)}</td><td>${Math.round(ovr(p))}</td>
       <td><select data-chg="focus" data-pid="${p.id}">${focusOptions(p).map(f => `<option ${p.focus === f ? 'selected' : ''}>${f}</option>`).join('')}</select></td></tr>`).join('')}
     </table></div>
   </section>`;
@@ -841,7 +867,7 @@ function renderMoney() {
   }).join('');
   const fc = (S.foreignCands || []).map(id => S.players[id]).filter(Boolean);
   const fcHtml = fc.length ? `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>能力</th><th>年俸</th><th></th></tr>
-    ${fc.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td>${p.age}</td>
+    ${fc.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td>
       <td class="l">${abilKeys(p).map(k => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(p.a.velo) + 'km' : `<span class="g g${U.grade(p.a[k])}">${U.grade(p.a[k])}</span>`}`).join(' ')}</td>
       <td>${U.money(p.salary)}</td><td><button data-act="signForeign" data-pid="${p.id}">契約（契約金${U.money(p.salary * 0.5)}）</button></td></tr>`).join('')}</table></div>` : '';
   return `
@@ -920,7 +946,7 @@ function renderTrade() {
   const other = S.teams[T.team], me = myTeam();
   const list = (team, sel, side) => teamPlayers(team).sort((a, b) => a.isP - b.isP || ovr(b) - ovr(a)).map(p => `
     <tr class="${sel.includes(p.id) ? 'sel' : ''}"><td><input type="checkbox" data-chg="tsel" data-side="${side}" data-pid="${p.id}" ${sel.includes(p.id) ? 'checked' : ''}></td>
-    <td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td>${p.age}</td><td>${Math.round(ovr(p))}</td><td>${tradeValue(p).toLocaleString()}</td></tr>`).join('');
+    <td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${Math.round(ovr(p))}</td><td>${tradeValue(p).toLocaleString()}</td></tr>`).join('');
   const vGive = U.sum(T.give.map(id => S.players[id]).filter(Boolean), tradeValue);
   const vGet = U.sum(T.get.map(id => S.players[id]).filter(Boolean), tradeValue);
   const ratio = vGet ? vGive / vGet : (vGive ? 2 : 0);
@@ -948,7 +974,7 @@ function renderFA() {
     const keys = abilKeys(p);
     const fee = Math.round(p.salary * 0.2);
     const can = open && t.players.length < ROSTER_MAX && t.money >= fee;
-    return `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td>${p.age}</td><td>${p.type}</td><td class="stars">${potStars(p.pot)}</td>
+    return `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${p.type}</td><td class="stars">${potStars(p.pot)}</td>
       <td class="l">${keys.map(k => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(p.a.velo) + 'km' : `<span class="g g${U.grade(p.a[k])}">${U.grade(p.a[k])}</span>`}`).join(' ')}</td>
       <td>${Math.round(ovr(p))}</td><td>${h(p.lastTeam || '-')}</td><td>${U.money(p.salary)}</td>
       <td><button class="sm primary" data-act="signFA" data-pid="${p.id}" ${can ? '' : 'disabled'}>契約（契約金${U.money(fee)}）</button></td></tr>`;
@@ -1237,7 +1263,7 @@ function renderReleasePanel() {
   const t = myTeam();
   const over = t.players.length - ROSTER_MAX;
   const list = teamPlayers(t).sort((a, b) => tradeValue(a) - tradeValue(b));
-  const rows = list.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td>${p.age}</td><td>${p.type}</td><td class="stars">${potStars(p.pot)}</td>
+  const rows = list.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${p.type}</td><td class="stars">${potStars(p.pot)}</td>
     <td>${Math.round(ovr(p))}</td><td>${U.money(p.salary)}</td><td><button class="sm danger" data-act="release" data-pid="${p.id}">戦力外</button></td></tr>`).join('');
   return `<section class="card"><h2>戦力外通告</h2>
     <p>支配下 <b>${t.players.length}人</b>（上限${ROSTER_MAX}人）${over > 0 ? ` ・ <span class="neg">あと${over}人減らす必要があります</span>` : ' ・ 上限以内です'}</p>

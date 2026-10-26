@@ -199,6 +199,18 @@ function focusOptions(p) {
   return p.isP ? FOCUS_PIT : FOCUS_BAT;
 }
 
+// 成長の時期。練習の伸び（trainPlayer）と年を取ったときの衰え（agePlayer）に合わせて分ける
+//   成長期：ピークの 3 年前まで。練習でよく伸びる
+//   ピーク：その次の年からピークの翌年まで。伸びはゆるやかになるが、まだ衰えない
+//   衰退期：ピークの 2 年後から。毎年オフに能力が下がる
+function growthSpan(p) { return { growEnd: p.peak - 3, peakFrom: p.peak - 2, peakTo: p.peak + 1, declineFrom: p.peak + 2 }; }
+function growthPhase(p) {
+  const g = growthSpan(p);
+  if (p.age <= g.growEnd) return { k: 'grow', name: '成長期', short: '成', left: g.growEnd - p.age };
+  if (p.age <= g.peakTo) return { k: 'peak', name: 'ピーク', short: '頂', left: g.peakTo - p.age };
+  return { k: 'decline', name: '衰退期', short: '衰', left: null };
+}
+
 // 年を取ったときの衰え
 function agePlayer(p) {
   p.age++;
