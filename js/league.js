@@ -25,7 +25,7 @@ function newFin() { return { gate: 0, food: 0, tv: 0, goods: 0, sponsor: 0, othe
 function newGame(myTeamId, games) {
   S = {
     version: 1, year: 2027, day: 0, games, myTeamId, phase: 'season',
-    teams: [], players: {}, nextPid: 1, schedule: [], news: [], history: [],
+    teams: [], players: {}, nextPid: 1, schedule: [], news: [], history: [], awardHist: [], records: { season: {} }, retired: [],
     lastGame: null, myGames: [], off: null, post: null, foreignCands: null, popups: [], freeAgents: [],
   };
   TEAM_DEFS.forEach((d, i) => {
@@ -642,6 +642,8 @@ function endRegular() {
     if (mvp) awards.unshift({ lg, title: 'MVP', pid: mvp.id, name: mvp.name, team: champ.short, val: '' });
   });
   awards.forEach(a => addFame(S.players[a.pid], a.title === 'MVP' ? 25 : 15));
+  S.awardHist.unshift({ year: S.year, list: awards.map(a => ({ ...a })) });
+  updateSeasonRecords();
   // シーズン終わりから CS まで数日あく
   Object.values(S.players).forEach(p => { p.rest += 3; p.fatigue = 0; });
   S.post = { stage: 'cs1', series: [], awards, champs, ranks: {}, day: 0, jp: null };
@@ -748,10 +750,103 @@ function endPost(jpId) {
   // 成績を年度別に残す（FA で球団が変わる前に）
   Object.values(S.players).forEach(p => {
     if (p.teamId == null) return;
-    if (p.stats.g || p.stats.pg) p.career.push({ y: S.year, t: S.teams[p.teamId].short, s: { ...p.stats } });
+    if (p.stats.g || p.stats.pg) {
+      milestoneNews(p);
+      p.career.push({ y: S.year, t: S.teams[p.teamId].short, s: { ...p.stats } });
+    }
   });
   S.phase = 'off';
   S.off = { step: 'awards', awards: P.awards, prize, rank, champ: jp.name, post, contract: null, draft: null };
+}
+
+// ---------- 記録・歴史・殿堂入り ----------
+// 名球会のような節目（143 試合のとき）。短いシーズンでは試合数に合わせて小さくする
+const MILESTONES = [
+  { k: 'h', n: 2000, label: '通算2000安打' }, { k: 'hr', n: 400, label: '通算400本塁打' },
+  { k: 'w', n: 200, label: '通算200勝' }, { k: 'sv', n: 250, label: '通算250セーブ' },
+];
+const byGames = n => Math.max(5, Math.round(n * S.games / 143));
+const CAREER_KEYS = ['g', 'pa', 'ab', 'h', 'd', 't', 'hr', 'rbi', 'r', 'sb', 'bb', 'k', 'pg', 'gs', 'w', 'l', 'sv', 'outs', 'ph', 'phr', 'pbb', 'pk', 'per'];
+
+// 通算成績（今季の分も入れる。シーズン後に career に入った年は二重に数えない）
+function careerTotal(p) {
+  const t = {};
+  CAREER_KEYS.forEach(k => { t[k] = 0; });
+  const rows = (p.career || []).slice();
+  if (p.stats && !rows.some(c => c.y === S.year)) rows.push({ s: p.stats });
+  rows.forEach(c => CAREER_KEYS.forEach(k => { t[k] += c.s[k] || 0; }));
+  return t;
+}
+
+function titlesOf(pid) {
+  const out = [];
+  (S.awardHist || []).forEach(y => y.list.forEach(a => { if (a.pid === pid) out.push({ year: y.year, title: a.title, lg: a.lg }); }));
+  return out;
+}
+
+// シーズン記録（歴代トップ 10）。率は規定に届いた選手だけ
+const SEASON_REC = [
+  { k: 'avg', name: '打率', bat: true, qual: true, f: s => s.h / s.ab },
+  { k: 'hr', name: '本塁打', bat: true, f: s => s.hr }, { k: 'rbi', name: '打点', bat: true, f: s => s.rbi },
+  { k: 'h', name: '安打', bat: true, f: s => s.h }, { k: 'sb', name: '盗塁', bat: true, f: s => s.sb },
+  { k: 'ops', name: 'OPS', bat: true, qual: true, f: s => ops(s) },
+  { k: 'w', name: '勝利', f: s => s.w }, { k: 'era', name: '防御率', qual: true, asc: true, f: s => s.per * 27 / s.outs },
+  { k: 'sv', name: 'セーブ', f: s => s.sv }, { k: 'pk', name: '奪三振', f: s => s.pk },
+];
+const REC_TOP = 10;
+function updateSeasonRecords() {
+  const ps = Object.values(S.players).filter(p => p.teamId != null);
+  SEASON_REC.forEach(r => {
+    const list = ps.filter(p => (r.bat ? canBat(p) && p.stats.pa > 0 : canPitch(p) && p.stats.pg > 0))
+      .filter(p => !r.qual || (r.bat ? p.stats.pa >= S.games * 3.1 : p.stats.outs >= S.games * 3))
+      .map(p => ({ v: r.f(p.stats), pid: p.id, name: p.name, team: S.teams[p.teamId].short, year: S.year, games: S.games }));
+    const all = (S.records.season[r.k] || []).concat(list).filter(x => isFinite(x.v));
+    all.sort((a, b) => (r.asc ? a.v - b.v : b.v - a.v));
+    const before = (S.records.season[r.k] || []).slice(0, 1)[0];
+    S.records.season[r.k] = all.slice(0, REC_TOP);
+    const top = S.records.season[r.k][0];
+    // 1 年目は何でも記録になるので知らせない
+    if (before && top && top.year === S.year) {
+      addNews(`歴代記録！${top.team}の${top.name}がシーズン${r.name}の記録を塗り替えました。`, 'big');
+    }
+  });
+}
+
+// 今季で節目の記録に届いたら知らせる（career に今季を入れる前に呼ぶ）
+function milestoneNews(p) {
+  const after = careerTotal(p);
+  MILESTONES.forEach(m => {
+    const need = byGames(m.n);
+    if (after[m.k] >= need && after[m.k] - (p.stats[m.k] || 0) < need) {
+      addNews(`${S.teams[p.teamId].short}の${p.name}が${m.label}を達成しました！`, p.teamId === S.myTeamId ? 'good' : 'big');
+    }
+  });
+}
+
+// 引退するときに、名を残す選手の記録をとっておく（選手そのものは消える）
+function retireRecord(p) {
+  if (!S.retired) S.retired = [];
+  const c = careerTotal(p);
+  const titles = titlesOf(p.id);
+  const ms = MILESTONES.filter(m => c[m.k] >= byGames(m.n)).map(m => m.label);
+  const mvp = titles.filter(t => t.title === 'MVP').length;
+  // 殿堂入りの点：いちばん節目に近い記録（節目で 1）に、MVP とタイトルの数を足す。25 年で 40 人ほど（年に 1〜2 人）になるように測った
+  const pts = Math.max(c.h / byGames(2000), c.hr / byGames(400), c.w / byGames(200), c.sv / byGames(250), c.pk / byGames(2500))
+    + mvp * 0.15 + (titles.length - mvp) * 0.05;
+  const hof = ms.length > 0 || pts >= 1;
+  const notable = hof || titles.length > 0 || pts >= 0.6;
+  if (!notable) return;
+  const years = (p.career || []).map(x => x.y);
+  const teams = [...new Set((p.career || []).map(x => x.t))];
+  const keep = {};
+  ['g', 'pa', 'ab', 'h', 'hr', 'rbi', 'sb', 'pg', 'w', 'l', 'sv', 'outs', 'per', 'pk'].forEach(k => { keep[k] = c[k]; });
+  S.retired.unshift({
+    id: p.id, name: p.name, pos: canPitch(p) && !p.twoWay ? '投' : p.twoWay ? '二刀流' : p.pos, isP: canPitch(p), bat: canBat(p),
+    from: years.length ? Math.min(...years) : S.year, to: S.year, teams, age: p.age, c: keep,
+    titles: titles.map(t => `${t.year} ${t.title}`), ms, hof, hofYear: hof ? S.year : null,
+    my: teams.includes(myTeam().short),
+  });
+  if (hof) addNews(`${p.name}（${teams.join('→')}）が引退し、殿堂入りしました。${ms.length ? `（${ms.join('・')}）` : ''}`, 'big');
 }
 
 // ---------- 覚醒 ----------
@@ -969,6 +1064,7 @@ function offContract() {
       if (p.foreign && o < 55) leave = true;
       if (leave) {
         if (t.id === my.id) retired.push({ name: p.name, age: p.age, why: p.foreign && p.age < 35 ? '退団' : '引退' });
+        retireRecord(p);
         removeFromTeam(p);
         delete S.players[p.id];
       }
@@ -1405,7 +1501,7 @@ function agingFreeAgents() {
     if (!p) return false;
     agePlayer(p);
     p.faYears = (p.faYears || 0) + 1;
-    if (p.age >= 37 || p.faYears >= 2 || ovr(p) < 38) { delete S.players[id]; return false; }
+    if (p.age >= 37 || p.faYears >= 2 || ovr(p) < 38) { retireRecord(p); delete S.players[id]; return false; }
     p.salary = faDemand(p);
     return true;
   });
@@ -1586,6 +1682,9 @@ function migrate() {
   if (S.off && S.off.draft && !S.off.draft.stage) Object.assign(S.off.draft, { stage: 'waiver', r1: { sub: 0, log: [] }, myDone: false, first: 'セ' });
   if (S.phase !== 'off' && !S.draftClass) S.draftClass = makeDraftClass();
   if (!S.standHist) S.standHist = [];
+  if (!S.awardHist) S.awardHist = [];
+  if (!S.records) S.records = { season: {} };
+  if (!S.retired) S.retired = [];
   Object.values(S.players).forEach(p => { if (p.svc == null) initService(p); });
   Object.values(S.players).forEach(p => { if (canPitch(p) && !p.apt) p.apt = rollApt(p.a.stamina); });
   Object.values(S.players).forEach(p => { if (p.home === undefined) p.home = p.foreign ? null : U.pick(PREFS); });
@@ -1674,6 +1773,11 @@ function exportSlot(n) {
 function lastExport(n) {
   try { const v = localStorage.getItem(expKey(n)); return v ? +v : null; } catch (e) { return null; }
 }
+
+// シーズンの終わりに「書き出しますか？」と聞くかどうか（端末ごと）
+const NO_ASK_KEY = `${SAVE_KEY}_noBackupAsk`;
+function backupAskOff() { try { return localStorage.getItem(NO_ASK_KEY) === '1'; } catch (e) { return false; } }
+function setBackupAskOff(v) { try { if (v) localStorage.setItem(NO_ASK_KEY, '1'); else localStorage.removeItem(NO_ASK_KEY); } catch (e) { /* なにもしない */ } }
 
 // ファイルの中身を確かめて、スロット n に入れる。だめなら理由を返す
 function importToSlot(n, text) {

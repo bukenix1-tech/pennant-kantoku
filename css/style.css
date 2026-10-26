@@ -299,3 +299,18 @@ label.filebtn input { display: none; }
 .tier.t6 { background: #f3f4f6; color: #9ca3af; }
 .review { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
 .review p { margin: 6px 0 0; line-height: 1.7; }
+
+/* セーブの書き出しのすすめ */
+.backup-banner { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 8px 12px; margin: 0 0 10px; line-height: 1.6; }
+.backup-btns { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }
+.backup-ask { text-align: left; }
+.backup-ask label { display: block; margin-top: 8px; }
+
+/* 記録・殿堂 */
+.hof-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 12px; margin: 6px 0; line-height: 1.6; }
+.hof-card.hof { background: #fffbeb; border-color: #fcd34d; }
+.hof-card.mine { box-shadow: inset 4px 0 0 var(--accent); }
+.hof-name { margin-bottom: 2px; }
+.leaders li.me { font-weight: bold; }
+tr.total td { font-weight: bold; border-top: 2px solid #cbd5e1; }
+ol.plain { padding-left: 22px; }

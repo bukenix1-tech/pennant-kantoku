@@ -49,6 +49,8 @@ const ACTIONS = {
       while (advancePost());
     }
     if (before !== S.phase) { UI.tab = S.phase === 'post' ? 'post' : S.phase === 'off' ? 'off' : 'home'; window.scrollTo(0, 0); }
+    // シーズンが終わったら、セーブをファイルに書き出すかを聞く
+    if (before !== 'off' && S.phase === 'off' && !backupAskOff()) UI.backupAsk = true;
   },
   lg(el) { UI.lg = el.dataset.lg; },
   closeModal() { closeModal(); },
@@ -167,6 +169,7 @@ const ACTIONS = {
   watch(el) { toggleWatch(+el.dataset.pid); },
   posf(el) { UI.posf[el.dataset.key] = el.dataset.g; },
   teamView(el) { UI.teamView = el.dataset.k; },
+  recView(el) { UI.recView = el.dataset.k; },
   statSort(el) { UI.statSort[el.dataset.kind] = el.dataset.k; },
   menu() { openModal(renderMenu()); return 'keep'; },
   exportNow() {
@@ -206,6 +209,8 @@ const ACTIONS = {
 const CHANGES = {
   games(el) { UI.newGames = +el.value; },
   watchOnly(el) { UI.watchOnly = el.checked; },
+  noBackupAsk(el) { setBackupAskOff(el.checked); return 'keep'; },
+  recYear(el) { UI.recYear = +el.value; },
   importFile(el) {
     const n = +el.dataset.n, file = el.files && el.files[0];
     el.value = '';
@@ -274,7 +279,7 @@ const CHANGES = {
 };
 
 document.addEventListener('click', e => {
-  if (e.target.id === 'modal' || e.target.closest('.modal-close')) { closeModal(); render(); return; }
+  if (e.target.id === 'modal' || e.target.closest('.modal-close')) { closeModal(); render(); showPopups(); return; }
   const el = e.target.closest('[data-act]');
   if (!el || el.disabled) return;
   e.preventDefault();
@@ -286,12 +291,16 @@ document.addEventListener('click', e => {
   showPopups();
 });
 
-// 覚醒などの知らせを大きく出す
+// 覚醒などの知らせを大きく出す。そのあとに、シーズン終わりの書き出しのすすめ
 function showPopups() {
-  if (!S || !S.popups || !S.popups.length) return;
-  openModal(renderAwaken(S.popups));
-  S.popups = [];
-  saveGame();
+  if (!S) return;
+  if (S.popups && S.popups.length) {
+    openModal(renderAwaken(S.popups));
+    S.popups = [];
+    saveGame();
+    return;
+  }
+  if (UI.backupAsk) { UI.backupAsk = false; openModal(renderBackupAsk()); }
 }
 
 document.addEventListener('change', e => {
