@@ -1025,8 +1025,8 @@ function renderOff() {
     body = `
     <section class="card"><h2>引退・退団</h2>${c.retired.length ? `<ul>${c.retired.map(r => `<li>${h(r.name)}（${r.age}歳）${r.why}</li>`).join('')}</ul>` : '<p>いません。</p>'}</section>
     <section class="card"><h2>契約更改</h2><p class="muted">成績と能力で来季の年俸が決まりました。選手は 1 つ歳を取りました。</p>
-      <div class="scroll"><table class="tbl"><tr><th>名前</th><th>今季</th><th>来季</th><th>増減</th></tr>
-      ${c.raises.map(r => `<tr><td class="l">${S.players[r.pid] ? nameCell(S.players[r.pid]) : h(r.name)}</td><td>${U.money(r.old)}</td><td>${U.money(r.now)}</td><td class="${r.now >= r.old ? 'win' : 'lose'}">${r.locked ? '<span class="muted">複数年契約</span>' : `${r.now >= r.old ? '+' : ''}${U.money(r.now - r.old)}`}</td></tr>`).join('')}
+      <div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年齢</th><th>総合</th><th>今季</th><th>来季</th><th>増減</th></tr>
+      ${c.raises.filter(r => S.players[r.pid] && S.players[r.pid].teamId === S.myTeamId).map(r => { const p = S.players[r.pid]; return `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${Math.round(ovr(p))}</td><td>${U.money(r.old)}</td><td>${U.money(r.now)}</td><td class="${r.now >= r.old ? 'win' : 'lose'}">${r.locked ? '<span class="muted">複数年契約</span>' : `${r.now >= r.old ? '+' : ''}${U.money(r.now - r.old)}`}</td></tr>`; }).join('')}
       </table></div>
       <p>来季の年俸総額 <b>${U.money(payroll(myTeam()))}</b></p>
       <button class="primary big" data-act="offNext">ドラフトへ ▶</button></section>`;
