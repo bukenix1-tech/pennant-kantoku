@@ -254,7 +254,8 @@ ul.news li.awaken { color: #b45309; font-weight: bold; }
   .tbl tr > th:first-child { background: #f8fafc; }
   .tbl tr.me > *:first-child { background: #fef9c3; }
   .tbl tr.sel > *:first-child { background: #dbeafe; }
-  .modal { padding: 0; align-items: stretch; }
+  /* 画面より長い中身でも、白い背景が下まで伸びるように（flex の stretch だと画面の高さで止まる） */
+  .modal { padding: 0; display: block; }
   .modal-box { border-radius: 0; min-height: 100%; padding: 14px 12px 40px; }
   .modal-close { position: sticky; top: 0; float: right; background: #fff; border-radius: 50%; width: 36px; height: 36px; }
   .bars .bl { width: 72px; }
