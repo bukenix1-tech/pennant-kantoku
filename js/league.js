@@ -1628,7 +1628,66 @@ function slotMeta(n) {
 }
 
 function deleteSlot(n) {
-  try { localStorage.removeItem(slotKey(n)); localStorage.removeItem(metaKey(n)); } catch (e) { /* なにもしない */ }
+  try { localStorage.removeItem(slotKey(n)); localStorage.removeItem(metaKey(n)); localStorage.removeItem(expKey(n)); } catch (e) { /* なにもしない */ }
+}
+
+// ---------- セーブのファイル書き出し・読み込み ----------
+// ブラウザのデータを消しても、書き出したファイルから戻せる。パソコンとスマホの間で移すのにも使える
+const SAVE_FILE_APP = 'pennant-kantoku';
+function expKey(n) { return `${SAVE_KEY}_exp${n}`; }
+
+// スロット n の中身をファイルにする文字列と名前を作る（n が遊んでいるスロットなら、いまの状態を使う）
+function exportSlot(n) {
+  let data;
+  if (n === currentSlot && S) data = S;
+  else {
+    const raw = localStorage.getItem(slotKey(n));
+    if (!raw) return null;
+    data = JSON.parse(raw);
+  }
+  const meta = slotMeta(n) || {};
+  const d = new Date();
+  const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  const team = data.teams && data.teams[data.myTeamId] ? data.teams[data.myTeamId].short : 'セーブ';
+  const name = `ペナント監督_${team}_${data.year}年_${ymd}.json`;
+  const text = JSON.stringify({ app: SAVE_FILE_APP, format: 1, exportedAt: Date.now(), meta, data });
+  try { localStorage.setItem(expKey(n), String(Date.now())); } catch (e) { /* 書き出し日が残せなくても、ファイルはできる */ }
+  return { name, text };
+}
+
+function lastExport(n) {
+  try { const v = localStorage.getItem(expKey(n)); return v ? +v : null; } catch (e) { return null; }
+}
+
+// ファイルの中身を確かめて、スロット n に入れる。だめなら理由を返す
+function importToSlot(n, text) {
+  let obj;
+  try { obj = JSON.parse(text); } catch (e) { return 'ファイルを読めませんでした（壊れているか、ちがう種類のファイルです）。'; }
+  const data = obj && obj.app === SAVE_FILE_APP ? obj.data : null;
+  if (!data || !Array.isArray(data.teams) || !data.players || data.myTeamId == null) return 'このゲームのセーブファイルではありません。';
+  const keepS = S, keepSlot = currentSlot;
+  try {
+    S = data;
+    migrate();
+    currentSlot = n;
+    if (!saveGame()) return '保存できませんでした（ブラウザの保存容量がいっぱいかもしれません）。';
+    localStorage.setItem(expKey(n), String(obj.exportedAt || Date.now()));
+  } catch (e) {
+    return 'セーブの中身がおかしいため、読み込めませんでした。';
+  } finally {
+    S = keepS; currentSlot = keepSlot;
+  }
+  return null;
+}
+
+// ブラウザに「このサイトのデータは勝手に消さないで」と頼む（できないブラウザもある）
+let storagePersisted = null;
+function askPersistentStorage() {
+  if (!navigator.storage || !navigator.storage.persisted) { storagePersisted = 'unsupported'; return; }
+  navigator.storage.persisted()
+    .then(p => (p ? true : navigator.storage.persist()))
+    .then(p => { storagePersisted = !!p; })
+    .catch(() => { storagePersisted = 'unsupported'; });
 }
 
 // いまのデータを別のスロットにも残す（バックアップ）

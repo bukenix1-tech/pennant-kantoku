@@ -283,3 +283,8 @@ a.sorth.on { color: var(--accent); }
 .needs { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
 .needs ol { margin: 6px 0 2px; padding-left: 22px; }
 .needs li { margin: 3px 0; }
+
+/* セーブのファイル読み込みボタン */
+label.filebtn { display: inline-block; font-size: 13px; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; cursor: pointer; text-align: center; }
+label.filebtn:hover { background: #f1f5f9; }
+label.filebtn input { display: none; }

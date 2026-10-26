@@ -101,7 +101,7 @@ function teamChip(t) { return `<span class="chip" style="background:${t.color}">
 
 function render() {
   const app = document.getElementById('app');
-  if (!S) { app.innerHTML = renderTitle(); return; }
+  if (!S) { app.innerHTML = renderTitle() + (UI.toast ? `<div class="toast">${h(UI.toast)}</div>` : ''); UI.toast = ''; return; }
   const first = S.phase === 'off' ? ['off', 'オフシーズン'] : S.phase === 'post' ? ['post', 'ポストシーズン'] : TABS[0];
   const tabs = [first, ...TABS.slice(1)];
   if (['home', 'off', 'post'].includes(UI.tab)) UI.tab = first[0];
@@ -139,22 +139,27 @@ function slotWhen(ms) {
 
 function renderSlotCard(n) {
   const m = slotMeta(n);
+  const importBtn = `<label class="filebtn">📂 ファイルから読み込む<input type="file" accept=".json,application/json" data-chg="importFile" data-n="${n}"></label>`;
   if (!m) {
     return `<div class="slot empty">
       <div class="slot-no">スロット${n}</div>
       <div class="slot-body muted">データなし</div>
-      <button class="primary" data-act="slotNew" data-n="${n}">ここで新しく始める</button>
+      <div class="slot-btns"><button class="primary" data-act="slotNew" data-n="${n}">ここで新しく始める</button>${importBtn}</div>
     </div>`;
   }
+  const ex = lastExport(n);
   return `<div class="slot" style="--c:${m.color}">
     <div class="slot-no">スロット${n}</div>
     <div class="slot-body">
       <div class="slot-team">${h(m.team)}</div>
       <div>${m.year}年 ${h(m.when)} ・ ${m.w}勝${m.l}敗${m.d ? m.d + '分' : ''} ${h(m.lg)}${m.rank}位</div>
       <div class="muted">資金 ${U.money(m.money)}${m.titles ? ` ・ 日本一 ${m.titles}回` : ''} ・ 保存 ${slotWhen(m.savedAt)}</div>
+      <div class="muted small">${ex ? `ファイルに書き出したのは ${slotWhen(ex)}` : 'まだファイルに書き出していません'}</div>
     </div>
     <div class="slot-btns">
       <button class="primary big" data-act="continue" data-n="${n}">つづきから</button>
+      <button class="sm" data-act="exportSlot" data-n="${n}">💾 ファイルに書き出す</button>
+      ${importBtn}
       <button class="sm" data-act="slotNew" data-n="${n}">上書きして新しく始める</button>
       <button class="sm danger" data-act="slotDelete" data-n="${n}">消す</button>
     </div>
@@ -171,6 +176,7 @@ function renderTitle() {
         <h2>データを選んでください</h2>
         <div class="slots">${Array.from({ length: SLOT_COUNT }, (_, i) => renderSlotCard(i + 1)).join('')}</div>
         <p class="note">試合を進めるたびに、選んだスロットへ自動で保存されます。ほかのスロットは変わりません。</p>
+        <p class="note">ブラウザの閲覧データを消すと、セーブも消えます。ときどき「ファイルに書き出す」で残しておくと、消えても「ファイルから読み込む」で戻せます。</p>
       </section>
     </div>`;
   }
@@ -1082,7 +1088,17 @@ function renderMenu() {
   return `<h2>メニュー</h2>
   <p>いま遊んでいるデータ：<b>スロット${currentSlot}</b>（試合を進めるたびに自動で保存しています）</p>
   <p><button data-act="saveNow">いま保存する</button></p>
-  <h3>バックアップ</h3>
+  <h3>ファイルに書き出す（いちばん安心）</h3>
+  <p class="muted">ブラウザのデータを消しても、書き出したファイルがあれば戻せます。Google ドライブ・iCloud・LINE の自分あてなどに置いておいてください。パソコンとスマホの間で移すのにも使えます。</p>
+  <p><button class="primary" data-act="exportNow">💾 ファイルに書き出す</button>
+    ${navigator.canShare ? '<button data-act="shareNow">📤 共有して送る（LINE・ドライブなど）</button>' : ''}</p>
+  <p class="muted small">${lastExport(currentSlot) ? `最後に書き出したのは ${slotWhen(lastExport(currentSlot))}` : 'まだ書き出していません'}</p>
+  <h3>ブラウザに消されにくくする設定</h3>
+  <p>${storagePersisted === true ? '✅ オン（容量が足りないときなどに、ブラウザが勝手に消すことはありません）'
+    : storagePersisted === 'unsupported' ? 'このブラウザではこの設定が使えません。ファイルへの書き出しで守ってください。'
+      : '⚠️ オフ（ブラウザが許可しませんでした。ホーム画面に追加したアイコンから開くと、オンになりやすくなります）'}</p>
+  <p class="muted small">この設定がオンでも、自分で閲覧データを消したときはセーブも消えます。</p>
+  <h3>バックアップ（別のスロットへ）</h3>
   <p class="muted">いまのデータを別のスロットにも残せます。大事な場面の前に残しておくと、あとでそこからやり直せます。</p>
   <p>${others.map(n => { const m = slotMeta(n); return `<button data-act="copySlot" data-n="${n}">スロット${n}にコピー${m ? `（${h(m.team)} ${m.year}年を上書き）` : '（空き）'}</button>`; }).join(' ')}</p>
   <h3>そのほか</h3>

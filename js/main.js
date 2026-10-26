@@ -169,6 +169,31 @@ const ACTIONS = {
   teamView(el) { UI.teamView = el.dataset.k; },
   statSort(el) { UI.statSort[el.dataset.kind] = el.dataset.k; },
   menu() { openModal(renderMenu()); return 'keep'; },
+  exportNow() {
+    saveGame();
+    const f = exportSlot(currentSlot);
+    downloadText(f.name, f.text);
+    closeModal();
+    UI.toast = `「${f.name}」を書き出しました。`;
+  },
+  shareNow() {
+    saveGame();
+    const f = exportSlot(currentSlot);
+    const file = new File([f.text], f.name, { type: 'application/json' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: 'ペナント監督のセーブ' }).catch(() => {});
+    } else {
+      downloadText(f.name, f.text);
+      UI.toast = 'この端末では共有できないので、ファイルとして書き出しました。';
+    }
+    closeModal();
+  },
+  exportSlot(el) {
+    const f = exportSlot(+el.dataset.n);
+    if (!f) { UI.toast = 'そのスロットにはデータがありません。'; return; }
+    downloadText(f.name, f.text);
+    UI.toast = `「${f.name}」を書き出しました。`;
+  },
   saveNow() { closeModal(); UI.toast = saveGame() ? `スロット${currentSlot}に保存しました。` : '保存できませんでした。'; },
   toTitle() { saveGame(); closeModal(); S = null; currentSlot = null; },
   reset() {
@@ -181,6 +206,22 @@ const ACTIONS = {
 const CHANGES = {
   games(el) { UI.newGames = +el.value; },
   watchOnly(el) { UI.watchOnly = el.checked; },
+  importFile(el) {
+    const n = +el.dataset.n, file = el.files && el.files[0];
+    el.value = '';
+    if (!file) return 'keep';
+    const m = slotMeta(n);
+    if (m && !confirm(`スロット${n}の「${m.team} ${m.year}年」のデータに上書きして、ファイル「${file.name}」を読み込みます。よろしいですか？`)) return 'keep';
+    const reader = new FileReader();
+    reader.onload = () => {
+      const err = importToSlot(n, String(reader.result));
+      UI.toast = err || `スロット${n}に読み込みました。「つづきから」で遊べます。`;
+      render();
+    };
+    reader.onerror = () => { UI.toast = 'ファイルを読めませんでした。'; render(); };
+    reader.readAsText(file);
+    return 'keep';
+  },
   geniusOnly(el) { UI.geniusOnly = el.checked; },
   histYear(el) { UI.histYear = +el.value; },
   retain(el) { setRetain(+el.dataset.pid, +el.value); },
@@ -267,7 +308,17 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closeModal(); render(); }
 });
 
+// ファイルとして保存させる
+function downloadText(name, text) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
 migrateOldSave();
+askPersistentStorage();
 render();
 // スマホとパソコンの幅をまたいだら描き直す（画面を回したときなど）
 window.matchMedia('(max-width: 700px)').addEventListener('change', () => render());
