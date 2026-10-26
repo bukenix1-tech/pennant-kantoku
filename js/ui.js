@@ -430,6 +430,28 @@ function renderPlayerModal(p) {
 }
 
 // ---------- オーダー ----------
+// 選ぶ欄の中にも能力を出す（ミB パA 走C 肩D 守C）
+const abilText = (p, keys) => keys.map(k => (k === 'velo' ? `${veloKmh(p.a.velo)}km` : `${SHORT_LABEL[k]}${U.grade(p.a[k])}`)).join(' ');
+const batOpt = f => `${h(f.name)}（${f.isP ? f.pos2 : f.pos}）${abilText(f, BAT_KEYS)} 総${Math.round(batOvr(f))}${f.inj ? ' 故障' : ''}`;
+const pitOpt = p => `${h(p.name)}（${abilText(p, PIT_KEYS)} 総${Math.round(ovr(p))}）${p.inj ? '故障' : ''}`;
+
+// 一軍の控え・中継ぎを、能力つきの表で見せる
+function benchTable(list) {
+  if (isMobile()) return cardList(list, p => playerCard(p, { sub: `<span class="muted">打率${U.avg(p.stats.h, p.stats.ab)} ${p.stats.hr}本</span>` }));
+  if (!list.length) return '<p class="muted">なし</p>';
+  return `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>調</th>${BAT_KEYS.map(k => `<th>${BAT_LABEL[k]}</th>`).join('')}<th>総合</th><th>打率</th><th>本</th></tr>
+    ${list.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td>${p.age}</td><td>${condCell(p)}</td>${BAT_KEYS.map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}
+      <td>${Math.round(batOvr(p))}</td><td>${U.avg(p.stats.h, p.stats.ab)}</td><td>${p.stats.hr}</td></tr>`).join('')}</table></div>`;
+}
+function penTable(list, t) {
+  const role = p => (p.id === t.closer ? '抑え' : p.id === t.setup ? 'セットアッパー' : '中継ぎ');
+  if (isMobile()) return cardList(list, p => playerCard(p, { sub: `<span>${role(p)}</span><span class="muted">${p.stats.pg}登板 防${U.era(p.stats.per, p.stats.outs)} ${p.stats.sv}S</span>` }));
+  if (!list.length) return '<p class="muted">なし</p>';
+  return `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>役割</th><th>年</th><th>調</th><th>球速</th>${PIT_KEYS.slice(1).map(k => `<th>${PIT_LABEL[k]}</th>`).join('')}<th>総合</th><th>登板</th><th>防御率</th><th>S</th></tr>
+    ${list.map(p => `<tr><td class="l">${nameCell(p)}</td><td class="nowrap">${role(p)} ${aptBadge(p)}</td><td>${p.age}</td><td>${condCell(p)}</td><td class="num">${veloKmh(p.a.velo)}km</td>
+      ${PIT_KEYS.slice(1).map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}<td>${Math.round(ovr(p))}</td><td>${p.stats.pg}</td><td>${U.era(p.stats.per, p.stats.outs)}</td><td>${p.stats.sv}</td></tr>`).join('')}</table></div>`;
+}
+
 function renderOrder() {
   const t = myTeam();
   const fielders = activePlayers(t).filter(canBat).sort((a, b) => batOvr(b) - batOvr(a));
@@ -441,10 +463,10 @@ function renderOrder() {
     return `<tr>
       <td><b>${i + 1}</b></td>
       <td><select data-chg="lpos" data-i="${i}">${LPOS.map(x => `<option ${x === s.pos ? 'selected' : ''}>${x}</option>`).join('')}</select></td>
-      <td class="l"><select data-chg="lplayer" data-i="${i}">${fielders.map(f => `<option value="${f.id}" ${f.id === p.id ? 'selected' : ''}>${h(f.name)}（${f.pos}）${f.inj ? '故障' : ''}</option>`).join('')}</select>
+      <td class="l"><select data-chg="lplayer" data-i="${i}">${fielders.map(f => `<option value="${f.id}" ${f.id === p.id ? 'selected' : ''}>${batOpt(f)}</option>`).join('')}</select>
         ${fit < 1 ? `<span class="tag ${fit < 0.7 ? 'bad' : ''}">適性${fit < 0.7 ? '×' : '△'}</span>` : ''}${p.inj ? '<span class="tag bad">故障</span>' : ''}</td>
       <td>${condCell(p)}</td>${BAT_KEYS.map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}
-      <td>${U.avg(p.stats.h, p.stats.ab)}</td><td>${p.stats.hr}</td>
+      <td>${Math.round(batOvr(p))}</td><td>${U.avg(p.stats.h, p.stats.ab)}</td><td>${p.stats.hr}</td>
       <td class="nowrap"><button class="sm" data-act="lmove" data-i="${i}" data-d="-1">▲</button><button class="sm" data-act="lmove" data-i="${i}" data-d="1">▼</button></td>
     </tr>`;
   }).join('');
@@ -453,34 +475,34 @@ function renderOrder() {
     const fit = posFit(p, s.pos);
     return `<div class="pcard"><div class="pc-top"><div class="order-no">${i + 1}</div>
         <select data-chg="lpos" data-i="${i}">${LPOS.map(x => `<option ${x === s.pos ? 'selected' : ''}>${x}</option>`).join('')}</select>
-        <select class="grow" data-chg="lplayer" data-i="${i}">${fielders.map(f => `<option value="${f.id}" ${f.id === p.id ? 'selected' : ''}>${h(f.name)}（${f.isP ? f.pos2 : f.pos}）${f.inj ? '故障' : ''}</option>`).join('')}</select></div>
+        <select class="grow" data-chg="lplayer" data-i="${i}">${fielders.map(f => `<option value="${f.id}" ${f.id === p.id ? 'selected' : ''}>${batOpt(f)}</option>`).join('')}</select></div>
       <div class="pc-sub">${posBadge(p)}${condCell(p)}${fit < 1 ? `<span class="tag ${fit < 0.7 ? 'bad' : ''}">適性${fit < 0.7 ? '×' : '△'}</span>` : ''}<span class="muted">打率${U.avg(p.stats.h, p.stats.ab)} ${p.stats.hr}本</span></div>
       <div class="pc-abil">${BAT_KEYS.map(k => `<span class="ab">${SHORT_LABEL[k]}<span class="g g${U.grade(p.a[k])}">${U.grade(p.a[k])}</span></span>`).join('')}</div>
       <div class="pc-act"><button class="sm" data-act="lmove" data-i="${i}" data-d="-1">▲ 上へ</button><button class="sm" data-act="lmove" data-i="${i}" data-d="1">▼ 下へ</button></div></div>`;
   }).join('')}</div>` : '';
   const bench = fielders.filter(p => !inLine.has(p.id));
-  const pOpt = (cur, list) => list.map(p => `<option value="${p.id}" ${p.id === cur ? 'selected' : ''}>${h(p.name)}（${veloKmh(p.a.velo)}km・ス${U.grade(p.a.stamina)}）${p.inj ? '故障' : ''}</option>`).join('');
+  const pOpt = (cur, list) => list.map(p => `<option value="${p.id}" ${p.id === cur ? 'selected' : ''}>${pitOpt(p)}</option>`).join('');
   const rot = t.rotation.map((id, i) => `<tr><td>${i + 1}${i === t.rotIdx % t.rotation.length ? ' <span class="tag">次</span>' : ''}</td>
       <td class="l"><select data-chg="rot" data-i="${i}">${pOpt(id, pitchers)}</select></td>
-      <td>${condCell(S.players[id])}</td><td>${S.players[id].rest >= STARTER_REST ? '◯' : `中${Math.max(0, S.players[id].rest - 1)}日`}</td>
+      <td>${condCell(S.players[id])}</td><td class="num">${veloKmh(S.players[id].a.velo)}km</td>${PIT_KEYS.slice(1).map(k => `<td>${gradeCell(S.players[id].a[k])}</td>`).join('')}<td>${Math.round(ovr(S.players[id]))}</td><td>${S.players[id].rest >= STARTER_REST ? '◯' : `中${Math.max(0, S.players[id].rest - 1)}日`}</td>
       <td>${S.players[id].stats.w}-${S.players[id].stats.l}</td><td>${U.era(S.players[id].stats.per, S.players[id].stats.outs)}</td></tr>`).join('');
   const pen = pitchers.filter(p => !t.rotation.includes(p.id));
   return `
   <section class="card">
     <div class="row"><h2>打順と守備</h2><button data-act="autoOrder">おまかせで組む</button></div>
     <p class="muted">守備位置を変えると、その位置にいた選手と入れ替わります。適性△×は守備が弱くなります。選べるのは一軍の選手だけです（入れ替えは「一軍・二軍」の画面で）。</p>
-    ${isMobile() ? lineupCards : `<div class="scroll"><table class="tbl"><tr><th>打順</th><th>守備</th><th>選手</th><th>調</th>${BAT_KEYS.map(k => `<th>${BAT_LABEL[k]}</th>`).join('')}<th>打率</th><th>本</th><th></th></tr>${rows}</table></div>`}
-    <h3>一軍の控え</h3><p>${bench.map(p => `${nameCell(p)}${posBadge(p)}（${Math.round(ovr(p))}）`).join('　') || 'なし'}</p>
+    ${isMobile() ? lineupCards : `<div class="scroll"><table class="tbl"><tr><th>打順</th><th>守備</th><th>選手</th><th>調</th>${BAT_KEYS.map(k => `<th>${BAT_LABEL[k]}</th>`).join('')}<th>総合</th><th>打率</th><th>本</th><th></th></tr>${rows}</table></div>`}
+    <h3>一軍の控え（${bench.length}人）</h3>${benchTable(bench)}
   </section>
   <section class="card">
     <h2>先発ローテーション（${ROTATION_SIZE}人）</h2>
     <p class="muted">月曜が休みなので、6 人で回すとそれぞれ中 6 日で投げられます。間が中 5 日より短いと次の人に飛ばします。</p>
-    <div class="scroll"><table class="tbl"><tr><th>#</th><th>投手</th><th>調</th><th>登板</th><th>勝敗</th><th>防御率</th></tr>${rot}</table></div>
+    <div class="scroll"><table class="tbl"><tr><th>#</th><th>投手</th><th>調</th><th>球速</th>${PIT_KEYS.slice(1).map(k => `<th>${PIT_LABEL[k]}</th>`).join('')}<th>総合</th><th>登板</th><th>勝敗</th><th>防御率</th></tr>${rot}</table></div>
     <h2>リリーフ</h2>
     <p>抑え（9回）：<select data-chg="closer"><option value="">なし</option>${pOpt(t.closer, pen.filter(p => p.id !== t.setup))}</select></p>
     <p>セットアッパー（8回）：<select data-chg="setup"><option value="">なし</option>${pOpt(t.setup, pen.filter(p => p.id !== t.closer))}</select></p>
     <p class="muted">3 点差以内でリードしている 8 回はセットアッパー、9 回は抑えが出ます。リリーフは 3 日続けては投げません。</p>
-    <h3>中継ぎ</h3><p>${pen.filter(p => p.id !== t.closer && p.id !== t.setup).map(p => `${nameCell(p)}（${veloKmh(p.a.velo)}km）`).join('　') || 'なし'}</p>
+    <h3>リリーフ陣（${pen.length}人）</h3>${penTable(pen.slice().sort((a, b) => (b.id === t.closer) - (a.id === t.closer) || (b.id === t.setup) - (a.id === t.setup) || relVal(b) - relVal(a)), t)}
   </section>`;
 }
 
@@ -871,13 +893,14 @@ function prospectTable(ids, mode) {
     ? `<button class="sm primary" data-act="draftBid" data-pid="${p.id}">1位で入札</button>`
     : `<button class="sm primary" data-act="draftPick" data-pid="${p.id}">指名</button>`);
   // 並び順も見立てで決める（本当の能力が並び順から漏れないように）
-  const seen = p => ovr({ ...p, a: Object.fromEntries(Object.keys(p.a).map(k => [k, scoutView(p, k)])) });
+  const seen = seenOvr;
+  const tierTag = p => { const t = draftTier(p); return `<span class="tier t${t[2]}">${t[1]}</span>`; };
   const watch = S.watch || [];
   let pool = ids.map(id => S.players[id]).filter(Boolean);
   if (UI.watchOnly) pool = pool.filter(p => watch.includes(p.id));
   pool = pool.filter(p => posMatch(p, UI.posf.draft));
   if (UI.geniusOnly) pool = pool.filter(geniusHint);
-  pool.sort((a, b) => (watch.includes(b.id) - watch.includes(a.id)) || (scoutView(b, 'pot') * 40 + seen(b) * 0.6) - (scoutView(a, 'pot') * 40 + seen(a) * 0.6));
+  pool.sort((a, b) => (watch.includes(b.id) - watch.includes(a.id)) || draftScore(b) - draftScore(a));
   const rows = pool.map(p => {
     const keys = abilKeys(p);
     const A = p.amateur;
@@ -886,7 +909,7 @@ function prospectTable(ids, mode) {
       <td class="l"><b>${h(p.name)}</b>${p.twoWay ? '<span class="tag twoway">二刀流</span>' : ''}</td><td>${p.kind}</td><td>${posBadge(p)}</td><td>${p.age}</td>
       <td>${geniusHint(p) ? '<span class="tag genius">天才肌？</span>' : ''}</td><td class="stars">${potStars(scoutView(p, 'pot'))}</td><td class="stars">${visualStars(p.visual)}</td>
       <td class="l">${keys.map(k => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(scoutView(p, k)) + 'km' : `<span class="g g${U.grade(scoutView(p, k))}">${U.grade(scoutView(p, k))}</span>`}`).join(' ')}</td>
-      <td class="l wrap amateur">${A ? `<div>${h(A.team)}</div><div>${h(A.line)}</div>${A.title ? `<div class="atitle">🏆 ${h(A.title)}</div>` : ''}` : ''}
+      <td class="l wrap amateur"><div>${tierTag(p)}</div>${A ? `<div>${h(A.team)}</div><div>${h(A.line)}</div>${A.title ? `<div class="atitle">🏆 ${h(A.title)}</div>` : ''}` : ''}
         <div class="muted">講評：${h(scoutComment(p))}</div></td>
       ${pickable ? `<td>${pickBtn(p)}</td>` : ''}</tr>`;
   }).join('');
@@ -898,7 +921,7 @@ function prospectTable(ids, mode) {
       lead: `<button class="star-btn ${on ? 'on' : ''}" data-act="watch" data-pid="${p.id}">${on ? '★' : '☆'}</button>`,
       name: `<b>${h(p.name)}</b>${p.twoWay ? '<span class="tag twoway">二刀流</span>' : ''}${geniusHint(p) ? '<span class="tag genius">天才肌？</span>' : ''}`,
       sub: `<span>${p.kind}</span><span class="muted">才能</span><span class="stars">${potStars(scoutView(p, 'pot'))}</span><span class="muted">ビジュアル</span><span class="stars">${visualStars(p.visual)}</span>`,
-      lines: `${A ? `<div class="pc-line">${h(A.team)}<br>${h(A.line)}</div>${A.title ? `<div class="pc-line atitle">🏆 ${h(A.title)}</div>` : ''}` : ''}<div class="pc-line muted">講評：${h(scoutComment(p))}</div>`,
+      lines: `<div class="pc-line">${tierTag(p)}</div>${A ? `<div class="pc-line">${h(A.team)}<br>${h(A.line)}</div>${A.title ? `<div class="pc-line atitle">🏆 ${h(A.title)}</div>` : ''}` : ''}<div class="pc-line muted">講評：${h(scoutComment(p))}</div>`,
       action: pickable ? pickBtn(p) : '',
     });
   }) : '';
@@ -907,13 +930,13 @@ function prospectTable(ids, mode) {
     <label><input type="checkbox" data-chg="watchOnly" ${UI.watchOnly ? 'checked' : ''}> ★ 気になる選手だけ（${watch.filter(id => ids.includes(id)).length}人）</label>
     <label><input type="checkbox" data-chg="geniusOnly" ${UI.geniusOnly ? 'checked' : ''}> ✨ 天才肌の気配だけ（${nGenius}人）</label></div>`;
   if (isMobile()) return filters + cards;
-  return `${filters}<div class="scroll"><table class="tbl"><tr><th>★</th><th>名前</th><th>出身</th><th>守</th><th>年</th><th>天才</th><th>才能</th><th>ビジュアル</th><th>能力（見立て）</th><th>アマ時代の成績・スカウト講評</th>${pickable ? '<th></th>' : ''}</tr>${rows || '<tr><td colspan="11" class="muted">該当する選手はいません</td></tr>'}</table></div>`;
+  return `${filters}<div class="scroll"><table class="tbl"><tr><th>★</th><th>名前</th><th>出身</th><th>守</th><th>年</th><th>天才</th><th>才能</th><th>ビジュアル</th><th>能力（見立て）</th><th>評価・アマ時代の成績・スカウト講評</th>${pickable ? '<th></th>' : ''}</tr>${rows || '<tr><td colspan="11" class="muted">該当する選手はいません</td></tr>'}</table></div>`;
 }
 
 function scoutNote() {
   const lv = myTeam().fac.scout;
   return `スカウト Lv${lv}：見えている能力は、本当の能力から<b>最大 ±${scoutRange()}</b> ずれています（たいていはその半分くらい）。
-    スカウトの段階を上げるほどずれが小さくなり、Lv5 ではほぼ正確です（Lv1 ±15 → Lv2 ±10 → Lv3 ±6 → Lv4 ±3 → Lv5 ±1）。成績とタイトルは事実なので、見立てと見比べてください。`;
+    スカウトの段階を上げるほどずれが小さくなり、Lv5 ではほぼ正確です（Lv1 ±15 → Lv2 ±10 → Lv3 ±6 → Lv4 ±3 → Lv5 ±1）。成績とタイトルは事実なので、見立てと見比べてください。評価（ドライチ級など）と総評も見立てから出しています。`;
 }
 
 // ---------- 補強のおすすめ（ドラフト・自由契約） ----------
@@ -953,6 +976,48 @@ function needsCard(filterKey) {
     <p class="muted small">ポジションの印を押すと、その候補だけに絞り込めます。</p></div>`;
 }
 
+// ---------- 今年のドラフトの総評（スカウト部長の見立て） ----------
+const KIND_WORD = { 高校: '高校生', 大学: '大学生', 社会人: '社会人' };
+const POS_WORD = { 捕: '捕手', 一: '一塁手', 二: '二塁手', 三: '三塁手', 遊: '遊撃手', 外: '外野手', 先発: '先発投手', 中継ぎ: '中継ぎ投手' };
+function draftReview(ids) {
+  const ps = ids.map(id => S.players[id]).filter(Boolean);
+  if (!ps.length) return '';
+  const top = ps.filter(p => draftScore(p) >= DRAFT_TOP);
+  const pit = top.filter(p => p.isP).length, bat = top.length - pit;
+  const word = (n, lo, hi) => (n >= hi ? '豊作' : n <= lo ? '不作' : '例年並み');
+  const wp = word(pit, REVIEW_LINE.P[0], REVIEW_LINE.P[1]), wb = word(bat, REVIEW_LINE.B[0], REVIEW_LINE.B[1]);
+  const lines = [];
+  if (wp === wb) {
+    lines.push(wp === '豊作' ? '今年は<b>投手・野手ともに豊作</b>。どの球団もいい選手が取れそうです。'
+      : wp === '不作' ? '今年は<b>投手・野手ともに不作</b>。上位の選手は奪い合いになりそうです。'
+        : '今年は投手・野手ともに<b>例年並み</b>です。');
+  } else {
+    lines.push(`今年は<b>投手が${wp}</b>、<b>野手は${wb}</b>です。`);
+  }
+  lines.push(`上位で消えそうな選手は ${top.length}人（投手${pit}人・野手${bat}人）。`);
+  const stars = top.filter(p => draftTier(p)[2] === 1).sort((a, b) => draftScore(b) - draftScore(a)).slice(0, 3);
+  lines.push(stars.length
+    ? `目玉は${stars.map(p => `<b>${h(p.name)}</b>（${KIND_WORD[p.kind]}・${p.isP ? '投手' : POS_WORD[p.pos]}）`).join('、')}。1位は重なりそうです。`
+    : '飛び抜けた目玉はおらず、1位の入札は割れそうです。');
+  // 出身ごとの多い・少ない（全体の割合とくらべて）
+  const kinds = Object.keys(KIND_WORD).map(k => {
+    const all = ps.filter(p => p.kind === k).length, t = top.filter(p => p.kind === k).length;
+    return { k, t, r: top.length && all ? (t / top.length) / (all / ps.length) : 1 };
+  }).sort((a, b) => b.r - a.r);
+  if (kinds[0].r >= 1.3 && kinds[0].t >= 3) lines.push(`上位候補は${KIND_WORD[kinds[0].k]}が多め（${kinds[0].t}人）。`);
+  const ready = ps.filter(p => p.kind !== '高校' && seenOvr(p) >= 58).length; // ふつうの年は 9 人くらい
+  lines.push(ready >= 14 ? `すぐに使える即戦力が${ready}人と多い年です。` : ready <= 6 ? `即戦力は${ready}人と少なめで、育てて使う年です。` : `即戦力は${ready}人。`);
+  const thin = ['捕', '遊'].filter(g => !top.some(p => posMatch(p, g)));
+  if (thin.length) lines.push(`上位候補に${thin.map(g => POS_WORD[g]).join('・')}がいません。`);
+  // 補強したいポジションとの照らし合わせ
+  const need = draftNeeds().find(x => x.score > 0);
+  if (need) {
+    const n = top.filter(p => posMatch(p, need.g)).length;
+    lines.push(`うちが補強したい<b>${POS_WORD[need.g]}</b>は、上位候補に${n}人${n >= 4 ? 'いて、狙いやすい年です' : n === 0 ? 'もおらず、中位以下で探すことになりそうです' : 'います'}。`);
+  }
+  return `<div class="review"><b>📰 今年のドラフト総評</b>（スカウト部長より）<p>${lines.join('<br>')}</p></div>`;
+}
+
 function renderProspects() {
   if (S.phase === 'off' && S.off.step !== 'awards' && S.off.step !== 'contract') {
     return `<section class="card"><h2>ドラフト候補</h2><p>${S.off.step === 'draft' ? 'ドラフト会議中です。「オフシーズン」の画面で指名してください。' : '今年のドラフトは終わりました。次の候補は開幕のときに発表されます。'}</p></section>`;
@@ -962,6 +1027,7 @@ function renderProspects() {
   <section class="card"><h2>${S.year}年 ドラフト候補</h2>
     <p>シーズンのあとのドラフト会議に出てくる選手です。☆を押すと「気になる選手」に入り、ドラフトで上に並びます。他球団に先に指名されるとニュースで知らせます。</p>
     <p class="muted">${scoutNote()}</p>
+    ${draftReview(ids)}
     ${needsCard('draft')}
     ${prospectTable(ids, false)}
   </section>`;
@@ -996,7 +1062,7 @@ function renderDraft() {
     <section class="card"><h2>1 巡目の結果</h2>${lotteryHtml || '<p class="muted">これから入札です</p>'}
       ${res ? `<h3>2 巡目から</h3><ul class="news">${res}</ul>` : ''}</section>
   </div>
-  ${done ? renderReleasePanel() : `<section class="card"><h2>候補選手</h2><p class="muted">${scoutNote()}</p>${needsCard('draft')}${prospectTable(D.pool, D.stage === 'r1' ? 'bid' : 'pick')}</section>`}`;
+  ${done ? renderReleasePanel() : `<section class="card"><h2>候補選手</h2><p class="muted">${scoutNote()}</p>${draftReview(D.pool.concat(D.result.map(r => r.pid)))}${needsCard('draft')}${prospectTable(D.pool, D.stage === 'r1' ? 'bid' : 'pick')}</section>`}`;
 }
 
 // 1 巡目の入札と抽選の結果

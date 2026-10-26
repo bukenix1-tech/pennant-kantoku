@@ -1007,12 +1007,15 @@ function offContract() {
 // その年のドラフト候補。シーズン開幕のときに発表され、ドラフトまでリストアップできる
 function makeDraftClass() {
   const pool = [];
+  // 年ごとの当たり外れ（「投手は豊作、野手は不作」のような年ができる）
+  const bias = { P: U.clamp(U.gauss() * 3.5, -7, 7), B: U.clamp(U.gauss() * 3.5, -7, 7) };
   for (let i = 0; i < S.teams.length * DRAFT_ROUNDS + 30; i++) {
     const kind = U.pick(['高校', '高校', '大学', '社会人']);
     const age = kind === '高校' ? 18 : kind === '大学' ? 22 : U.rint(23, 25);
-    const q = kind === '高校' ? U.rnd(28, 46) : kind === '大学' ? U.rnd(38, 54) : U.rnd(44, 58);
+    const isP = U.chance(0.45);
+    const q = (kind === '高校' ? U.rnd(28, 46) : kind === '大学' ? U.rnd(38, 54) : U.rnd(44, 58)) + (isP ? bias.P : bias.B);
     const pot = U.clamp(1.05 + U.gauss() * 0.25 + (kind === '高校' ? 0.1 : 0), 0.6, 1.7);
-    const p = newPlayer(S, { isP: U.chance(0.45), q, age, pot });
+    const p = newPlayer(S, { isP, q, age, pot });
     p.kind = kind;
     p.salary = 600;
     if (p.isP && p.pot >= 1.1 && U.chance(TWO_WAY_CHANCE / 0.2)) {
@@ -1078,6 +1081,19 @@ function scoutView(p, key) {
   if (key === 'pot') return U.clamp(real + dev * 0.025, 0.5, 1.7);
   return U.clamp(real + dev, 1, 99);
 }
+
+// ---------- ドラフトの評価（スカウトの見立てで決めるので、スカウトが低いと外れることもある） ----------
+function seenOvr(p) { return ovr({ ...p, a: Object.fromEntries(Object.keys(p.a).map(k => [k, scoutView(p, k)])) }); }
+function draftScore(p) { return scoutView(p, 'pot') * 40 + seenOvr(p) * 0.6; }
+// ふつうの年に「目玉 3 人・1 位級 12 人・上位 36 人」くらいになる点
+const DRAFT_TIERS = [
+  [94, '競合必至の目玉', 1], [84, 'ドライチ級', 2], [76, '上位で消える逸材', 3],
+  [67, '中位指名候補', 4], [58, '下位指名候補', 5], [-Infinity, '指名漏れもありうる', 6],
+];
+const DRAFT_TOP = 76; // 「上位候補」とみなす点
+// 上位候補の人数が この数以下なら「不作」、以上なら「豊作」（だいたい 2 割ずつの年がそうなる）
+const REVIEW_LINE = { P: [14, 21], B: [16, 25] };
+function draftTier(p) { const s = draftScore(p); return DRAFT_TIERS.find(t => s >= t[0]); }
 
 function toggleWatch(pid) {
   if (!S.watch) S.watch = [];
