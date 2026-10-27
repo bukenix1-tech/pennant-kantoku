@@ -194,6 +194,7 @@ function renderTitle() {
         <div class="slots">${Array.from({ length: SLOT_COUNT }, (_, i) => renderSlotCard(i + 1)).join('')}</div>
         <p class="note">試合を進めるたびに、選んだスロットへ自動で保存されます。ほかのスロットは変わりません。</p>
         <p class="note">ブラウザの閲覧データを消すと、セーブも消えます。ときどき「ファイルに書き出す」で残しておくと、消えても「ファイルから読み込む」で戻せます。</p>
+        ${versionLine()}
       </section>
     </div>`;
   }
@@ -1337,9 +1338,19 @@ function renderAwaken(list) {
   </div>`;
 }
 
+// いまの版と、どこから開いているか（更新されないときに見る）。値は main.js がオフライン用の仕組みから受け取る
+let swReg = null;
+let appVersion = '';
+function versionLine() {
+  return `<div class="version"><span>版：<b>${appVersion ? h(appVersion.replace('pennant-', '')) : '（オフライン用の準備なし）'}</b></span>
+    <span class="muted small">${h(location.host || 'ファイル')}</span>
+    ${'serviceWorker' in navigator && location.protocol === 'https:' ? '<button class="sm" data-act="checkUpdate">🔄 新しい版を確かめる</button>' : ''}</div>`;
+}
+
 function renderMenu() {
   const others = Array.from({ length: SLOT_COUNT }, (_, i) => i + 1).filter(n => n !== currentSlot);
   return `<h2>メニュー</h2>
+  ${versionLine()}
   <p>いま遊んでいるデータ：<b>スロット${currentSlot}</b>（試合を進めるたびに自動で保存しています）</p>
   <p><button data-act="saveNow">いま保存する</button></p>
   <h3>ファイルに書き出す（いちばん安心）</h3>

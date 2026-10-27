@@ -335,3 +335,6 @@ ol.plain { padding-left: 22px; }
 /* 古い年の記録の整理 */
 details.slim { margin-top: 14px; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 12px; background: #f8fafc; }
 details.slim summary { cursor: pointer; font-weight: bold; }
+
+/* 版の表示 */
+.version { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: #f1f5f9; border-radius: 8px; padding: 6px 10px; margin: 6px 0 10px; font-size: 13px; }

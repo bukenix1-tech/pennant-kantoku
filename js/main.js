@@ -186,6 +186,7 @@ const ACTIONS = {
   },
   statSort(el) { UI.statSort[el.dataset.kind] = el.dataset.k; },
   menu() { openModal(renderMenu()); return 'keep'; },
+  checkUpdate() { checkUpdate(); return 'keep'; },
   exportNow() {
     saveGame();
     const f = exportSlot(currentSlot);
@@ -349,6 +350,35 @@ render();
 window.matchMedia('(max-width: 700px)').addEventListener('change', () => render());
 
 // ネットに置いたとき（https）は、一度開けば電波がなくても遊べるようにする。ファイルを直接開いたときは何もしない
+// 新しい版を出したら、開き直したとき・アプリに戻ってきたときに自分で取りにいき、入れ替わったら読み込み直す
 if ('serviceWorker' in navigator && window.isSecureContext && location.protocol.startsWith('http')) {
-  navigator.serviceWorker.register('sw.js').catch(e => console.warn('オフライン用の準備ができませんでした', e));
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+    .then(reg => { swReg = reg; reg.update().catch(() => {}); askVersion(); })
+    .catch(e => console.warn('オフライン用の準備ができませんでした', e));
+  navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.version) { appVersion = e.data.version; render(); } });
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    // はじめて入ったときは読み込み直さない。版が入れ替わったときだけ
+    if (!hadController || reloading) return;
+    reloading = true;
+    if (S) saveGame();
+    location.reload();
+  });
+  // iPhone のホーム画面のアプリは、閉じたつもりでも裏で残っていることがあるので、前に戻ってきたときにも確かめる
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && swReg) swReg.update().catch(() => {}); });
+}
+function askVersion() {
+  if (navigator.serviceWorker && navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage('version');
+}
+
+// メニューの「新しい版を確かめる」
+async function checkUpdate() {
+  UI.toast = '新しい版を確かめています…';
+  render();
+  try {
+    if (swReg) await swReg.update();
+  } catch (e) { /* つながらないときは、いまの版のまま */ }
+  if (S) saveGame();
+  location.reload();
 }
