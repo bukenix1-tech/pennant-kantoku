@@ -781,7 +781,50 @@ function careerTotal(p) {
 function titlesOf(pid) {
   const out = [];
   (S.awardHist || []).forEach(y => y.list.forEach(a => { if (a.pid === pid) out.push({ year: y.year, title: a.title, lg: a.lg }); }));
+  // 整理で年表から消したタイトルは、選手のほうに移してある
+  const p = S.players[pid];
+  if (p && p.oldTitles) out.push(...p.oldTitles);
   return out;
+}
+
+// ---------- 古い年の記録の整理（人が選んだときだけ消す） ----------
+// 順位表は「球団・勝敗・差」だけにし、タイトルは MVP だけ残す。
+// 優勝・日本一・MVP・球団の記録・シーズン記録・通算記録・殿堂入りは変わらない
+function slimHistory(untilYear, lgs) {
+  S.awardHist.forEach(y => {
+    if (y.year > untilYear) return;
+    y.list = y.list.filter(a => {
+      if (a.title === 'MVP' || !lgs.includes(a.lg)) return true;
+      // まだいる選手のタイトルは、選手の詳細と殿堂入りの点に使うので、選手に移しておく
+      const p = S.players[a.pid];
+      if (p) (p.oldTitles = p.oldTitles || []).push({ year: y.year, title: a.title, lg: a.lg });
+      return false;
+    });
+    y.slim = [...new Set([...(y.slim || []), ...lgs])];
+  });
+  S.standHist.forEach(y => {
+    if (y.year > untilYear) return;
+    lgs.forEach(lg => { y.lg[lg] = y.lg[lg].map(r => ({ id: r.id, w: r.w, l: r.l, d: r.d, gb: r.gb })); });
+    y.slim = [...new Set([...(y.slim || []), ...lgs])];
+  });
+}
+
+// 整理して減るおおよその文字数（ためしに写しで整理してみる）
+function slimSaving(untilYear, lgs) {
+  const keep = S;
+  const before = JSON.stringify(S.awardHist).length + JSON.stringify(S.standHist).length;
+  S = { ...keep, awardHist: JSON.parse(JSON.stringify(keep.awardHist)), standHist: JSON.parse(JSON.stringify(keep.standHist)), players: {} };
+  try {
+    slimHistory(untilYear, lgs);
+    return before - JSON.stringify(S.awardHist).length - JSON.stringify(S.standHist).length;
+  } finally { S = keep; }
+}
+
+// 整理した順位表の行に、球団の名前と色を足して、ふつうの行と同じに扱えるようにする
+function histRow(r) {
+  if (!r) return r;
+  const t = S.teams[r.id];
+  return { name: t.name, short: t.short, color: t.color, rs: null, ra: null, ...r };
 }
 
 // シーズン記録（歴代トップ 10）。率は規定に届いた選手だけ

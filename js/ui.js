@@ -4,7 +4,7 @@
 
 const UI = {
   tab: 'home', viewTeam: null, trade: { team: null, give: [], get: [] }, toast: '',
-  sortKey: null, newTeam: 0, newGames: 143, lg: null, newSlot: null, watchOnly: false, pkind: '', faDraft: {}, histYear: null, posf: { team: '', draft: '', fa: '' }, geniusOnly: false, teamView: 'list', statSort: { bat: 'avg', pit: 'era' }, goodsType: 'towel', goodsPid: null, recView: 'hist', recYear: null,
+  sortKey: null, newTeam: 0, newGames: 143, lg: null, newSlot: null, watchOnly: false, pkind: '', faDraft: {}, histYear: null, posf: { team: '', draft: '', fa: '' }, geniusOnly: false, teamView: 'list', statSort: { bat: 'avg', pit: 'era' }, goodsType: 'towel', goodsPid: null, recView: 'hist', recYear: null, slimUntil: null, slimScope: 'other',
 };
 
 const TABS = [
@@ -738,11 +738,11 @@ function renderStandHist() {
   const y = H.find(x => x.year === UI.histYear);
   const table = rows => `<div class="scroll"><table class="tbl"><tr><th>順</th><th>球団</th><th>勝</th><th>敗</th><th>分</th><th>勝率</th><th>差</th><th>得点</th><th>失点</th></tr>
     ${rows.map((r, i) => `<tr class="${r.id === S.myTeamId ? 'me' : ''}"><td>${i + 1}</td><td class="l"><span class="chip" style="background:${r.color}">${h(r.short)}</span> ${h(r.name)}${y.jp === r.name ? ' <span class="tag awaken-tag">日本一</span>' : ''}</td>
-      <td>${r.w}</td><td>${r.l}</td><td>${r.d}</td><td>${(r.w + r.l ? r.w / (r.w + r.l) : 0).toFixed(3).replace(/^0/, '')}</td><td>${i ? r.gb.toFixed(1) : '-'}</td><td>${r.rs}</td><td>${r.ra}</td></tr>`).join('')}</table></div>`;
+      <td>${r.w}</td><td>${r.l}</td><td>${r.d}</td><td>${(r.w + r.l ? r.w / (r.w + r.l) : 0).toFixed(3).replace(/^0/, '')}</td><td>${i ? r.gb.toFixed(1) : '-'}</td><td>${r.rs != null ? r.rs : '-'}</td><td>${r.ra != null ? r.ra : '-'}</td></tr>`).join('')}</table></div>`;
   return `<section class="card"><div class="row"><h2>過去の順位</h2>
     <select data-chg="histYear">${H.map(x => `<option value="${x.year}" ${x.year === UI.histYear ? 'selected' : ''}>${x.year}年</option>`).join('')}</select></div>
     <p>${y.year}年（${y.games}試合）${y.jp ? ` ・ 日本一：<b>${h(y.jp)}</b>` : ''}</p>
-    <div class="grid2">${LEAGUES.map(lg => `<div><h3>${LEAGUE_NAME[lg]}</h3>${table(y.lg[lg])}</div>`).join('')}</div>
+    <div class="grid2">${LEAGUES.map(lg => `<div><h3>${LEAGUE_NAME[lg]}${(y.slim || []).includes(lg) ? ' <span class="muted small">（整理済み：得点・失点は消しました）</span>' : ''}</h3>${table(y.lg[lg].map(histRow))}</div>`).join('')}</div>
   </section>`;
 }
 
@@ -769,7 +769,7 @@ function recHist() {
   const mine = y => S.history.find(x => x.year === y);
   const rows = H.map(y => {
     const m = mine(y.year);
-    return `<tr><td>${y.year}</td>${LEAGUES.map(lg => `<td class="l">${teamTag(y.lg[lg][0])}</td>`).join('')}<td class="l">${y.jp ? `🏆 ${h(y.jp)}` : '-'}</td>
+    return `<tr><td>${y.year}</td>${LEAGUES.map(lg => `<td class="l">${teamTag(histRow(y.lg[lg][0]))}</td>`).join('')}<td class="l">${y.jp ? `🏆 ${h(y.jp)}` : '-'}</td>
       ${LEAGUES.map(lg => `<td class="l">${mvp(y.year, lg)}</td>`).join('')}<td class="l">${m ? `${m.rank}位${m.post ? ` ${h(m.post)}` : ''}` : '-'}</td></tr>`;
   }).join('');
   if (!H.some(x => x.year === UI.recYear)) UI.recYear = H[0].year;
@@ -777,10 +777,33 @@ function recHist() {
   const detail = list.length ? `<div class="grid2">${LEAGUES.map(lg => `<div><h3>${LEAGUE_NAME[lg]}</h3><table class="tbl">${list.filter(a => a.lg === lg)
     .map(a => `<tr><td class="l">${h(a.title)}</td><td class="l">${pName(a.pid, a.name)}<span class="muted">（${h(a.team)}）</span></td><td>${h(String(a.val))}</td></tr>`).join('')}</table></div>`).join('')}</div>`
     : '<p class="muted">この年のタイトルの記録はありません。</p>';
+  const slimNote = ((S.awardHist.find(x => x.year === UI.recYear) || {}).slim || []).map(lg => LEAGUE_NAME[lg]);
   return `<div class="scroll"><table class="tbl"><tr><th>年</th>${LEAGUES.map(lg => `<th>${LEAGUE_NAME[lg]}優勝</th>`).join('')}<th>日本一</th>${LEAGUES.map(lg => `<th>${LEAGUE_NAME[lg]}MVP</th>`).join('')}<th>${h(myTeam().short)}</th></tr>${rows}</table></div>
     <div class="row"><h3>タイトル</h3><select data-chg="recYear">${H.map(x => `<option value="${x.year}" ${x.year === UI.recYear ? 'selected' : ''}>${x.year}年</option>`).join('')}</select></div>
-    ${detail}`;
+    ${slimNote.length ? `<p class="muted small">${slimNote.join('・')}は整理したので、MVP のほかのタイトルは消してあります（選手の詳細にはまだ残っています）。</p>` : ''}
+    ${detail}
+    ${slimPanel(H)}`;
 }
+
+// 古い年の記録の整理
+function slimPanel(H) {
+  if (H.length < 2) return '';
+  const years = H.map(x => x.year);
+  if (!years.includes(UI.slimUntil)) UI.slimUntil = years[Math.min(years.length - 1, 10)] || years[years.length - 1];
+  const myLg = myTeam().lg, other = LEAGUES.find(l => l !== myLg);
+  const lgs = UI.slimScope === 'both' ? LEAGUES : [other];
+  const save = slimSaving(UI.slimUntil, lgs);
+  const from = years[years.length - 1];
+  return `<details class="slim"><summary>🧹 古い年の記録を整理する（セーブを軽くする）</summary>
+    <p>選んだ年までの<b>順位表の得点・失点</b>と、<b>MVP 以外のタイトルの一覧</b>を消します。</p>
+    <p class="muted small">残るもの：優勝・日本一・MVP・各球団の順位と勝敗・球団の記録・シーズン記録・通算記録・殿堂入り。
+      まだいる選手が取ったタイトルは、選手の詳細と殿堂入りの点には残ります。</p>
+    <p><select data-chg="slimUntil">${years.map(y => `<option value="${y}" ${y === UI.slimUntil ? 'selected' : ''}>${from}〜${y}年</option>`).join('')}</select>
+      <select data-chg="slimScope"><option value="other" ${UI.slimScope !== 'both' ? 'selected' : ''}>${LEAGUE_NAME[other]}（自分のいないリーグ）だけ</option><option value="both" ${UI.slimScope === 'both' ? 'selected' : ''}>両リーグ</option></select></p>
+    <p>${save > 0 ? `だいたい <b>${save.toLocaleString()}文字</b> 軽くなります（いまのセーブは約${JSON.stringify(S).length.toLocaleString()}文字）。` : 'この範囲は、もう整理してあります。'}</p>
+    <p><button class="danger" data-act="slimNow" ${save > 0 ? '' : 'disabled'}>整理する（元に戻せません）</button></p></details>`;
+}
+
 function teamTag(r) { return r ? `<span class="chip" style="background:${r.color}">${h(r.short)}</span> <span class="muted">${r.w}勝</span>` : '-'; }
 
 function recSeason() {
@@ -840,12 +863,12 @@ function recTeam() {
   const H = S.standHist || [];
   if (!H.length) return '<p class="muted">シーズンが終わると、球団ごとの記録がここに残ります。</p>';
   const rows = S.teams.map(t => {
-    const seasons = H.map(y => { const i = y.lg[t.lg].findIndex(r => r.id === t.id); return i < 0 ? null : { ...y.lg[t.lg][i], rank: i + 1, year: y.year, games: y.games, jp: y.jp === y.lg[t.lg][i].name }; }).filter(Boolean);
+    const seasons = H.map(y => { const i = y.lg[t.lg].findIndex(r => r.id === t.id); return i < 0 ? null : { ...histRow(y.lg[t.lg][i]), rank: i + 1, year: y.year, games: y.games, jp: y.jp === t.name }; }).filter(Boolean);
     const best = seasons.slice().sort((a, b) => b.w / Math.max(1, b.w + b.l) - a.w / Math.max(1, a.w + a.l))[0];
     return { t, lgWin: seasons.filter(s => s.rank === 1).length, jp: seasons.filter(s => s.jp).length, best, last: seasons.filter(s => s.rank === 6).length };
   }).sort((a, b) => b.jp - a.jp || b.lgWin - a.lgWin);
   const allSeasons = [];
-  H.forEach(y => LEAGUES.forEach(lg => y.lg[lg].forEach((r, i) => allSeasons.push({ ...r, year: y.year, rank: i + 1, games: y.games }))));
+  H.forEach(y => LEAGUES.forEach(lg => y.lg[lg].forEach((r, i) => allSeasons.push({ ...histRow(r), year: y.year, rank: i + 1, games: y.games }))));
   const pctOf = r => r.w / Math.max(1, r.w + r.l);
   const bestAll = allSeasons.slice().sort((a, b) => pctOf(b) - pctOf(a)).slice(0, 5);
   const worstAll = allSeasons.slice().sort((a, b) => pctOf(a) - pctOf(b)).slice(0, 5);
