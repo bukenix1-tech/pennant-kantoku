@@ -2,7 +2,7 @@
 
 // 一度開いたら、電波がなくても遊べるようにする（ゲームのファイルをスマホに取っておく）
 // ファイルを直したら CACHE の番号を上げる
-const CACHE = 'pennant-v13';
+const CACHE = 'pennant-v14';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './css/style.css',
   './js/util.js', './js/data.js', './js/player.js', './js/sim.js', './js/league.js', './js/ui.js', './js/main.js',

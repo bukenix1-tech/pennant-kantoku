@@ -1166,7 +1166,7 @@ function needsCard(filterKey) {
 }
 
 // ---------- 今年のドラフトの総評（スカウト部長の見立て） ----------
-const KIND_WORD = { 高校: '高校生', 大学: '大学生', 社会人: '社会人' };
+const KIND_WORD = { 高校: '高校生', 大学: '大学生', 社会人: '社会人', 高卒社会人: '高卒社会人' };
 const POS_WORD = { 捕: '捕手', 一: '一塁手', 二: '二塁手', 三: '三塁手', 遊: '遊撃手', 外: '外野手', 先発: '先発投手', 中継ぎ: '中継ぎ投手' };
 function draftReview(ids) {
   const ps = ids.map(id => S.players[id]).filter(Boolean);

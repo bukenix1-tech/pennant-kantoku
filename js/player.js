@@ -19,7 +19,7 @@ function newPlayer(S, opts) {
   const id = S.nextPid++;
   const isP = !!opts.isP;
   const age = opts.age != null ? opts.age : U.rint(19, 35);
-  const type = U.pick(['早熟', '普通', '普通', '晩成']);
+  const type = U.chance(SUPER_LATE_CHANCE) ? '超晩成' : U.pick(['早熟', '普通', '普通', '晩成']);
   const pot = opts.pot != null ? opts.pot : U.clamp(1 + U.gauss() * 0.22, 0.55, 1.6);
   const q = opts.q;
   const g = () => U.gauss() * 10;
@@ -223,9 +223,13 @@ function agePlayer(p) {
   if (p.isP) p.role = p.role === '抑え' ? '抑え' : (aptOf(p).sp >= aptOf(p).rp ? '先発' : '中継');
 }
 
+// 引退・戦力外・トレードの値打ちで見る年齢。超晩成型は花開くのが遅いので、そのぶん若く見る
+function careerAge(p) { return p.type === '超晩成' ? p.age - SUPER_LATE_SHIFT : p.age; }
+
 function tradeValue(p) {
   const o = ovr(p);
-  const ageMul = p.age <= 24 ? 1.3 : p.age <= 28 ? 1.1 : p.age <= 31 ? 1.0 : p.age <= 34 ? 0.7 : 0.4;
+  const ca = careerAge(p);
+  const ageMul = ca <= 24 ? 1.3 : ca <= 28 ? 1.1 : ca <= 31 ? 1.0 : ca <= 34 ? 0.7 : 0.4;
   let v = Math.pow(Math.max(o - 30, 1), 2) * ageMul * (0.8 + p.pot * 0.2);
   if (p.age <= 23) v *= p.pot;
   return Math.round(v);

@@ -1125,9 +1125,10 @@ function offContract() {
     teamPlayers(t).forEach(p => {
       const o = ovr(p);
       let leave = false;
-      if (p.age >= 38) leave = U.chance(0.85);
-      else if (p.age >= 35) leave = U.chance(o < 55 ? 0.7 : 0.3);
-      else if (p.age >= 31 && o < 45) leave = U.chance(0.5);
+      const ca = careerAge(p);
+      if (ca >= 38) leave = U.chance(0.85);
+      else if (ca >= 35) leave = U.chance(o < 55 ? 0.7 : 0.3);
+      else if (ca >= 31 && o < 45) leave = U.chance(0.5);
       if (p.foreign && o < 55) leave = true;
       if (leave) {
         if (t.id === my.id) retired.push({ name: p.name, age: p.age, why: p.foreign && p.age < 35 ? '退団' : '引退' });
@@ -1173,11 +1174,11 @@ function makeDraftClass() {
   // 年ごとの当たり外れ（「投手は豊作、野手は不作」のような年ができる）
   const bias = { P: U.clamp(U.gauss() * 3.5, -7, 7), B: U.clamp(U.gauss() * 3.5, -7, 7) };
   for (let i = 0; i < S.teams.length * DRAFT_ROUNDS + 30; i++) {
-    const kind = U.pick(['高校', '高校', '大学', '社会人']);
-    const age = kind === '高校' ? 18 : kind === '大学' ? 22 : U.rint(23, 25);
+    const kind = U.pickW(DRAFT_KINDS);
+    const age = kind === '高校' ? 18 : kind === '大学' ? 22 : kind === '高卒社会人' ? 21 : U.rint(23, 25);
     const isP = U.chance(0.45);
-    const q = (kind === '高校' ? U.rnd(28, 46) : kind === '大学' ? U.rnd(38, 54) : U.rnd(44, 58)) + (isP ? bias.P : bias.B);
-    const pot = U.clamp(1.05 + U.gauss() * 0.25 + (kind === '高校' ? 0.1 : 0), 0.6, 1.7);
+    const q = (kind === '高校' ? U.rnd(28, 46) : kind === '大学' ? U.rnd(38, 54) : kind === '高卒社会人' ? U.rnd(34, 50) : U.rnd(44, 58)) + (isP ? bias.P : bias.B);
+    const pot = U.clamp(1.05 + U.gauss() * 0.25 + (kind === '高校' ? 0.1 : kind === '高卒社会人' ? 0.05 : 0), 0.6, 1.7);
     const p = newPlayer(S, { isP, q, age, pot });
     p.kind = kind;
     p.salary = 600;
@@ -1267,7 +1268,9 @@ function toggleWatch(pid) {
 // ---------- アマチュア時代の成績と講評 ----------
 const UNIV_LEAGUES = ['東都大学リーグ', '東京六大学リーグ', '首都大学リーグ', '関西学生リーグ', '九州六大学リーグ', '北海道六大学リーグ'];
 const COMPANIES = ['ミナト自動車', '北辰製鉄', '大和ガス', '東邦電力', '三葉重工', '青葉通運'];
-const KIND_BASE = { 高校: 37, 大学: 46, 社会人: 51 }; // 出身ごとの能力の真ん中
+const KIND_BASE = { 高校: 37, 大学: 46, 高卒社会人: 42, 社会人: 51 }; // 出身ごとの能力の真ん中
+// ドラフト候補の出身の割合。高卒社会人は、高校を出て社会人で 3 年たった 21 歳（本物でも高卒の社会人は 3 年たたないと指名できない）
+const DRAFT_KINDS = [['高校', 47], ['大学', 25], ['社会人', 18], ['高卒社会人', 10]];
 
 // 成績とタイトルは本当の能力から作る（スカウトの見立てとは別の、表に出ている事実）
 function makeAmateur(p, kind) {
@@ -1284,7 +1287,7 @@ function makeAmateur(p, kind) {
     league = U.pick(UNIV_LEAGUES);
     A.team = `${U.pick(['東邦', '西海', '南星', '北陵', '中央学院', '国際', '明和', '清和'])}${U.pick(['大', '学院大', '工業大', '体育大'])}（${league}）`;
   } else {
-    A.team = `${U.pick(COMPANIES)}（社会人）`;
+    A.team = kind === '高卒社会人' ? `${U.pick(COMPANIES)}（社会人・高卒3年目）` : `${U.pick(COMPANIES)}（社会人）`;
   }
   const km = veloKmh(p.isP ? p.a.velo : 0) + U.rint(1, 3);
   if (!p.isP) {
@@ -1347,6 +1350,7 @@ function scoutComment(p) {
   else if (pot < 0.85) parts.push('完成度は高いが伸びしろは小さめ');
   if (p.kind === '高校' && pot >= 1.15 && ovr(p) < 38) parts.push('じっくり育てたい素材型');
   if (p.kind === '社会人' && ovr(p) >= 52) parts.push('即戦力');
+  if (p.kind === '高卒社会人') parts.push(ovr(p) >= 46 ? '社会人の3年で体ができ、まだ若い' : '若さが魅力で、もうひと伸びしそう');
   if (p.twoWay) parts.push('投打の二刀流');
   return parts.join('。') + '。';
 }
@@ -1570,7 +1574,7 @@ function agingFreeAgents() {
     if (!p) return false;
     agePlayer(p);
     p.faYears = (p.faYears || 0) + 1;
-    if (p.age >= 37 || p.faYears >= 2 || ovr(p) < 38) { retireRecord(p); delete S.players[id]; return false; }
+    if (careerAge(p) >= 37 || p.faYears >= 2 || ovr(p) < 38) { retireRecord(p); delete S.players[id]; return false; }
     p.salary = faDemand(p);
     return true;
   });

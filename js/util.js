@@ -12,6 +12,8 @@ const U = {
   },
   clamp(v, a, b) { return Math.max(a, Math.min(b, v)); },
   pick(a) { return a[Math.floor(Math.random() * a.length)]; },
+  // [[値, 重み], ...] から重みに応じて 1 つ選ぶ
+  pickW(list) { let r = Math.random() * list.reduce((t, x) => t + x[1], 0); for (const [v, w] of list) { if ((r -= w) < 0) return v; } return list[list.length - 1][0]; },
   chance(p) { return Math.random() < p; },
   shuffle(a) {
     for (let i = a.length - 1; i > 0; i--) {
