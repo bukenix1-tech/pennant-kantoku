@@ -459,12 +459,12 @@ function renderPlayerModal(p) {
     const s = c.s;
     return pit
       ? `<tr><td>${c.y}${c.now ? '（今季）' : ''}</td><td>${h(c.t)}</td><td>${s.pg}</td><td>${s.w}</td><td>${s.l}</td><td>${s.sv}</td><td>${U.era(s.per, s.outs)}</td><td>${U.ip(s.outs)}</td><td>${s.pk}</td></tr>`
-      : `<tr><td>${c.y}${c.now ? '（今季）' : ''}</td><td>${h(c.t)}</td><td>${s.g}</td><td>${U.avg(s.h, s.ab)}</td><td>${s.hr}</td><td>${s.rbi}</td><td>${s.sb}</td><td>${s.pa ? ops(s).toFixed(3) : '-'}</td></tr>`;
+      : `<tr><td>${c.y}${c.now ? '（今季）' : ''}</td><td>${h(c.t)}</td><td>${s.g}</td><td>${U.avg(s.h, s.ab)}</td><td>${s.h}</td><td>${s.hr}</td><td>${s.rbi}</td><td>${s.sb}</td><td>${s.pa ? ops(s).toFixed(3) : '-'}</td></tr>`;
   };
   const titles = titlesOf(p.id);
   const totalRow = pit => (careerRows.length > 1 ? crow({ y: '通算', t: '', s: careerTotal(p) }, pit).replace('<tr>', '<tr class="total">') : '');
   const headP = '<tr><th>年</th><th>球団</th><th>登板</th><th>勝</th><th>敗</th><th>S</th><th>防御率</th><th>回</th><th>三振</th></tr>';
-  const headB = '<tr><th>年</th><th>球団</th><th>試合</th><th>打率</th><th>本</th><th>点</th><th>盗</th><th>OPS</th></tr>';
+  const headB = '<tr><th>年</th><th>球団</th><th>試合</th><th>打率</th><th>安打</th><th>本</th><th>点</th><th>盗</th><th>OPS</th></tr>';
   const focusOpts = focusOptions(p).map(f => `<option ${p.focus === f ? 'selected' : ''}>${f}</option>`).join('');
   const team = p.teamId != null ? S.teams[p.teamId] : null;
   return `
