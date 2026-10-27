@@ -54,7 +54,8 @@ function doPA(b, rec, fld) {
   const ctrl = p.a.control * cp;
   const pBB = U.clamp(0.085 + (50 - ctrl) * 0.0013, 0.02, 0.2);
   const pK = U.clamp(0.185 + (stuff - 50) * 0.0035 - (meet - 50) * 0.003, 0.05, 0.42);
-  const pHR = U.clamp(0.021 + (pow - 50) * 0.001 - (stuff - 50) * 0.0004, 0.002, 0.09);
+  const tj = trajOf(b);
+  const pHR = U.clamp((0.021 + (pow - 50) * 0.001 - (stuff - 50) * 0.0004) * TRAJ_HR[tj], 0.002, 0.11);
   let r = Math.random();
   if (r < pBB) return { t: 'BB', pc: U.rint(4, 7) };
   r -= pBB;
@@ -63,14 +64,14 @@ function doPA(b, rec, fld) {
   if (r < pHR) return { t: 'HR', pc: U.rint(1, 6) };
   const pc = U.rint(1, 6);
   const babip = U.clamp(0.29 + (meet - 50) * 0.0022 + (spd - 50) * 0.0007
-    - (fld.def - 50) * 0.0018 - (stuff - 50) * 0.0008, 0.2, 0.42);
+    - (fld.def - 50) * 0.0018 - (stuff - 50) * 0.0008 + TRAJ_BABIP[tj], 0.2, 0.42);
   if (Math.random() < babip) {
     const x = Math.random();
     if (x < 0.018 + Math.max(0, spd - 50) * 0.0006) return { t: '3B', pc };
     if (x < 0.2 + (pow - 50) * 0.002) return { t: '2B', pc };
     return { t: '1B', pc };
   }
-  return { t: Math.random() < 0.5 ? 'GO' : 'FO', pc };
+  return { t: Math.random() < TRAJ_FLY[tj] ? 'FO' : 'GO', pc };
 }
 
 function changePitcher(g, fld, bat, inning, atStart) {

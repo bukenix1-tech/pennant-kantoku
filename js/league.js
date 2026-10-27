@@ -1345,6 +1345,8 @@ function scoutComment(p) {
   if (scoutView(p, keys[1]) >= base + 8) parts.push(SCOUT_GOOD[keys[1]]);
   if (scoutView(p, worst) < base) parts.push(SCOUT_BAD[worst]);
   const pot = scoutView(p, 'pot');
+  if (canBat(p) && trajOf(p) === 4) parts.push('打球が高く上がるアーチスト');
+  else if (canBat(p) && trajOf(p) === 1) parts.push('低く鋭い打球のライナー打者');
   if (pot >= 1.42) parts.push('将来のスター候補');
   else if (pot >= 1.22) parts.push('伸びしろ十分');
   else if (pot < 0.85) parts.push('完成度は高いが伸びしろは小さめ');
@@ -1812,6 +1814,7 @@ function migrate() {
   Object.values(S.players).forEach(p => { if (p.svc == null) initService(p); });
   Object.values(S.players).forEach(p => { if (canPitch(p) && !p.apt) p.apt = rollApt(p.a.stamina); });
   Object.values(S.players).forEach(p => { if (p.home === undefined) p.home = p.foreign ? null : U.pick(PREFS); });
+  Object.values(S.players).forEach(p => { if (canBat(p) && !p.traj) p.traj = rollTraj(p.a.power); });
   S.teams.forEach(t => { if (!t.active) { t.active = []; autoActive(t); ensureLineup(S, t); } });
   Object.values(S.players).forEach(p => {
     if (p.visual == null) p.visual = rollVisual();

@@ -18,9 +18,16 @@ const h = U.esc;
 // 画面の幅が狭いとき（スマホ）は、選手の表をカードにする。パソコンでは今までどおり表
 function isMobile() { return window.matchMedia('(max-width: 700px)').matches; }
 
+// 弾道（↗の数）。野手だけ
+function trajTag(p) {
+  if (!canBat(p)) return '';
+  const t = trajOf(p);
+  return `<span class="ab traj t${t}" title="弾道${t}（高いほどホームランとフライが多い）">弾<b>${t}</b></span>`;
+}
+
 function abilSum(p, view) {
   const v = k => (view ? scoutView(p, k) : p.a[k]);
-  return abilKeys(p).map(k => `<span class="ab">${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(v(k)) + 'km' : `<span class="g g${U.grade(v(k))}">${U.grade(v(k))}</span>`}</span>`).join('');
+  return abilKeys(p).map(k => `<span class="ab">${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(v(k)) + 'km' : `<span class="g g${U.grade(v(k))}">${U.grade(v(k))}</span>`}</span>`).join('') + trajTag(p);
 }
 
 function statLine(p) {
@@ -416,12 +423,12 @@ function teamStats(t, g, showBat, showPit) {
 function batTable(list) {
   if (isMobile()) return cardList(list, p => playerCard(p, { sub: `<span class="muted">人気${Math.round(p.fame)} ・ ${U.money(p.salary)}</span>`, lines: `<div class="pc-line">${statLine(p)}</div>` }));
   return `<div class="scroll"><table class="tbl">
-  <tr><th>名前</th><th>守</th><th>年</th><th>調</th>${BAT_KEYS.map(k => `<th>${BAT_LABEL[k]}</th>`).join('')}<th>総合</th><th>人気</th>
+  <tr><th>名前</th><th>守</th><th>年</th><th>調</th>${BAT_KEYS.map(k => `<th>${BAT_LABEL[k]}</th>`).join('')}<th>弾</th><th>総合</th><th>人気</th>
   <th>試合</th><th>打率</th><th>本</th><th>点</th><th>盗</th><th>OPS</th><th>年俸</th></tr>
   ${list.map(p => {
     const s = p.stats;
     return `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${condCell(p)}</td>
-    ${BAT_KEYS.map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}<td>${Math.round(ovr(p))}</td><td>${Math.round(p.fame)}</td>
+    ${BAT_KEYS.map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}<td>${canBat(p) ? trajOf(p) : '-'}</td><td>${Math.round(ovr(p))}</td><td>${Math.round(p.fame)}</td>
     <td>${s.g}</td><td>${U.avg(s.h, s.ab)}</td><td>${s.hr}</td><td>${s.rbi}</td><td>${s.sb}</td><td>${s.pa ? ops(s).toFixed(3) : '-'}</td><td>${U.money(p.salary)}</td></tr>`;
   }).join('')}</table></div>`;
 }
@@ -448,11 +455,14 @@ function growthBox(p) {
     ・ いま <span class="phase ph-${ph.k}">${ph.name}</span> ${now}</p>${growthBar(p)}</div>`;
 }
 
+const TRAJ_WORD = ['', 'ライナー・ゴロが多い', 'やや低め', 'やや高め', '高く上がるアーチスト'];
+
 function renderPlayerModal(p) {
   const mine = p.teamId === S.myTeamId;
   const keys = abilKeys(p), lbl = ALL_LABEL;
   const bars = keys.map(k => `<div class="bar"><span class="bl">${lbl[k]}</span>${gradeCell(p.a[k])}
-    <span class="bt"><span style="width:${Math.round(p.a[k])}%"></span></span>${k === 'velo' ? `<span class="muted">${veloKmh(p.a.velo)}km/h</span>` : ''}</div>`).join('');
+    <span class="bt"><span style="width:${Math.round(p.a[k])}%"></span></span>${k === 'velo' ? `<span class="muted">${veloKmh(p.a.velo)}km/h</span>` : ''}</div>`).join('')
+    + (canBat(p) ? `<div class="bar"><span class="bl">弾道</span>${trajTag(p)}<span class="muted small">${TRAJ_WORD[trajOf(p)]}</span></div>` : '');
   const careerRows = [...p.career, { y: S.year, t: p.teamId != null ? S.teams[p.teamId].short : '-', s: p.stats, now: true }]
     .filter((c, i, arr) => !(c.now && arr.some(x => !x.now && x.y === S.year)));
   const crow = (c, pit) => {
@@ -507,15 +517,15 @@ function renderPlayerModal(p) {
 // ---------- オーダー ----------
 // 選ぶ欄の中にも能力を出す（ミB パA 走C 肩D 守C）
 const abilText = (p, keys) => keys.map(k => (k === 'velo' ? `${veloKmh(p.a.velo)}km` : `${SHORT_LABEL[k]}${U.grade(p.a[k])}`)).join(' ');
-const batOpt = f => `${h(f.name)}（${f.isP ? f.pos2 : f.pos}）${abilText(f, BAT_KEYS)} 総${Math.round(batOvr(f))}${f.inj ? ' 故障' : ''}`;
+const batOpt = f => `${h(f.name)}（${f.isP ? f.pos2 : f.pos}）${abilText(f, BAT_KEYS)} 弾${trajOf(f)} 総${Math.round(batOvr(f))}${f.inj ? ' 故障' : ''}`;
 const pitOpt = p => `${h(p.name)}（${abilText(p, PIT_KEYS)} 総${Math.round(ovr(p))}）${p.inj ? '故障' : ''}`;
 
 // 一軍の控え・中継ぎを、能力つきの表で見せる
 function benchTable(list) {
   if (isMobile()) return cardList(list, p => playerCard(p, { sub: `<span class="muted">打率${U.avg(p.stats.h, p.stats.ab)} ${p.stats.hr}本</span>` }));
   if (!list.length) return '<p class="muted">なし</p>';
-  return `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>調</th>${BAT_KEYS.map(k => `<th>${BAT_LABEL[k]}</th>`).join('')}<th>総合</th><th>打率</th><th>本</th></tr>
-    ${list.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${condCell(p)}</td>${BAT_KEYS.map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}
+  return `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>調</th>${BAT_KEYS.map(k => `<th>${BAT_LABEL[k]}</th>`).join('')}<th>弾</th><th>総合</th><th>打率</th><th>本</th></tr>
+    ${list.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${condCell(p)}</td>${BAT_KEYS.map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}<td>${canBat(p) ? trajOf(p) : '-'}</td>
       <td>${Math.round(batOvr(p))}</td><td>${U.avg(p.stats.h, p.stats.ab)}</td><td>${p.stats.hr}</td></tr>`).join('')}</table></div>`;
 }
 function penTable(list, t) {
@@ -540,7 +550,7 @@ function renderOrder() {
       <td><select data-chg="lpos" data-i="${i}">${LPOS.map(x => `<option ${x === s.pos ? 'selected' : ''}>${x}</option>`).join('')}</select></td>
       <td class="l"><select data-chg="lplayer" data-i="${i}">${fielders.map(f => `<option value="${f.id}" ${f.id === p.id ? 'selected' : ''}>${batOpt(f)}</option>`).join('')}</select>
         ${fit < 1 ? `<span class="tag ${fit < 0.7 ? 'bad' : ''}">適性${fit < 0.7 ? '×' : '△'}</span>` : ''}${p.inj ? '<span class="tag bad">故障</span>' : ''}</td>
-      <td>${condCell(p)}</td>${BAT_KEYS.map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}
+      <td>${condCell(p)}</td>${BAT_KEYS.map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}<td>${canBat(p) ? trajOf(p) : '-'}</td>
       <td>${Math.round(batOvr(p))}</td><td>${U.avg(p.stats.h, p.stats.ab)}</td><td>${p.stats.hr}</td>
       <td class="nowrap"><button class="sm" data-act="lmove" data-i="${i}" data-d="-1">▲</button><button class="sm" data-act="lmove" data-i="${i}" data-d="1">▼</button></td>
     </tr>`;
@@ -552,7 +562,7 @@ function renderOrder() {
         <select data-chg="lpos" data-i="${i}">${LPOS.map(x => `<option ${x === s.pos ? 'selected' : ''}>${x}</option>`).join('')}</select>
         <select class="grow" data-chg="lplayer" data-i="${i}">${fielders.map(f => `<option value="${f.id}" ${f.id === p.id ? 'selected' : ''}>${batOpt(f)}</option>`).join('')}</select></div>
       <div class="pc-sub">${posBadge(p)}${condCell(p)}${fit < 1 ? `<span class="tag ${fit < 0.7 ? 'bad' : ''}">適性${fit < 0.7 ? '×' : '△'}</span>` : ''}<span class="muted">打率${U.avg(p.stats.h, p.stats.ab)} ${p.stats.hr}本</span></div>
-      <div class="pc-abil">${BAT_KEYS.map(k => `<span class="ab">${SHORT_LABEL[k]}<span class="g g${U.grade(p.a[k])}">${U.grade(p.a[k])}</span></span>`).join('')}</div>
+      <div class="pc-abil">${BAT_KEYS.map(k => `<span class="ab">${SHORT_LABEL[k]}<span class="g g${U.grade(p.a[k])}">${U.grade(p.a[k])}</span></span>`).join('')}${trajTag(p)}</div>
       <div class="pc-act"><button class="sm" data-act="lmove" data-i="${i}" data-d="-1">▲ 上へ</button><button class="sm" data-act="lmove" data-i="${i}" data-d="1">▼ 下へ</button></div></div>`;
   }).join('')}</div>` : '';
   const bench = fielders.filter(p => !inLine.has(p.id));
@@ -566,7 +576,7 @@ function renderOrder() {
   <section class="card">
     <div class="row"><h2>打順と守備</h2><button data-act="autoOrder">おまかせで組む</button></div>
     <p class="muted">守備位置を変えると、その位置にいた選手と入れ替わります。適性△×は守備が弱くなります。選べるのは一軍の選手だけです（入れ替えは「一軍・二軍」の画面で）。</p>
-    ${isMobile() ? lineupCards : `<div class="scroll"><table class="tbl"><tr><th>打順</th><th>守備</th><th>選手</th><th>調</th>${BAT_KEYS.map(k => `<th>${BAT_LABEL[k]}</th>`).join('')}<th>総合</th><th>打率</th><th>本</th><th></th></tr>${rows}</table></div>`}
+    ${isMobile() ? lineupCards : `<div class="scroll"><table class="tbl"><tr><th>打順</th><th>守備</th><th>選手</th><th>調</th>${BAT_KEYS.map(k => `<th>${BAT_LABEL[k]}</th>`).join('')}<th>弾</th><th>総合</th><th>打率</th><th>本</th><th></th></tr>${rows}</table></div>`}
     <h3>一軍の控え（${bench.length}人）</h3>${benchTable(bench)}
   </section>
   <section class="card">
@@ -636,7 +646,7 @@ function renderRoster() {
   const t = myTeam();
   const act = activePlayers(t), farm = teamPlayers(t).filter(p => !t.active.includes(p.id));
   const foreign = act.filter(p => p.foreign).length;
-  const sum = p => abilKeys(p).map(k => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(p.a.velo) + 'km' : `<span class="g g${U.grade(p.a[k])}">${U.grade(p.a[k])}</span>`}`).join(' ');
+  const sum = p => abilKeys(p).map(k => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(p.a.velo) + 'km' : `<span class="g g${U.grade(p.a[k])}">${U.grade(p.a[k])}</span>`}`).join(' ') + trajTag(p);
   const pos = p => posBadge(p);
   const actAct = p => `<button class="sm" data-act="demote" data-pid="${p.id}">抹消</button>`;
   const farmAct = p => {
@@ -913,7 +923,7 @@ function renderMoney() {
   const fc = (S.foreignCands || []).map(id => S.players[id]).filter(Boolean);
   const fcHtml = fc.length ? `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>能力</th><th>年俸</th><th></th></tr>
     ${fc.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td>
-      <td class="l">${abilKeys(p).map(k => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(p.a.velo) + 'km' : `<span class="g g${U.grade(p.a[k])}">${U.grade(p.a[k])}</span>`}`).join(' ')}</td>
+      <td class="l">${abilKeys(p).map(k => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(p.a.velo) + 'km' : `<span class="g g${U.grade(p.a[k])}">${U.grade(p.a[k])}</span>`}`).join(' ')}${trajTag(p)}</td>
       <td>${U.money(p.salary)}</td><td><button data-act="signForeign" data-pid="${p.id}">契約（契約金${U.money(p.salary * 0.5)}）</button></td></tr>`).join('')}</table></div>` : '';
   return `
   <div class="grid2">
@@ -1020,7 +1030,7 @@ function renderFA() {
     const fee = Math.round(p.salary * 0.2);
     const can = open && t.players.length < ROSTER_MAX && t.money >= fee;
     return `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${p.type}</td><td class="stars">${potStars(p.pot)}</td>
-      <td class="l">${keys.map(k => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(p.a.velo) + 'km' : `<span class="g g${U.grade(p.a[k])}">${U.grade(p.a[k])}</span>`}`).join(' ')}</td>
+      <td class="l">${keys.map(k => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(p.a.velo) + 'km' : `<span class="g g${U.grade(p.a[k])}">${U.grade(p.a[k])}</span>`}`).join(' ')}${trajTag(p)}</td>
       <td>${Math.round(ovr(p))}</td><td>${h(p.lastTeam || '-')}</td><td>${U.money(p.salary)}</td>
       <td><button class="sm primary" data-act="signFA" data-pid="${p.id}" ${can ? '' : 'disabled'}>契約（契約金${U.money(fee)}）</button></td></tr>`;
   };
@@ -1116,7 +1126,7 @@ function prospectTable(ids, mode) {
     return `<tr class="${on ? 'sel' : ''}"><td><button class="star-btn ${on ? 'on' : ''}" data-act="watch" data-pid="${p.id}" title="気になる">${on ? '★' : '☆'}</button></td>
       <td class="l"><b>${h(p.name)}</b>${p.twoWay ? '<span class="tag twoway">二刀流</span>' : ''}</td><td>${p.kind}</td><td>${posBadge(p)}</td><td>${p.age}</td>
       <td>${geniusHint(p) ? '<span class="tag genius">天才肌？</span>' : ''}</td><td class="stars">${potStars(scoutView(p, 'pot'))}</td><td class="stars">${visualStars(p.visual)}</td>
-      <td class="l">${keys.map(k => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(scoutView(p, k)) + 'km' : `<span class="g g${U.grade(scoutView(p, k))}">${U.grade(scoutView(p, k))}</span>`}`).join(' ')}</td>
+      <td class="l">${keys.map(k => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(scoutView(p, k)) + 'km' : `<span class="g g${U.grade(scoutView(p, k))}">${U.grade(scoutView(p, k))}</span>`}`).join(' ')}${trajTag(p)}</td>
       <td class="l wrap amateur"><div>${tierTag(p)}</div>${A ? `<div>${h(A.team)}</div><div>${h(A.line)}</div>${A.title ? `<div class="atitle">🏆 ${h(A.title)}</div>` : ''}` : ''}
         <div class="muted">講評：${h(scoutComment(p))}</div></td>
       ${pickable ? `<td>${pickBtn(p)}</td>` : ''}</tr>`;

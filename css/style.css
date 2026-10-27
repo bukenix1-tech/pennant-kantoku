@@ -343,3 +343,9 @@ details.slim summary { cursor: pointer; font-weight: bold; }
 .dgrade { display: inline-block; min-width: 22px; text-align: center; font-weight: bold; border-radius: 6px; padding: 1px 6px; color: #fff; }
 .dgrade.ga { background: #dc2626; } .dgrade.gb { background: #f97316; } .dgrade.gc { background: #eab308; }
 .dgrade.gd { background: #64748b; } .dgrade.ge { background: #334155; }
+
+/* 弾道 */
+.ab.traj { background: #eef2ff; color: #3730a3; border-radius: 4px; padding: 0 4px; margin-left: 2px; }
+.ab.traj b { font-weight: 700; }
+.ab.traj.t4 { background: #fee2e2; color: #b91c1c; }
+.ab.traj.t3 { background: #ffedd5; color: #c2410c; }

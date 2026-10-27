@@ -49,8 +49,9 @@ function newPlayer(S, opts) {
     a = {};
     BAT_KEYS.forEach(k => { a[k] = c(q + g() + bias[k]); });
   }
+  const traj = isP ? null : rollTraj(a.power);
   const p = {
-    id, name: makeName(opts.foreign), age, isP, pos, role, type,
+    id, name: makeName(opts.foreign), age, isP, pos, role, type, traj,
     peak: GROWTH_PEAK[type] + U.rint(-1, 1), pot, a,
     foreign: !!opts.foreign, teamId: null, salary: 0,
     focus: 'バランス', cond: 3, inj: 0, rest: 5, fatigue: 0,
@@ -109,6 +110,7 @@ function makeTwoWay(p, q) {
   const c = v => U.clamp(v, 5, 99);
   if (p.isP) {
     BAT_KEYS.forEach(k => { p.a[k] = c(q + U.gauss() * 8); });
+    p.traj = rollTraj(p.a.power);
     p.pos2 = U.pick(['外', '外', '一', '三']);
   } else {
     p.a.velo = c(q + U.gauss() * 8); p.a.control = c(q + U.gauss() * 8);
@@ -124,6 +126,16 @@ function dropTwoWay(p) {
   p.twoWay = false;
   delete p.pos2;
   if (!p.isP) p.role = null;
+}
+
+// 弾道はパワーにだいたい合わせて決まる（パワーがあっても弾道の低い人もいる）
+function rollTraj(power) { return U.clamp(Math.round(1.2 + (power - 30) / 18 + U.gauss() * 0.7), 1, 4); }
+function trajOf(p) { return p.traj || 2; }
+// オフに、パワーが足りていれば弾道が上がることがある
+function growTraj(p) {
+  const t = trajOf(p);
+  if (!canBat(p) || t >= 4) return;
+  if (p.a.power >= TRAJ_UP_POWER[t + 1] && U.chance(TRAJ_UP_CHANCE)) p.traj = t + 1;
 }
 
 function batOvr(p) { const a = p.a; return a.meet * 0.3 + a.power * 0.3 + a.speed * 0.12 + a.arm * 0.08 + a.field * 0.2; }
@@ -214,6 +226,7 @@ function growthPhase(p) {
 // 年を取ったときの衰え
 function agePlayer(p) {
   p.age++;
+  growTraj(p);
   const over = p.age - (p.peak + 1);
   if (over > 0) {
     abilKeys(p).forEach(k => {
