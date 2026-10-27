@@ -794,6 +794,12 @@ const SEASON_REC = [
   { k: 'sv', name: 'セーブ', f: s => s.sv }, { k: 'pk', name: '奪三振', f: s => s.pk },
 ];
 const REC_TOP = 10;
+const CAREER_REC = [
+  ['h', '安打'], ['hr', '本塁打'], ['rbi', '打点'], ['sb', '盗塁'], ['g', '出場試合'],
+  ['w', '勝利'], ['sv', 'セーブ'], ['pk', '奪三振'], ['pg', '登板'],
+];
+// 殿堂入りしなかった名選手のうち、★のない選手を残す人数（セーブが増え続けないように）
+const RETIRED_KEEP = 100;
 function updateSeasonRecords() {
   const ps = Object.values(S.players).filter(p => p.teamId != null);
   SEASON_REC.forEach(r => {
@@ -849,6 +855,21 @@ function retireRecord(p) {
     my: teams.includes(myTeam().short),
   });
   if (hof) addNews(`${p.name}（${teams.join('→')}）が引退し、殿堂入りしました。${ms.length ? `（${ms.join('・')}）` : ''}`, 'big');
+  pruneRetired();
+}
+
+// 殿堂入り・★付き・通算記録のトップに入っている選手は残し、ほかは新しい順に RETIRED_KEEP 人まで
+function pruneRetired() {
+  const R = S.retired; // 新しい順
+  const keep = new Set();
+  CAREER_REC.forEach(([k]) => R.slice().sort((a, b) => b.c[k] - a.c[k]).slice(0, REC_TOP).forEach(r => { if (r.c[k] > 0) keep.add(r); }));
+  let n = 0;
+  S.retired = R.filter(r => r.hof || r.star || keep.has(r) || ++n <= RETIRED_KEEP);
+}
+
+function toggleRetiredStar(id) {
+  const r = S.retired.find(x => x.id === id);
+  if (r) r.star = !r.star;
 }
 
 // ---------- 覚醒 ----------

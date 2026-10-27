@@ -748,10 +748,6 @@ function renderStandHist() {
 
 // ---------- 記録・歴史・殿堂 ----------
 const recFmt = k => (k === 'avg' || k === 'ops' ? v => v.toFixed(3).replace(/^0/, '') : k === 'era' ? v => v.toFixed(2) : v => v);
-const CAREER_REC = [
-  ['h', '安打'], ['hr', '本塁打'], ['rbi', '打点'], ['sb', '盗塁'], ['g', '出場試合'],
-  ['w', '勝利'], ['sv', 'セーブ'], ['pk', '奪三振'], ['pg', '登板'],
-];
 // 記録の中の名前（いる選手は押すと詳細が開く。引退した選手は名前だけ）
 const pName = (id, name) => (S.players[id] ? `<a href="#" data-act="player" data-pid="${id}">${h(name)}</a>` : h(name));
 
@@ -827,13 +823,16 @@ function careerLine(r) {
 
 function recHof() {
   const hof = S.retired.filter(r => r.hof), others = S.retired.filter(r => !r.hof);
-  const card = r => `<div class="hof-card ${r.hof ? 'hof' : ''} ${r.my ? 'mine' : ''}"><div class="hof-name">${r.hof ? '🏛️ ' : ''}<b>${h(r.name)}</b> <span class="muted">${h(r.pos)}・${r.from}〜${r.to}年・${h(r.teams.join('→'))}</span>${r.my ? '<span class="tag">わがチームのOB</span>' : ''}${r.draft ? ` <span class="muted small">${h(r.draft)}</span>` : ''}</div>
+  const card = r => `<div class="hof-card ${r.hof ? 'hof' : ''} ${r.my ? 'mine' : ''}"><div class="hof-name">${r.hof ? '🏛️ '
+    : `<button class="star-btn ${r.star ? 'on' : ''}" data-act="retStar" data-id="${r.id}" title="星を付けると消えません">${r.star ? '★' : '☆'}</button>`}<b>${h(r.name)}</b> <span class="muted">${h(r.pos)}・${r.from}〜${r.to}年・${h(r.teams.join('→'))}</span>${r.my ? '<span class="tag">わがチームのOB</span>' : ''}${r.draft ? ` <span class="muted small">${h(r.draft)}</span>` : ''}</div>
     <div>${careerLine(r)}</div>
     ${r.ms.length ? `<div class="atitle">${r.ms.map(h).join('・')}</div>` : ''}
     ${r.titles.length ? `<div class="muted small">🏆 ${r.titles.map(h).join('、')}</div>` : ''}</div>`;
   return `<p class="muted">引退した選手のうち、${MILESTONES.map(m => m.label.replace(/\d+/, byGames(m.n))).join('・')}のどれかに届いた選手と、タイトルや長い活躍で大きな記録を残した選手が殿堂入りします。</p>
     <h3>殿堂入り（${hof.length}人）</h3>${hof.length ? hof.map(card).join('') : '<p class="muted">まだいません。名選手が引退すると、ここに入ります。</p>'}
-    <h3>記録を残して引退した選手（${others.length}人）</h3>${others.length ? others.slice(0, 40).map(card).join('') : '<p class="muted">まだいません。</p>'}`;
+    <h3>記録を残して引退した選手（${others.length}人・★${others.filter(r => r.star).length}人）</h3>
+    <p class="muted small">☆を押して★にした選手は、ずっと残ります。★のない選手は、新しい${RETIRED_KEEP}人と、通算記録のトップ${REC_TOP}に入っている選手だけが残り、それより古い選手は引退する選手が出るたびに消えていきます。殿堂入りの選手はずっと残ります。</p>
+    ${others.length ? others.map(card).join('') : '<p class="muted">まだいません。</p>'}`;
 }
 
 // 球団ごとの優勝回数・最多勝利のシーズン

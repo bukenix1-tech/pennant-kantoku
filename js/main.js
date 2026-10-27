@@ -170,6 +170,7 @@ const ACTIONS = {
   posf(el) { UI.posf[el.dataset.key] = el.dataset.g; },
   teamView(el) { UI.teamView = el.dataset.k; },
   recView(el) { UI.recView = el.dataset.k; },
+  retStar(el) { toggleRetiredStar(+el.dataset.id); },
   statSort(el) { UI.statSort[el.dataset.kind] = el.dataset.k; },
   menu() { openModal(renderMenu()); return 'keep'; },
   exportNow() {
