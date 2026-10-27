@@ -328,3 +328,6 @@ ol.plain { padding-left: 22px; }
 .gb-now { position: absolute; top: -18px; bottom: -2px; border-left: 2px solid #dc2626; font-size: 11px; }
 .gb-now b { position: absolute; top: 0; left: 3px; color: #dc2626; white-space: nowrap; }
 .gb-ages { display: flex; justify-content: space-between; font-size: 11px; color: #94a3b8; }
+
+/* 殿堂入りの星（ふつうの★とは別の色） */
+.star-btn.hof-star.on, .hof-star-sample { color: #9333ea; }

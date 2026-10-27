@@ -798,7 +798,7 @@ const CAREER_REC = [
   ['h', '安打'], ['hr', '本塁打'], ['rbi', '打点'], ['sb', '盗塁'], ['g', '出場試合'],
   ['w', '勝利'], ['sv', 'セーブ'], ['pk', '奪三振'], ['pg', '登板'],
 ];
-// 殿堂入りしなかった名選手のうち、★のない選手を残す人数（セーブが増え続けないように）
+// ★のない引退選手を残す人数（セーブが増え続けないように）。殿堂入りの選手も★を外すとここに入る
 const RETIRED_KEEP = 100;
 function updateSeasonRecords() {
   const ps = Object.values(S.players).filter(p => p.teamId != null);
@@ -852,19 +852,20 @@ function retireRecord(p) {
     id: p.id, name: p.name, pos: canPitch(p) && !p.twoWay ? '投' : p.twoWay ? '二刀流' : p.pos, isP: canPitch(p), bat: canBat(p),
     from: years.length ? Math.min(...years) : S.year, to: S.year, teams, age: p.age, c: keep,
     titles: titles.map(t => `${t.year} ${t.title}`), ms, hof, hofYear: hof ? S.year : null, draft: draftLabel(p),
+    star: hof, // 殿堂入りの選手には、はじめから星を付けておく（外せる）
     my: teams.includes(myTeam().short),
   });
   if (hof) addNews(`${p.name}（${teams.join('→')}）が引退し、殿堂入りしました。${ms.length ? `（${ms.join('・')}）` : ''}`, 'big');
   pruneRetired();
 }
 
-// 殿堂入り・★付き・通算記録のトップに入っている選手は残し、ほかは新しい順に RETIRED_KEEP 人まで
+// ★付き（殿堂入りは最初から付いている）・通算記録のトップに入っている選手は残し、ほかは新しい順に RETIRED_KEEP 人まで
 function pruneRetired() {
   const R = S.retired; // 新しい順
   const keep = new Set();
   CAREER_REC.forEach(([k]) => R.slice().sort((a, b) => b.c[k] - a.c[k]).slice(0, REC_TOP).forEach(r => { if (r.c[k] > 0) keep.add(r); }));
   let n = 0;
-  S.retired = R.filter(r => r.hof || r.star || keep.has(r) || ++n <= RETIRED_KEEP);
+  S.retired = R.filter(r => r.star || keep.has(r) || ++n <= RETIRED_KEEP);
 }
 
 function toggleRetiredStar(id) {
@@ -1710,6 +1711,7 @@ function migrate() {
   if (!S.awardHist) S.awardHist = [];
   if (!S.records) S.records = { season: {} };
   if (!S.retired) S.retired = [];
+  S.retired.forEach(r => { if (r.hof && r.star === undefined) r.star = true; });
   Object.values(S.players).forEach(p => { if (p.svc == null) initService(p); });
   Object.values(S.players).forEach(p => { if (canPitch(p) && !p.apt) p.apt = rollApt(p.a.stamina); });
   Object.values(S.players).forEach(p => { if (p.home === undefined) p.home = p.foreign ? null : U.pick(PREFS); });

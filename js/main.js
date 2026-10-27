@@ -170,7 +170,12 @@ const ACTIONS = {
   posf(el) { UI.posf[el.dataset.key] = el.dataset.g; },
   teamView(el) { UI.teamView = el.dataset.k; },
   recView(el) { UI.recView = el.dataset.k; },
-  retStar(el) { toggleRetiredStar(+el.dataset.id); },
+  retStar(el) {
+    const r = S.retired.find(x => x.id === +el.dataset.id);
+    if (r && r.hof && r.star && !confirm(`殿堂入りの${r.name}の★を外しますか？
+外すと、ほかの選手と同じように、古い順に記録が消えることがあります。`)) return 'keep';
+    toggleRetiredStar(+el.dataset.id);
+  },
   statSort(el) { UI.statSort[el.dataset.kind] = el.dataset.k; },
   menu() { openModal(renderMenu()); return 'keep'; },
   exportNow() {

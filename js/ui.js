@@ -823,15 +823,15 @@ function careerLine(r) {
 
 function recHof() {
   const hof = S.retired.filter(r => r.hof), others = S.retired.filter(r => !r.hof);
-  const card = r => `<div class="hof-card ${r.hof ? 'hof' : ''} ${r.my ? 'mine' : ''}"><div class="hof-name">${r.hof ? '🏛️ '
-    : `<button class="star-btn ${r.star ? 'on' : ''}" data-act="retStar" data-id="${r.id}" title="星を付けると消えません">${r.star ? '★' : '☆'}</button>`}<b>${h(r.name)}</b> <span class="muted">${h(r.pos)}・${r.from}〜${r.to}年・${h(r.teams.join('→'))}</span>${r.my ? '<span class="tag">わがチームのOB</span>' : ''}${r.draft ? ` <span class="muted small">${h(r.draft)}</span>` : ''}</div>
+  const card = r => `<div class="hof-card ${r.hof ? 'hof' : ''} ${r.my ? 'mine' : ''}"><div class="hof-name"><button class="star-btn ${r.star ? 'on' : ''} ${r.hof ? 'hof-star' : ''}" data-act="retStar" data-id="${r.id}" title="${r.hof ? '殿堂入りの星（外すと、古い順に消えることがあります）' : '星を付けると消えません'}">${r.star ? '★' : '☆'}</button>${r.hof ? '🏛️ ' : ''}<b>${h(r.name)}</b> <span class="muted">${h(r.pos)}・${r.from}〜${r.to}年・${h(r.teams.join('→'))}</span>${r.my ? '<span class="tag">わがチームのOB</span>' : ''}${r.draft ? ` <span class="muted small">${h(r.draft)}</span>` : ''}</div>
     <div>${careerLine(r)}</div>
     ${r.ms.length ? `<div class="atitle">${r.ms.map(h).join('・')}</div>` : ''}
     ${r.titles.length ? `<div class="muted small">🏆 ${r.titles.map(h).join('、')}</div>` : ''}</div>`;
   return `<p class="muted">引退した選手のうち、${MILESTONES.map(m => m.label.replace(/\d+/, byGames(m.n))).join('・')}のどれかに届いた選手と、タイトルや長い活躍で大きな記録を残した選手が殿堂入りします。</p>
-    <h3>殿堂入り（${hof.length}人）</h3>${hof.length ? hof.map(card).join('') : '<p class="muted">まだいません。名選手が引退すると、ここに入ります。</p>'}
+    <p class="muted small">殿堂入りの選手には、はじめから<span class="hof-star-sample">★</span>が付いていて、ずっと残ります。★を外すと、ほかの選手と同じように古い順に消えることがあります。</p>
+    <h3>殿堂入り（${hof.length}人${hof.some(r => !r.star) ? `・★を外した${hof.filter(r => !r.star).length}人` : ''}）</h3>${hof.length ? hof.map(card).join('') : '<p class="muted">まだいません。名選手が引退すると、ここに入ります。</p>'}
     <h3>記録を残して引退した選手（${others.length}人・★${others.filter(r => r.star).length}人）</h3>
-    <p class="muted small">☆を押して★にした選手は、ずっと残ります。★のない選手は、新しい${RETIRED_KEEP}人と、通算記録のトップ${REC_TOP}に入っている選手だけが残り、それより古い選手は引退する選手が出るたびに消えていきます。殿堂入りの選手はずっと残ります。</p>
+    <p class="muted small">☆を押して★にした選手は、ずっと残ります。★のない選手は（★を外した殿堂入りの選手もふくめて）、新しい${RETIRED_KEEP}人と、通算記録のトップ${REC_TOP}に入っている選手だけが残り、それより古い選手は引退する選手が出るたびに消えていきます。</p>
     ${others.length ? others.map(card).join('') : '<p class="muted">まだいません。</p>'}`;
 }
 
