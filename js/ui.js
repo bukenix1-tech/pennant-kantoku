@@ -454,6 +454,9 @@ function renderPlayerModal(p) {
   ${growthBox(p)}
   <div class="bars">${bars}</div>
   <p>総合 <b>${Math.round(ovr(p))}</b>　トレード価値 ${tradeValue(p).toLocaleString()}</p>
+  <p class="drafted">${p.drafted
+    ? `📝 入団：<b>${p.drafted.year}年ドラフト${p.drafted.round}位</b>（${h(p.drafted.team)}${p.drafted.note ? `・${h(p.drafted.note)}` : ''}）${p.drafted.from ? ` <span class="muted">${h(p.drafted.from)}から</span>` : ''}`
+    : p.foreign ? '📝 入団：外国人選手として契約' : '<span class="muted">📝 入団：ゲームを始める前からいる選手（ドラフトの記録なし）</span>'}</p>
   <p>出身 ${p.home ? h(p.home) : '海外'}${team && isHomeTeam(p, team) ? ' <span class="tag">地元</span>' : ''}
     ・ ${p.foreign ? 'FA権なし（外国人）' : hasFA(p) ? '<b>FA権あり</b>' : `FA権まであと${Math.max(0, faNeed(p) - faYearsHave(p)).toFixed(1)}年`}（一軍登録 ${faYearsHave(p).toFixed(1)}年）
     ${p.contractYears > 0 ? ` ・ 複数年契約 あと${p.contractYears}年（年俸固定）` : ''}</p>
@@ -824,7 +827,7 @@ function careerLine(r) {
 
 function recHof() {
   const hof = S.retired.filter(r => r.hof), others = S.retired.filter(r => !r.hof);
-  const card = r => `<div class="hof-card ${r.hof ? 'hof' : ''} ${r.my ? 'mine' : ''}"><div class="hof-name">${r.hof ? '🏛️ ' : ''}<b>${h(r.name)}</b> <span class="muted">${h(r.pos)}・${r.from}〜${r.to}年・${h(r.teams.join('→'))}</span>${r.my ? '<span class="tag">わがチームのOB</span>' : ''}</div>
+  const card = r => `<div class="hof-card ${r.hof ? 'hof' : ''} ${r.my ? 'mine' : ''}"><div class="hof-name">${r.hof ? '🏛️ ' : ''}<b>${h(r.name)}</b> <span class="muted">${h(r.pos)}・${r.from}〜${r.to}年・${h(r.teams.join('→'))}</span>${r.my ? '<span class="tag">わがチームのOB</span>' : ''}${r.draft ? ` <span class="muted small">${h(r.draft)}</span>` : ''}</div>
     <div>${careerLine(r)}</div>
     ${r.ms.length ? `<div class="atitle">${r.ms.map(h).join('・')}</div>` : ''}
     ${r.titles.length ? `<div class="muted small">🏆 ${r.titles.map(h).join('、')}</div>` : ''}</div>`;

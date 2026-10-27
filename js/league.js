@@ -823,6 +823,8 @@ function milestoneNews(p) {
   });
 }
 
+function draftLabel(p) { return p.drafted ? `${p.drafted.year}年ドラフト${p.drafted.round}位（${p.drafted.team}）` : ''; }
+
 // 引退するときに、名を残す選手の記録をとっておく（選手そのものは消える）
 function retireRecord(p) {
   if (!S.retired) S.retired = [];
@@ -843,7 +845,7 @@ function retireRecord(p) {
   S.retired.unshift({
     id: p.id, name: p.name, pos: canPitch(p) && !p.twoWay ? '投' : p.twoWay ? '二刀流' : p.pos, isP: canPitch(p), bat: canBat(p),
     from: years.length ? Math.min(...years) : S.year, to: S.year, teams, age: p.age, c: keep,
-    titles: titles.map(t => `${t.year} ${t.title}`), ms, hof, hofYear: hof ? S.year : null,
+    titles: titles.map(t => `${t.year} ${t.title}`), ms, hof, hofYear: hof ? S.year : null, draft: draftLabel(p),
     my: teams.includes(myTeam().short),
   });
   if (hof) addNews(`${p.name}（${teams.join('→')}）が引退し、殿堂入りしました。${ms.length ? `（${ms.join('・')}）` : ''}`, 'big');
@@ -1304,6 +1306,8 @@ function assignPick(teamId, pid, round, note) {
   p.loyalty = U.rint(55, 75);
   p.faNeed = p.kind === '高校' ? 8 : 7;
   p.svc = 0;
+  // 何年のドラフトの何位で、どの球団に入ったか（選手の詳細に出す）
+  p.drafted = { year: S.year, round, team: S.teams[teamId].short, note: note || '', from: p.amateur ? p.amateur.team : '' };
   D.result.push({ round, team: teamId, pid, name: p.name, pos: p.pos, kind: p.kind, note: note || '' });
   if (teamId === S.myTeamId) addNews(`ドラフト${round}位で${p.name}（${p.kind}・${p.pos}）${note ? `（${note}）` : ''}の交渉権を獲得！`, 'good');
   else if ((S.watch || []).includes(pid)) addNews(`気になっていた${p.name}は${S.teams[teamId].short}が${round}位で指名しました。`, 'bad');
