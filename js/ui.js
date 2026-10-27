@@ -4,7 +4,7 @@
 
 const UI = {
   tab: 'home', viewTeam: null, trade: { team: null, give: [], get: [] }, toast: '',
-  sortKey: null, newTeam: 0, newGames: 143, lg: null, newSlot: null, watchOnly: false, pkind: '', faDraft: {}, histYear: null, posf: { team: '', draft: '', fa: '' }, geniusOnly: false, teamView: 'list', statSort: { bat: 'avg', pit: 'era' }, goodsType: 'towel', goodsPid: null, recView: 'hist', recYear: null, slimUntil: null, slimScope: 'other',
+  sortKey: null, newTeam: 0, newGames: 143, lg: null, newSlot: null, watchOnly: false, pkind: '', faDraft: {}, histYear: null, posf: { team: '', draft: '', fa: '' }, geniusOnly: false, teamView: 'list', statSort: { bat: 'avg', pit: 'era' }, goodsType: 'towel', goodsPid: null, draftYearF: '', dhYear: null, recView: 'hist', recYear: null, slimUntil: null, slimScope: 'other',
 };
 
 const TABS = [
@@ -319,6 +319,24 @@ function boxScore(g) {
 }
 
 // ---------- チーム ----------
+// 何年のドラフトで入った選手か、で絞り込む（'' = すべて、'none' = ドラフトの記録がない選手）
+function draftYearMatch(p) {
+  const f = UI.draftYearF;
+  if (!f) return true;
+  if (f === 'none') return !p.drafted;
+  return !!p.drafted && p.drafted.year === +f;
+}
+function draftYearFilter(ps) {
+  const years = [...new Set(ps.filter(p => p.drafted).map(p => p.drafted.year))].sort((a, b) => b - a);
+  if (UI.draftYearF && UI.draftYearF !== 'none' && !years.includes(+UI.draftYearF)) UI.draftYearF = '';
+  const n = f => ps.filter(p => (f === 'none' ? !p.drafted : p.drafted && p.drafted.year === f)).length;
+  return `<div class="row" style="justify-content:flex-start"><label>入団：<select data-chg="draftYearF">
+    <option value="">すべての選手</option>
+    ${years.map(y => `<option value="${y}" ${String(y) === String(UI.draftYearF) ? 'selected' : ''}>${y}年ドラフト（${n(y)}人）</option>`).join('')}
+    <option value="none" ${UI.draftYearF === 'none' ? 'selected' : ''}>ドラフト以外（ゲーム開始前・外国人など）（${n('none')}人）</option>
+  </select></label></div>`;
+}
+
 function renderTeam() {
   const t = S.teams[UI.viewTeam != null ? UI.viewTeam : S.myTeamId];
   const ps = teamPlayers(t);
@@ -337,8 +355,9 @@ function renderTeam() {
     <p class="muted">支配下 ${ps.length}人（上限${ROSTER_MAX}）・ 一軍 ${t.active.length}人 ・ 年俸総額 ${U.money(payroll(t))} ・ 名前を押すと詳しく見られます</p>
     <div class="seg">${[['list', '選手一覧'], ['stats', '今季の成績']].map(([k, n]) => `<button class="${UI.teamView === k ? 'on' : ''}" data-act="teamView" data-k="${k}">${n}</button>`).join('')}</div>
     ${posFilter('team')}
-    ${UI.teamView === 'stats' ? teamStats(t, g, showBat, showPit) : `${showBat ? `<h3>野手${g ? `（${g}）` : ''}</h3>${batTable(bats.filter(p => posMatch(p, g)))}` : ''}
-    ${showPit ? `<h3>投手${g ? `（${g}）` : ''}</h3>${pitTable(pits.filter(p => posMatch(p, g)))}` : ''}`}
+    ${draftYearFilter(ps)}
+    ${UI.teamView === 'stats' ? teamStats(t, g, showBat, showPit) : `${showBat ? `<h3>野手${g ? `（${g}）` : ''}</h3>${batTable(bats.filter(p => posMatch(p, g) && draftYearMatch(p)))}` : ''}
+    ${showPit ? `<h3>投手${g ? `（${g}）` : ''}</h3>${pitTable(pits.filter(p => posMatch(p, g) && draftYearMatch(p)))}` : ''}`}
   </section>
   ${t.id === S.myTeamId ? `<section class="card genius-box"><h2>✨ 天才</h2>
     ${geniuses.length ? `<p>${geniuses.map(p => `${nameCell(p)}（${posBadge(p)}・${p.age}歳・総合${Math.round(ovr(p))}）`).join('　')}</p>`
@@ -383,7 +402,7 @@ function statTable(kind, list, gp) {
 
 function teamStats(t, g, showBat, showPit) {
   const gp = Math.max(1, gamesPlayed(t));
-  const ps = teamPlayers(t).filter(p => posMatch(p, g));
+  const ps = teamPlayers(t).filter(p => posMatch(p, g) && draftYearMatch(p));
   const bats = ps.filter(p => canBat(p) && p.stats.pa > 0);
   const pits = ps.filter(p => canPitch(p) && p.stats.pg > 0);
   const S0 = list => list.reduce((a, p) => { Object.keys(p.stats).forEach(k => { a[k] = (a[k] || 0) + p.stats[k]; }); return a; }, {});
@@ -1219,7 +1238,47 @@ function renderProspects() {
     ${draftReview(ids)}
     ${needsCard('draft')}
     ${prospectTable(ids, false)}
-  </section>`;
+  </section>
+  ${renderDraftHistory()}`;
+}
+
+// ドラフト採点の表（今年の採点と、過去の答え合わせで使う）
+const GRADE_CLASS = { A: 'ga', B: 'gb', C: 'gc', D: 'gd', E: 'ge' };
+const gradeMark = g => `<span class="dgrade ${GRADE_CLASS[g] || ''}">${g}</span>`;
+function draftGradeCard(rows, title) {
+  const sorted = rows.slice().sort((a, b) => b.pts - a.pts);
+  return `<section class="card"><h2>📝 ${title}</h2>
+    <p class="muted">スカウト部長の見立てで、指名した選手の評価を良い順に重みを付けて足し、12 球団の中の順位で A〜E を付けました（A 2 球団・B 3・C 4・D 2・E 1）。何年かたったら「ドラフト候補」の画面の下で答え合わせができます。</p>
+    <div class="scroll"><table class="tbl"><tr><th>採点</th><th>球団</th><th>指名</th><th>点</th><th>ひとこと</th></tr>
+    ${sorted.map(r => `<tr class="${r.id === S.myTeamId ? 'me' : ''}"><td>${gradeMark(r.grade)}</td><td class="l">${teamChip(S.teams[r.id])}</td><td>${r.n != null ? r.n : r.picks.length}人</td><td>${r.pts}</td><td class="l">${h(r.note || '')}</td></tr>`).join('')}
+    </table></div></section>`;
+}
+
+// 過去のドラフトの答え合わせ
+function renderDraftHistory() {
+  const H = S.draftHist || [];
+  if (!H.length) return '<section class="card"><h2>📝 過去のドラフト（答え合わせ）</h2><p class="muted">ドラフトが終わると、ここに採点が残ります。何年かたってから、指名した選手がどう育ったかを見比べられます。</p></section>';
+  if (!H.some(x => x.year === UI.dhYear)) UI.dhYear = H[0].year;
+  const y = H.find(x => x.year === UI.dhYear);
+  const now = draftNow(y);
+  const byId = id => now.find(r => r.id === id);
+  const rows = y.rows.slice().sort((a, b) => byId(b.id).nowPts - byId(a.id).nowPts).map(r => {
+    const n = byId(r.id);
+    const up = n.grade < r.grade ? '⤴' : n.grade > r.grade ? '⤵' : '';
+    return `<tr class="${r.id === S.myTeamId ? 'me' : ''}"><td class="l">${teamChip(S.teams[r.id])}</td><td>${gradeMark(r.grade)}</td><td>${gradeMark(n.grade)} ${up}</td>
+      <td>${n.alive}/${n.n}人</td><td class="l">${n.best ? `${nameCell(n.best)} <span class="muted">総合${Math.round(ovr(n.best))}</span>` : '-'}</td><td>${n.titles || '-'}</td></tr>`;
+  }).join('');
+  const mine = y.rows.find(r => r.id === S.myTeamId);
+  const myList = mine ? mine.picks.map((id, i) => {
+    const p = S.players[id];
+    return p ? `<li>${nameCell(p)} ${posBadge(p)} <span class="muted">${p.drafted ? `${p.drafted.round}位` : ''} ・ ${p.age}歳 ・ 総合${Math.round(ovr(p))}${p.teamId != null && p.teamId !== S.myTeamId ? ` ・ いまは${h(S.teams[p.teamId].short)}` : p.teamId == null ? ' ・ 自由契約' : ''}</span></li>`
+      : `<li class="muted">${i + 1}人目：もういません（引退・退団）</li>`;
+  }).join('') : '';
+  return `<section class="card"><div class="row"><h2>📝 過去のドラフト（答え合わせ）</h2>
+    <select data-chg="dhYear">${H.map(x => `<option value="${x.year}" ${x.year === UI.dhYear ? 'selected' : ''}>${x.year}年</option>`).join('')}</select></div>
+    <p class="muted">「当時」はドラフト直後の採点、「いま」は指名した選手の今の総合（上位 3 人）とタイトルの数で付け直した採点です。引退した選手は数えません。</p>
+    <div class="scroll"><table class="tbl"><tr><th>球団</th><th>当時</th><th>いま</th><th>残っている</th><th>いちばん育った選手</th><th>タイトル</th></tr>${rows}</table></div>
+    ${mine ? `<h3>${h(myTeam().short)}が${y.year}年に指名した選手</h3><ul class="news">${myList}</ul>` : ''}</section>`;
 }
 
 function renderDraft() {
@@ -1251,7 +1310,7 @@ function renderDraft() {
     <section class="card"><h2>1 巡目の結果</h2>${lotteryHtml || '<p class="muted">これから入札です</p>'}
       ${res ? `<h3>2 巡目から</h3><ul class="news">${res}</ul>` : ''}</section>
   </div>
-  ${done ? renderReleasePanel() : `<section class="card"><h2>候補選手</h2><p class="muted">${scoutNote()}</p>${draftReview(D.pool.concat(D.result.map(r => r.pid)))}${needsCard('draft')}${prospectTable(D.pool, D.stage === 'r1' ? 'bid' : 'pick')}</section>`}`;
+  ${done ? `${draftGradeCard(draftGrades(D), '今年のドラフト採点')}${renderReleasePanel()}` : `<section class="card"><h2>候補選手</h2><p class="muted">${scoutNote()}</p>${draftReview(D.pool.concat(D.result.map(r => r.pid)))}${needsCard('draft')}${prospectTable(D.pool, D.stage === 'r1' ? 'bid' : 'pick')}</section>`}`;
 }
 
 // 1 巡目の入札と抽選の結果

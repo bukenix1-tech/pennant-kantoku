@@ -226,6 +226,8 @@ const CHANGES = {
   watchOnly(el) { UI.watchOnly = el.checked; },
   noBackupAsk(el) { setBackupAskOff(el.checked); return 'keep'; },
   recYear(el) { UI.recYear = +el.value; },
+  draftYearF(el) { UI.draftYearF = el.value; },
+  dhYear(el) { UI.dhYear = +el.value; },
   slimUntil(el) { UI.slimUntil = +el.value; },
   slimScope(el) { UI.slimScope = el.value; },
   importFile(el) {

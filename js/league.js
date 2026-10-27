@@ -1465,7 +1465,56 @@ function draftPass() {
 
 function draftDone() { const D = S.off.draft; return D.stage === 'waiver' && D.idx >= D.order.length; }
 
+// ---------- ドラフト採点（スカウト部長の見立て） ----------
+// 指名した選手の評価の点（draftScore）を、良い順に重みを付けて足す。上位の選手ほど重く見る
+const PICK_W = [1, 0.8, 0.65, 0.5, 0.4, 0.3, 0.25];
+// 12 球団の中の順位で A〜E を付ける（A 2 球団・B 3・C 4・D 2・E 1）
+const GRADE_BY_RANK = ['A', 'A', 'B', 'B', 'B', 'C', 'C', 'C', 'C', 'D', 'D', 'E'];
+function gradeByRank(rows, key) {
+  rows.slice().sort((a, b) => b[key] - a[key]).forEach((r, i) => { r.grade = GRADE_BY_RANK[Math.min(i, GRADE_BY_RANK.length - 1)]; });
+  return rows;
+}
+
+function draftGrades(D) {
+  const rows = S.teams.map(t => {
+    const picks = D.result.filter(r => r.team === t.id).sort((a, b) => a.round - b.round);
+    const ps = picks.map(r => S.players[r.pid]).filter(Boolean);
+    const scored = ps.map(p => ({ p, s: draftScore(p) })).sort((a, b) => b.s - a.s);
+    const pts = scored.reduce((sum, x, i) => sum + x.s * (PICK_W[i] || 0.2), 0);
+    // ひとこと
+    const notes = [];
+    const lucky = picks.find(r => r.round === 1 && /競合/.test(r.note || ''));
+    if (lucky) notes.push(`${lucky.note}の${lucky.name}を引き当てた`);
+    else if (scored[0]) notes.push(`目玉は${scored[0].p.name}（${draftTier(scored[0].p)[1]}）`);
+    const hs = ps.filter(p => p.kind === '高校').length, ready = ps.filter(p => p.kind !== '高校' && seenOvr(p) >= 58).length;
+    if (ps.length && hs >= Math.ceil(ps.length / 2)) notes.push('高校生中心で将来性重視');
+    else if (ready >= 2) notes.push('即戦力を厚く');
+    if (picks.length <= 3) notes.push(`${picks.length}人で選択終了`);
+    return { id: t.id, pts: Math.round(pts), picks: picks.map(r => r.pid), n: picks.length, note: notes.join('・') };
+  });
+  return gradeByRank(rows, 'pts');
+}
+
+// その年のドラフトの「いま」：指名した選手が今どれくらいの選手になっているか（答え合わせ）
+function draftNow(h) {
+  const rows = h.rows.map(r => {
+    const ps = r.picks.map(id => S.players[id]).filter(p => p && (p.teamId != null || S.freeAgents.includes(p.id)));
+    const ovrs = ps.map(p => ovr(p)).sort((a, b) => b - a);
+    const nowPts = ovrs.slice(0, 3).reduce((s, v, i) => s + v * [1, 0.7, 0.5][i], 0);
+    const best = ps.slice().sort((a, b) => ovr(b) - ovr(a))[0];
+    const titles = ps.reduce((s, p) => s + titlesOf(p.id).length, 0);
+    return { id: r.id, was: r.grade, alive: ps.length, n: r.picks.length, best, titles, nowPts: nowPts + titles * 3 };
+  });
+  return gradeByRank(rows, 'nowPts');
+}
+
 function offCampStart() {
+  // ドラフト採点を残す（スカウトの見立てが消える前に）
+  const grades = draftGrades(S.off.draft);
+  if (!S.draftHist) S.draftHist = [];
+  S.draftHist.unshift({ year: S.year, rows: grades.map(r => ({ id: r.id, grade: r.grade, pts: r.pts, picks: r.picks, note: r.note })) });
+  const mineG = grades.find(r => r.id === S.myTeamId);
+  if (mineG) addNews(`ドラフト採点：${myTeam().short}は「${mineG.grade}」（${mineG.note || '指名なし'}）`, mineG.grade === 'A' ? 'good' : mineG.grade === 'E' ? 'bad' : '');
   // 指名されなかった候補は消える
   S.off.draft.pool.forEach(id => delete S.players[id]);
   S.off.draft.pool = [];
@@ -1758,6 +1807,7 @@ function migrate() {
   if (!S.awardHist) S.awardHist = [];
   if (!S.records) S.records = { season: {} };
   if (!S.retired) S.retired = [];
+  if (!S.draftHist) S.draftHist = [];
   S.retired.forEach(r => { if (r.hof && r.star === undefined) r.star = true; });
   Object.values(S.players).forEach(p => { if (p.svc == null) initService(p); });
   Object.values(S.players).forEach(p => { if (canPitch(p) && !p.apt) p.apt = rollApt(p.a.stamina); });
