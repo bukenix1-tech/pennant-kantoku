@@ -86,6 +86,8 @@ const SUB_COUNT_W = [[0, 40], [1, 35], [2, 18], [3, 7]]; // サブポジの数�
 // 引退：一軍の出場がこれより少ない年（野手は試合、投手は登板）は、30 歳から引退しやすくなる。長くケガをした年は数えない
 const RETIRE_LOW_G = 30, RETIRE_LOW_PG = 10, RETIRE_INJ_DAYS = 60, RETIRE_MAX_AGE = 43;
 const REBORN_START = { 高校: 0.6, 高卒社会人: 0.68, 大学: 0.72, 社会人: 0.95 }; // 転生選手の入団時の能力（ピーク時の何割か）
+// 能力の上限。球速だけは別（103 で 170km）
+const ABIL_MAX = 110, VELO_MAX = 103;
 const REBORN_OVER = 7; // 転生選手がピーク時の値を超えられる幅
 const REBORN_YEAR_CHANCE = 0.85; // 転生選手がその年のドラフト候補に現れる確率（現れるのは 1 人）
 const SUB_FIT = 0.9;

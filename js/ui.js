@@ -471,7 +471,7 @@ function renderPlayerModal(p) {
   const mine = p.teamId === S.myTeamId;
   const keys = abilKeys(p), lbl = ALL_LABEL;
   const bars = keys.map(k => `<div class="bar"><span class="bl">${lbl[k]}</span>${abilStalled(p, k) ? `<span class="gstack"><span class="grow1">${gradeCell(p.a[k])}</span><small class="stall" title="伸びしろの上限に近く、練習してもほとんど伸びない">停滞</small></span>` : gradeCell(p.a[k])}
-    <span class="bt"><span style="width:${Math.round(p.a[k])}%"></span></span>${k === 'velo' ? `<span class="muted">${veloKmh(p.a.velo)}km/h</span>` : ''}</div>`).join('')
+    <span class="bt"><span style="width:${Math.round(p.a[k] / ABIL_MAX * 100)}%"></span></span>${k === 'velo' ? `<span class="muted">${veloKmh(p.a.velo)}km/h</span>` : ''}</div>`).join('')
     + (canBat(p) ? `<div class="bar"><span class="bl">弾道</span>${trajTag(p)}<span class="muted small">${TRAJ_WORD[trajOf(p)]}</span></div>
       <div class="bar"><span class="bl">選球眼</span>${eyeTag(p) || '<span class="muted small">ふつう</span>'}</div>
       <div class="bar"><span class="bl">盗塁</span><span class="tag steal s-${stealWord(p)}">${stealWord(p)}</span><span class="muted small">${stealWord(p) === '積極的' ? 'すきがあればどんどん走る' : stealWord(p) === '慎重' ? 'あまり走らない' : ''}</span></div>` : '');

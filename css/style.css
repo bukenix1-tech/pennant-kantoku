@@ -75,6 +75,7 @@ table.tbl { border-collapse: collapse; width: 100%; font-size: 13px; }
 /* 能力のランク（S〜G） */
 .g { display: inline-block; width: 20px; text-align: center; font-weight: 900; border-radius: 3px; color: #fff; font-size: 12px; margin-right: 2px; }
 .gS { background: linear-gradient(135deg, #f59e0b, #fde047); color: #7c2d12; }
+.gSS { background: linear-gradient(135deg, #b45309, #facc15 45%, #fef9c3 55%, #f59e0b); color: #451a03; font-size: 10px; letter-spacing: -0.5px; box-shadow: 0 0 0 1px #b45309; }
 .gA { background: #e11d48; }
 .gB { background: #f97316; }
 .gC { background: #eab308; }

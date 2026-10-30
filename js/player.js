@@ -23,7 +23,7 @@ function newPlayer(S, opts) {
   const pot = opts.pot != null ? opts.pot : U.clamp(1 + U.gauss() * 0.22, 0.55, 1.6);
   const q = opts.q;
   const g = () => U.gauss() * 10;
-  const c = v => U.clamp(v, 5, 99);
+  const c = v => U.clamp(v, 5, ABIL_MAX);
   let a, pos, role = null, apt = null;
   if (isP) {
     pos = '投';
@@ -110,7 +110,7 @@ function abilKeys(p) { return p.twoWay ? [...PIT_KEYS, ...BAT_KEYS] : p.isP ? PI
 
 // もう片方の能力を足して二刀流にする（q はその能力の中心）
 function makeTwoWay(p, q) {
-  const c = v => U.clamp(v, 5, 99);
+  const c = v => U.clamp(v, 5, ABIL_MAX);
   if (p.isP) {
     BAT_KEYS.forEach(k => { p.a[k] = c(q + U.gauss() * 8); });
     p.traj = rollTraj(p.a.power);
@@ -207,17 +207,20 @@ function potStars(pot) {
   return '★'.repeat(n) + '☆'.repeat(5 - n);
 }
 
-// 球速の能力 → km/h。90（157km）までは 1 で 0.3km、そこから上は 1 で 1km（99 で 166km）
+// 球速の能力 → km/h。90（157km）までは 1 で 0.3km、そこから上は 1 で 1km（103 で 170km）
 function veloKmh(v) { return Math.round(v <= 90 ? 130 + v * 0.3 : 157 + (v - 90)); }
-function kmhToVelo(km) { return U.clamp(km <= 157 ? (km - 130) / 0.3 : 90 + (km - 157), 5, 99); }
+function kmhToVelo(km) { return U.clamp(km <= 157 ? (km - 130) / 0.3 : 90 + (km - 157), 5, VELO_MAX); }
 
 // 才能で決まる伸びしろ（★が多いほど高くまで伸びる。天才はさらに上まで）
 // 転生選手は、能力ごとにピーク時の値が上限（p.ceilA）
 function abilCeil(p, k) { return k && p.ceilA && p.ceilA[k] != null ? p.ceilA[k] + (p.genius ? 5 : 0) : CEIL_BASE + p.pot * CEIL_PER_POT + (p.genius ? 10 : 0); }
 // 伸びしろの上限の近くまで来て、練習してもほとんど伸びない能力（衰退期は衰えのほうを見せるので出さない）
 // 能力の天井。転生選手はピーク時の値を練習で目指し、覚醒などで REBORN_OVER まで超えられる（天才肌はさらに +5）
-function abilMax(p, k) { return p.ceilA && p.ceilA[k] != null ? Math.min(99, abilCeil(p, k) + REBORN_OVER) : 99; }
-function abilStalled(p, k) { return growthPhase(p).k !== 'decline' && p.a[k] < 99 && abilCeil(p, k) - p.a[k] <= STALL_GAP; }
+function abilMax(p, k) {
+  const top = k === 'velo' ? VELO_MAX : ABIL_MAX;
+  return p.ceilA && p.ceilA[k] != null ? Math.min(top, abilCeil(p, k) + REBORN_OVER) : top;
+}
+function abilStalled(p, k) { return growthPhase(p).k !== 'decline' && p.a[k] < abilMax(p, k) && abilCeil(p, k) - p.a[k] <= STALL_GAP; }
 
 // 1 回の練習（6 日に 1 回とキャンプで呼ぶ）
 function trainPlayer(p, mult) {

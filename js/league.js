@@ -535,7 +535,7 @@ function randomEvent() {
     const keys = abilKeys(p);
     const k = U.pick(keys);
     const up = U.rint(3, 7);
-    p.a[k] = Math.min(99, p.a[k] + up);
+    p.a[k] = Math.min(abilMax(p, k), p.a[k] + up);
     addNews(`${p.name}が居残り特訓でコツをつかんだ！ ${ALL_LABEL[k]}が${up}上がった。`, 'good');
   } else if (roll === 3) {
     t.pop = U.clamp(t.pop + 3, 0, 100);
@@ -1249,7 +1249,7 @@ function makeDraftClass() {
     p.kind = kind;
     p.salary = 600;
     if (p.isP && p.pot >= 1.1 && U.chance(TWO_WAY_CHANCE / 0.2)) {
-      PIT_KEYS.forEach(k => { p.a[k] = Math.min(99, p.a[k] + 6); });
+      PIT_KEYS.forEach(k => { p.a[k] = Math.min(abilMax(p, k), p.a[k] + 6); });
       makeTwoWay(p, q + 4);
     }
     finishProspect(p, kind);
@@ -1288,7 +1288,7 @@ function addReborn(pool) {
     const p = newPlayer(S, { isP: R.isP, pos: R.pos, q: avg * ratio, age, pot });
     p.name = R.name;
     if (R.twoWay) { makeTwoWay(p, avg * ratio); if (R.isP) { p.pos2 = R.pos2 || '外'; p.subs = R.subs || []; } } // 二刀流は peak に投打両方を書く
-    keys.forEach(k => { p.a[k] = U.clamp(peakA[k] * ratio + U.gauss() * 2, 5, 99); });
+    keys.forEach(k => { p.a[k] = U.clamp(peakA[k] * ratio + U.gauss() * 2, 5, ABIL_MAX); });
     p.ceilA = peakA;
     if (R.isP) {
       // 先発・中継ぎ・抑えの向き不向き
@@ -1376,7 +1376,7 @@ function scoutView(p, key) {
   const unit = n.unit != null ? n.unit : (n.dev || 0) / 15; // 前の版のセーブにも対応
   const dev = unit * scoutRange();
   if (key === 'pot') return U.clamp(real + dev * 0.025, 0.5, 1.7);
-  return U.clamp(real + dev, 1, 99);
+  return U.clamp(real + dev, 1, key === 'velo' ? VELO_MAX : ABIL_MAX);
 }
 
 // ---------- ドラフトの評価（スカウトの見立てで決めるので、スカウトが低いと外れることもある） ----------

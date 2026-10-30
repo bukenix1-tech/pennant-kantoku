@@ -35,6 +35,7 @@ const U = {
   },
   grade(v) {
     v = Math.round(v);
+    if (v >= 100) return 'SS';
     if (v >= 90) return 'S';
     if (v >= 80) return 'A';
     if (v >= 70) return 'B';
