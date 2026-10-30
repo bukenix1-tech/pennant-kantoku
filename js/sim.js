@@ -21,9 +21,9 @@ function prepareSide(S, team, idx) {
   let def = 0, n = 0, cArm = 40;
   lineup.forEach(s => {
     if (s.pos === '指') return;
-    const f = posFit(s.p, s.pos);
-    def += (s.p.a.field * 0.8 + s.p.a.arm * 0.2) * f;
-    n++;
+    const f = posFit(s.p, s.pos), w = POS_DEF_W[s.pos] || 1; // むずかしい位置の守備ほど重く数える
+    def += (s.p.a.field * 0.8 + s.p.a.arm * 0.2) * f * w;
+    n += w;
     if (s.pos === '捕') cArm = s.p.a.arm * f;
   });
   const side = {
@@ -63,7 +63,7 @@ function doPA(b, rec, fld) {
   r -= pK;
   if (r < pHR) return { t: 'HR', pc: U.rint(1, 6) };
   const pc = U.rint(1, 6);
-  const babip = U.clamp(0.292 + (meet - 50) * 0.0022 + (spd - 50) * 0.0007
+  const babip = U.clamp(0.296 + (meet - 50) * 0.0022 + (spd - 50) * 0.0007
     - (fld.def - 50) * 0.0018 - (stuff - 50) * 0.0008 + TRAJ_BABIP[tj], 0.2, 0.42);
   if (Math.random() < babip) {
     const x = Math.random();
@@ -139,7 +139,7 @@ function halfInning(g, bat, fld, inning) {
     // 盗塁
     if (bases[0] && !bases[1] && outs < 2) {
       const rn = bases[0], sp = rn.p.a.speed;
-      if (sp >= 50 && Math.random() < (sp - 45) * 0.0075) {
+      if (sp >= 50 && Math.random() < (sp - 45) * 0.0075 * stealOf(rn.p)) { // 積極的な選手ほどよく走る
         const ok = Math.random() < U.clamp(0.62 + (sp - 65) * 0.012 - (fld.cArm - 50) * 0.006, 0.3, 0.95);
         bases[0] = null;
         if (ok) {

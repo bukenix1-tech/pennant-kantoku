@@ -51,8 +51,9 @@ function newPlayer(S, opts) {
   }
   const traj = isP ? null : rollTraj(a.power);
   const subs = isP ? undefined : rollSubs(pos, a.field);
+  const steal = isP ? undefined : rollSteal();
   const p = {
-    id, name: makeName(opts.foreign), age, isP, pos, subs, role, type, traj,
+    id, name: makeName(opts.foreign), age, isP, pos, subs, steal, role, type, traj,
     peak: GROWTH_PEAK[type] + U.rint(-1, 1), pot, a,
     foreign: !!opts.foreign, teamId: null, salary: 0,
     focus: 'バランス', cond: 3, inj: 0, rest: 5, fatigue: 0,
@@ -114,6 +115,7 @@ function makeTwoWay(p, q) {
     p.traj = rollTraj(p.a.power);
     p.pos2 = U.pick(['外', '外', '一', '三']);
     p.subs = rollSubs(p.pos2, p.a.field);
+    p.steal = rollSteal();
   } else {
     p.a.velo = c(q + U.gauss() * 8); p.a.control = c(q + U.gauss() * 8);
     p.a.stamina = c(q + 5 + U.gauss() * 8); p.a.breaking = c(q + U.gauss() * 8);
@@ -141,7 +143,7 @@ function growTraj(p) {
   if (p.a.power >= TRAJ_UP_POWER[t + 1] && U.chance(TRAJ_UP_CHANCE)) p.traj = t + 1;
 }
 
-function batOvr(p) { const a = p.a; return a.meet * 0.3 + a.power * 0.3 + a.speed * 0.12 + a.arm * 0.08 + a.field * 0.2; }
+function batOvr(p) { const a = p.a, w = POS_OVR_W[(p.isP ? p.pos2 : p.pos)] || POS_OVR_W.外; return BAT_KEYS.reduce((s, k) => s + a[k] * w[k], 0); }
 function pitOvr(p) { return p.role === '先発' ? starterVal(p) : relVal(p) * 0.95 + p.a.stamina * 0.05; }
 
 function batVal(p) { return p.a.meet * 0.5 + p.a.power * 0.5; }
@@ -178,6 +180,10 @@ function rollSubs(prim, field) {
   }
   return LPOS.filter(x => subs.includes(x)).concat(subs.includes('外') ? ['外'] : []);
 }
+// 盗塁の積極性。足の速さとは別の、走りたがるかどうか
+function rollSteal() { return Math.round(U.clamp(1 + U.gauss() * STEAL_SD, 0.4, 1.8) * 100) / 100; }
+function stealOf(p) { return p.steal || 1; }
+function stealWord(p) { const s = stealOf(p); return s >= STEAL_HI ? '積極的' : s <= STEAL_LO ? '慎重' : 'ふつう'; }
 function subsOf(p) { return canBat(p) ? p.subs || [] : []; }
 
 // 守備位置への向き不向き（1 = 本職）

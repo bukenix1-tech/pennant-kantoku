@@ -85,9 +85,23 @@ const SUB_CANDS = {
 const SUB_COUNT_W = [[0, 40], [1, 35], [2, 18], [3, 7]]; // サブポジの数の出やすさ
 // 引退：一軍の出場がこれより少ない年（野手は試合、投手は登板）は、30 歳から引退しやすくなる。長くケガをした年は数えない
 const RETIRE_LOW_G = 30, RETIRE_LOW_PG = 10, RETIRE_INJ_DAYS = 60, RETIRE_MAX_AGE = 43;
-const REBORN_START = { 高校: 0.6, 高卒社会人: 0.68, 大学: 0.72, 社会人: 0.8 }; // 転生選手の入団時の能力（ピーク時の何割か）
+const REBORN_START = { 高校: 0.6, 高卒社会人: 0.68, 大学: 0.72, 社会人: 0.95 }; // 転生選手の入団時の能力（ピーク時の何割か）
 const REBORN_YEAR_CHANCE = 0.85; // 転生選手がその年のドラフト候補に現れる確率（現れるのは 1 人）
-const SUB_FIT = 0.9; // サブポジで守ったときの守備の強さ（本職 = 1）
+const SUB_FIT = 0.9;
+// 盗塁の積極性（試みる回数の倍率）。1 がふつう。これ以上で「積極的」、これ以下で「慎重」
+const STEAL_SD = 0.3, STEAL_HI = 1.3, STEAL_LO = 0.7;
+// 守備の重さ。むずかしい位置ほど、その選手の守備がチームの失点に強く効く
+const POS_DEF_W = { 捕: 1.4, 遊: 1.6, 二: 1.3, 中: 1.3, 三: 1.0, 右: 0.8, 左: 0.7, 一: 0.5 };
+// 野手の総合の出し方（本職ごと）。むずかしい位置ほど守備と肩、指名打者・一塁は打撃を重く見る
+const POS_OVR_W = {
+  捕: { meet: 0.25, power: 0.25, speed: 0.05, arm: 0.2, field: 0.25 },
+  遊: { meet: 0.26, power: 0.2, speed: 0.15, arm: 0.12, field: 0.27 },
+  二: { meet: 0.28, power: 0.22, speed: 0.15, arm: 0.08, field: 0.27 },
+  三: { meet: 0.3, power: 0.3, speed: 0.08, arm: 0.12, field: 0.2 },
+  外: { meet: 0.3, power: 0.3, speed: 0.15, arm: 0.1, field: 0.15 },
+  一: { meet: 0.36, power: 0.4, speed: 0.08, arm: 0.02, field: 0.14 },
+  指: { meet: 0.45, power: 0.5, speed: 0.05, arm: 0, field: 0 },
+}; // サブポジで守ったときの守備の強さ（本職 = 1）
 
 const GROWTH_PEAK = { 早熟: 24, 普通: 27, 晩成: 30, 超晩成: 33 };
 const SUPER_LATE_CHANCE = 0.05; // 超晩成型（30 代で開花する）が生まれる確率
