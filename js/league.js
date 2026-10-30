@@ -970,8 +970,64 @@ function faNeed(p) { return p.faUsed ? 4 : (p.faNeed || 8); }
 function faYearsHave(p) { return (p.svc || 0) - (p.svcUsed || 0); }
 function hasFA(p) { return !p.foreign && faYearsHave(p) >= faNeed(p); }
 
-// FA 市場での相場（年俸）
-function faMarket(p) { return Math.max(1000, Math.round(calcSalary(p) * 1.3 / 10) * 10); }
+// ---------- 成績から見た年俸の目安 ----------
+// リーグ全体の OPS と防御率（その日のうちは使い回す）
+function lgRates() {
+  const key = S.year + '-' + S.day + '-' + S.phase;
+  if (S._lgRates && S._lgRates.key === key) return S._lgRates;
+  let ab = 0, pa = 0, h = 0, bb = 0, tb = 0, er = 0, outs = 0;
+  Object.values(S.players).forEach(p => {
+    const st = p.stats;
+    if (!st) return;
+    pa += st.pa; ab += st.ab; h += st.h; bb += st.bb; tb += st.h + st.d + st.t * 2 + st.hr * 3;
+    er += st.per; outs += st.outs;
+  });
+  const r = { key, ops: pa ? (h + bb) / pa + (ab ? tb / ab : 0) : 0.7, era: outs > 300 ? er * 27 / outs : 3.7 };
+  Object.defineProperty(S, '_lgRates', { value: r, writable: true, configurable: true, enumerable: false }); // セーブには入れない
+  return r;
+}
+
+// その年の貢献（勝利数の目安。リーグ平均の選手が 1 年出ると 2 くらい）
+function seasonWins(p) {
+  const st = p.stats, lg = lgRates();
+  const full = 143 / Math.max(1, S.games || 143); // 短いシーズンは 143 試合に直す
+  let w = 0;
+  if (canBat(p) && st.pa > 0) {
+    const pos = (p.isP ? p.pos2 : p.pos);
+    w += (ops(st) - lg.ops * 0.82 + (pos === '捕' || pos === '遊' ? 0.04 : 0)) * st.pa * full / 600 * 16;
+  }
+  if (canPitch(p) && st.outs > 0) {
+    w += (lg.era * 1.3 - st.per * 27 / st.outs) * st.outs * full / 27 / 10 + st.sv * full * 0.05;
+  }
+  return w;
+}
+function playedEnough(p) { const st = p.stats; return st.pa >= 100 || st.outs >= 60; }
+function perfSalary(p) {
+  const w = Math.max(0, seasonWins(p));
+  return Math.round((800 + w * SAL_PER_WIN + w * w * SAL_PER_WIN2) / 10) * 10;
+}
+
+// 契約更改：去年の年俸から、今年の成績で上げ下げする（能力の数字は使わない）
+function renewSalary(p) {
+  const old = p.salary;
+  let now;
+  if (!playedEnough(p)) {
+    now = p.age <= 25 ? old * 1.03 : old * 0.9; // あまり出ていない：若手は少しだけ上がり、ほかは少し下がる
+  } else {
+    const target = perfSalary(p);
+    if (seasonWins(p) < 0.5) now = Math.min(old, target); // 出ても働けなかった人は上げない
+    else now = target > old ? Math.min(old + (target - old) * 0.6, old * 3 + 2000) : old - (old - target) * 0.5;
+  }
+  // 減額制限（1 億円以下は 25%、1 億円を超えると 40% まで）
+  now = Math.max(now, old * (old > 10000 ? 0.6 : 0.75));
+  return Math.max(MIN_SALARY, Math.round(now / 10) * 10);
+}
+
+// FA 市場での相場（年俸）。今の年俸と今年の成績の間くらいを、少し上乗せして
+function faMarket(p) {
+  const v = playedEnough(p) ? Math.max(p.salary, (p.salary + perfSalary(p)) / 2) : p.salary;
+  return Math.max(1000, Math.round(v * 1.2 / 10) * 10);
+}
 
 // 年俸のチーム内順位で A（上位 3 人）・B（4〜10 位）・C（それ以外）
 function faRank(t, p) {
@@ -1142,19 +1198,10 @@ function offContract() {
   S.teams.forEach(t => {
     teamPlayers(t).forEach(p => {
       const old = p.salary;
-      const s = p.stats;
-      let perf = 0;
-      if (canBat(p) && s.pa >= 100) perf += (ops(s) - 0.7) * 1.5;
-      if (canPitch(p) && s.outs >= 90) perf += (3.8 - s.per * 27 / s.outs) * 0.15 + s.w * 0.02 + s.sv * 0.01;
-      perf = U.clamp(perf, -0.4, 0.8);
-      agePlayer(p);
       const locked = p.contractYears > 0;
-      if (locked) {
-        p.contractYears--; // 複数年契約のあいだは年俸がそのまま
-      } else {
-        const target = calcSalary(p) * (1 + perf);
-        p.salary = Math.max(420, Math.round((old * 0.4 + target * 0.6) / 10) * 10);
-      }
+      if (locked) p.contractYears--; // 複数年契約のあいだは年俸がそのまま
+      else p.salary = renewSalary(p);
+      agePlayer(p);
       if (t.id === my.id) raises.push({ pid: p.id, name: p.name, old, now: p.salary, locked });
       addLoyalty(p, 3 + (t.goods.some(g => g.pid === p.id) ? 5 : 0));
       if (t.id === my.id && p.genius && !p.geniusKnown) {
@@ -1574,7 +1621,11 @@ function faOpen() {
 }
 
 // 自由契約選手の希望年俸（戦力外からの再出発なので安め）
-function faDemand(p) { return Math.max(420, Math.round(calcSalary(p) * 0.7 / 10) * 10); }
+// 自由契約の希望年俸：能力なりの額か、前の年俸の 6 割の安いほう
+function faDemand(p) {
+  const v = Math.min(calcSalary(p) * 0.7, p.salary ? p.salary * 0.6 : Infinity);
+  return Math.max(MIN_SALARY, Math.round(v / 10) * 10);
+}
 
 function toFreeAgent(p) {
   const t = S.teams[p.teamId];

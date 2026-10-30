@@ -52,10 +52,10 @@ function doPA(b, rec, fld) {
   const meet = b.a.meet * cb, pow = b.a.power * cb, spd = b.a.speed;
   const stuff = (p.a.velo * 0.45 + p.a.breaking * 0.55) * cp;
   const ctrl = p.a.control * cp;
-  const pBB = U.clamp(0.085 + (50 - ctrl) * 0.0013, 0.02, 0.2);
-  const pK = U.clamp(0.185 + (stuff - 50) * 0.0035 - (meet - 50) * 0.003, 0.05, 0.42);
+  const pBB = U.clamp(0.098 + (50 - ctrl) * 0.0013, 0.02, 0.2);
+  const pK = U.clamp(0.187 + (stuff - 50) * 0.0035 - (meet - 50) * 0.003, 0.05, 0.42);
   const tj = trajOf(b);
-  const pHR = U.clamp((0.021 + (pow - 50) * 0.001 - (stuff - 50) * 0.0004) * TRAJ_HR[tj], 0.002, 0.11);
+  const pHR = U.clamp((0.016 + (pow - 50) * 0.00076 - (stuff - 50) * 0.0003) * TRAJ_HR[tj], 0.002, 0.11);
   let r = Math.random();
   if (r < pBB) return { t: 'BB', pc: U.rint(4, 7) };
   r -= pBB;
@@ -63,12 +63,12 @@ function doPA(b, rec, fld) {
   r -= pK;
   if (r < pHR) return { t: 'HR', pc: U.rint(1, 6) };
   const pc = U.rint(1, 6);
-  const babip = U.clamp(0.29 + (meet - 50) * 0.0022 + (spd - 50) * 0.0007
+  const babip = U.clamp(0.292 + (meet - 50) * 0.0022 + (spd - 50) * 0.0007
     - (fld.def - 50) * 0.0018 - (stuff - 50) * 0.0008 + TRAJ_BABIP[tj], 0.2, 0.42);
   if (Math.random() < babip) {
     const x = Math.random();
-    if (x < 0.018 + Math.max(0, spd - 50) * 0.0006) return { t: '3B', pc };
-    if (x < 0.2 + (pow - 50) * 0.002) return { t: '2B', pc };
+    if (x < 0.011 + Math.max(0, spd - 50) * 0.0006) return { t: '3B', pc };
+    if (x < 0.17 + (pow - 50) * 0.002) return { t: '2B', pc };
     return { t: '1B', pc };
   }
   return { t: Math.random() < TRAJ_FLY[tj] ? 'FO' : 'GO', pc };
@@ -139,7 +139,7 @@ function halfInning(g, bat, fld, inning) {
     // 盗塁
     if (bases[0] && !bases[1] && outs < 2) {
       const rn = bases[0], sp = rn.p.a.speed;
-      if (sp >= 55 && Math.random() < (sp - 50) * 0.006) {
+      if (sp >= 50 && Math.random() < (sp - 45) * 0.01) {
         const ok = Math.random() < U.clamp(0.62 + (sp - 65) * 0.012 - (fld.cArm - 50) * 0.006, 0.3, 0.95);
         bases[0] = null;
         if (ok) {
@@ -187,7 +187,7 @@ function halfInning(g, bat, fld, inning) {
         hit();
         if (bases[2]) { score(bases[2], slot); bases[2] = null; }
         if (bases[1]) {
-          if (Math.random() < 0.55 + (bases[1].p.a.speed - 50) * 0.006) score(bases[1], slot);
+          if (Math.random() < 0.65 + (bases[1].p.a.speed - 50) * 0.006) score(bases[1], slot);
           else bases[2] = bases[1];
           bases[1] = null;
         }
@@ -204,7 +204,7 @@ function halfInning(g, bat, fld, inning) {
         if (bases[2]) { score(bases[2], slot); bases[2] = null; }
         if (bases[1]) { score(bases[1], slot); bases[1] = null; }
         if (bases[0]) {
-          if (Math.random() < 0.35 + (bases[0].p.a.speed - 50) * 0.006) score(bases[0], slot);
+          if (Math.random() < 0.42 + (bases[0].p.a.speed - 50) * 0.006) score(bases[0], slot);
           else bases[2] = bases[0];
           bases[0] = null;
         }
@@ -235,7 +235,7 @@ function halfInning(g, bat, fld, inning) {
         break;
       case 'FO':
         outs++; rec.outs++;
-        if (outs < 3 && bases[2] && Math.random() < 0.4 + (bases[2].p.a.speed - 50) * 0.005) {
+        if (outs < 3 && bases[2] && Math.random() < 0.5 + (bases[2].p.a.speed - 50) * 0.005) {
           score(bases[2], slot); bases[2] = null;
           desc = '犠牲フライ';
         } else { b.stats.ab++; slot.box.ab++; }

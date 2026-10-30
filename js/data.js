@@ -117,3 +117,8 @@ const FOREIGN_ACTIVE_MAX = 4; // 一軍に登録できる外国人の数
 const REREGISTER_DAYS = 10;   // 登録を抹消したら、この日数は一軍に戻せない
 const DRAFT_ROUNDS = 7;
 const SAVE_KEY = 'pennant_save_v2'; // 12 球団にしたので v1 とは別
+
+// 年俸（万円）。成績の目安額 = 800 + 勝利数 × SAL_PER_WIN + 勝利数² × SAL_PER_WIN2
+const MIN_SALARY = 420;
+const SAL_PER_WIN = 2200;
+const SAL_PER_WIN2 = 600;
