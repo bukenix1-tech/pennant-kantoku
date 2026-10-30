@@ -168,6 +168,7 @@ function calcSalary(p) {
 function rollSubs(prim, field) {
   let n = U.pickW(SUB_COUNT_W);
   if (field >= 70 && n < 3 && U.chance(0.3)) n++;
+  if (!SUB_CANDS[prim]) return []; // DH 専門などはサブポジなし
   const cands = SUB_CANDS[prim].slice();
   const subs = [];
   while (subs.length < n && cands.length) {
@@ -184,6 +185,7 @@ function posFit(p, pos) {
   if (pos === '指') return 1;
   if (p.isP && !p.twoWay) return 0.3;
   const prim = p.isP ? p.pos2 : p.pos;
+  if (prim === '指') return 0.3; // DH 専門は守らない（指名打者は上で 1）
   const area = pos === '左' || pos === '中' || pos === '右' ? '外' : pos;
   if (prim === area) return 1;
   if ((p.subs || []).includes(area)) return SUB_FIT;
@@ -196,7 +198,9 @@ function potStars(pot) {
   return '★'.repeat(n) + '☆'.repeat(5 - n);
 }
 
-function veloKmh(v) { return Math.round(130 + v * 0.3); }
+// 球速の能力 → km/h。90（157km）までは 1 で 0.3km、そこから上は 1 で 1km（99 で 166km）
+function veloKmh(v) { return Math.round(v <= 90 ? 130 + v * 0.3 : 157 + (v - 90)); }
+function kmhToVelo(km) { return U.clamp(km <= 157 ? (km - 130) / 0.3 : 90 + (km - 157), 5, 99); }
 
 // 才能で決まる伸びしろ（★が多いほど高くまで伸びる。天才はさらに上まで）
 // 転生選手は、能力ごとにピーク時の値が上限（p.ceilA）

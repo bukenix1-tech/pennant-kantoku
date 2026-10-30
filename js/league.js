@@ -1275,22 +1275,23 @@ function addReborn(pool) {
     const age = R.kind === '高校' ? 18 : R.kind === '大学' ? 22 : R.kind === '高卒社会人' ? 21 : 24;
     // ピーク時の能力（R.peak）から、入団時の能力・才能・伸びしろの上限を決める
     const peakA = { ...R.peak };
-    if (peakA.velo >= 100) peakA.velo = U.clamp((peakA.velo - 130) / 0.3, 5, 99); // 球速は km/h でも書ける
+    if (peakA.velo >= 100) peakA.velo = kmhToVelo(peakA.velo); // 球速は km/h でも書ける
     const keys = Object.keys(peakA), avg = U.sum(keys, k => peakA[k]) / keys.length;
     const ratio = REBORN_START[R.kind] || 0.65;
     const pot = U.clamp((avg - CEIL_BASE) / CEIL_PER_POT, 1.3, 1.7); // 才能は必ず ★5
     const p = newPlayer(S, { isP: R.isP, pos: R.pos, q: avg * ratio, age, pot });
     p.name = R.name;
+    if (R.twoWay) { makeTwoWay(p, avg * ratio); if (R.isP) { p.pos2 = R.pos2 || '外'; p.subs = R.subs || []; } } // 二刀流は peak に投打両方を書く
     keys.forEach(k => { p.a[k] = U.clamp(peakA[k] * ratio + U.gauss() * 2, 5, 99); });
     p.ceilA = peakA;
     if (R.isP) {
       // 先発・中継ぎ・抑えの向き不向き
-      p.apt = R.role === '先発' ? { sp: 2, rp: 1 } : { sp: 0, rp: 2 };
+      p.apt = R.apt ? { ...R.apt } : R.role === '先発' ? { sp: 2, rp: 1 } : { sp: 0, rp: 2 }; // apt（0△ 1〇 2◎）を書けばそれを使う
       p.role = R.role === '先発' ? '先発' : '中継';
     }
     if (R.team && TEAM_PREF[R.team]) p.home = TEAM_PREF[R.team]; // 出身地は、元の所属球団の本拠地
     if (R.retireAge) p.retireAge = R.retireAge;
-    if (!R.isP) { p.traj = R.traj || p.traj; p.subs = R.subs || p.subs; }
+    if (canBat(p)) { p.traj = R.traj || p.traj; if (!R.isP) p.subs = R.subs || p.subs; }
     p.type = R.type || '晩成'; p.peak = GROWTH_PEAK[p.type]; // 転生選手はふつう晩成型（R.type で変えられる）
     p.genius = U.chance(GENIUS_CHANCE); // 天才肌になる確率はふつうの選手と同じ
     p.kind = R.kind;

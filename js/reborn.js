@@ -5,7 +5,8 @@
 // リストの元は _private/reborn.json（Git に入れない）。直したら python tools/reborn_lock.py で暗号化し直す
 //   name ：ゲームに出る名前 ／ team：元の所属球団の地名 ／ note：どんな選手か
 //   kind ：高校 / 大学 / 社会人 / 高卒社会人 ／ peak：ピーク時の能力 ／ traj：弾道 ／ weight：選ばれやすさ（ふつう 1）
-//   投手は peak に velo（km/h でよい）・control・stamina・breaking、role（先発 / 中継 / 抑え）
+//   投手は peak に velo（km/h でよい）・control・stamina・breaking、role（先発 / 中継 / 抑え）、apt（{ sp, rp }：0△ 1〇 2◎。書かなければ role から）
+//   二刀流は twoWay: true にして、peak に投打の両方を書く（pos2：野手のときの守備位置）
 //   type：成長型（書かなければ晩成） ／ retireAge：この年齢までは引退しない（衰えもゆるやか）
 //   出身地は team の本拠地。才能は ★5。天才肌になる確率はふつうの選手と同じ。出身校は「？？？」
 let REBORN = [];
