@@ -371,13 +371,7 @@ function startSeason() {
   S.foreignCands = null;
   Object.values(S.players).forEach(p => { p.stats = newStats(); p.rest = 7; p.fatigue = 0; p.downDay = null; });
   S.draftClass = makeDraftClass();
-  S.draftClass.map(id => S.players[id]).filter(p => p.reborn).forEach(p => {
-    const R = rebornOf(p);
-    addNews(`転生選手がドラフト候補に現れた！ ${p.name}（${p.amateur ? p.amateur.team : p.kind}）${R ? '― ' + R.note : ''}`, 'big');
-  });
-  S.draftClass.map(id => S.players[id]).filter(p => p.rareYears).forEach(p => {
-    addNews(`今年のドラフト候補に「${p.rareYears}年に一人の逸材」と言われる${p.kind === '高校' ? '高校生' : p.kind === '大学' ? '大学生' : '社会人'}がいる！ ${p.name}（${p.amateur ? p.amateur.team : p.kind}）`, 'big');
-  });
+  announceDraftClass();
   S.watch = [];
   S.teams.forEach(t => {
     t.w = t.l = t.d = t.rs = t.ra = 0;
@@ -954,7 +948,7 @@ function awaken(p) {
     : [[main, U.rint(8, 15)], [others[0], U.rint(3, 7)]];
   const parts = ups.map(([k, v]) => {
     const before = p.a[k];
-    p.a[k] = Math.min(99, p.a[k] + v);
+    p.a[k] = Math.max(p.a[k], Math.min(abilMax(p, k), p.a[k] + v));
     if (k === 'velo') return `球速 +${veloKmh(p.a[k]) - veloKmh(before)}km/h`;
     return `${lbl[k]} +${Math.round(p.a[k]) - Math.round(before)}`;
   });
@@ -1267,12 +1261,17 @@ function addReborn(pool) {
   if (!cands.length) return;
   [U.pickW(cands.map(R => [R, R.weight || 1]))].forEach(R => {
     const age = R.kind === '高校' ? 18 : R.kind === '大学' ? 22 : R.kind === '高卒社会人' ? 21 : 24;
-    const p = newPlayer(S, { isP: R.isP, pos: R.pos, q: R.q, age, pot: R.pot });
+    // ピーク時の能力（R.peak）から、入団時の能力・才能・伸びしろの上限を決める
+    const keys = Object.keys(R.peak), avg = U.sum(keys, k => R.peak[k]) / keys.length;
+    const ratio = REBORN_START[R.kind] || 0.65;
+    const pot = U.clamp((avg - CEIL_BASE) / CEIL_PER_POT, 1.3, 1.7); // 才能は必ず ★5
+    const p = newPlayer(S, { isP: R.isP, pos: R.pos, q: avg * ratio, age, pot });
     p.name = R.name;
-    Object.keys(R.style || {}).forEach(k => { if (p.a[k] != null) p.a[k] = U.clamp(R.q + R.style[k] + U.gauss() * 3, 5, 99); });
+    keys.forEach(k => { p.a[k] = U.clamp(R.peak[k] * ratio + U.gauss() * 2, 5, 99); });
+    p.ceilA = { ...R.peak };
     if (!R.isP) { p.traj = R.traj || p.traj; p.subs = R.subs || p.subs; }
-    if (R.type) { p.type = R.type; p.peak = GROWTH_PEAK[R.type]; }
-    p.genius = false;
+    p.type = '晩成'; p.peak = GROWTH_PEAK['晩成']; // 転生選手は晩成型
+    p.genius = U.chance(GENIUS_CHANCE); // 天才肌になる確率はふつうの選手と同じ
     p.kind = R.kind;
     p.salary = 600;
     p.reborn = R.id;
@@ -1283,6 +1282,17 @@ function addReborn(pool) {
 }
 function rebornOf(p) { return p.reborn ? REBORN.find(R => R.id === p.reborn) || null : null; }
 function rebornTag(p) { return p.reborn ? `<span class="tag reborn" title="名選手をもとにした転生選手">転生</span>` : ''; }
+
+// ドラフト候補の発表で、転生選手と「〇年に一人の逸材」をニュースにする
+function announceDraftClass() {
+  S.draftClass.map(id => S.players[id]).filter(p => p.reborn).forEach(p => {
+    const R = rebornOf(p);
+    addNews(`転生選手がドラフト候補に現れた！ ${p.name}（${p.amateur ? p.amateur.team : p.kind}）${R ? '― ' + R.note : ''}`, 'big');
+  });
+  S.draftClass.map(id => S.players[id]).filter(p => p.rareYears).forEach(p => {
+    addNews(`今年のドラフト候補に「${p.rareYears}年に一人の逸材」と言われる${p.kind === '高校' ? '高校生' : p.kind === '大学' ? '大学生' : '社会人'}がいる！ ${p.name}（${p.amateur ? p.amateur.team : p.kind}）`, 'big');
+  });
+}
 
 // 「〇年に一人の逸材」：本当の能力と才能が、何年に 1 人しか出ない高さか
 function rareYears(p) {
@@ -1902,7 +1912,7 @@ function migrate() {
   if (!S.watch) S.watch = [];
   // ウェーバーだけだったころのドラフトの途中から読み込んだとき
   if (S.off && S.off.draft && !S.off.draft.stage) Object.assign(S.off.draft, { stage: 'waiver', r1: { sub: 0, log: [] }, myDone: false, first: 'セ' });
-  if (S.phase !== 'off' && !S.draftClass) S.draftClass = makeDraftClass();
+  if (S.phase !== 'off' && !S.draftClass) { S.draftClass = makeDraftClass(); announceDraftClass(); }
   if (!S.standHist) S.standHist = [];
   if (!S.awardHist) S.awardHist = [];
   if (!S.records) S.records = { season: {} };

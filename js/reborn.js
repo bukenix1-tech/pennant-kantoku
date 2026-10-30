@@ -4,8 +4,8 @@
 // リストは家族の合言葉で暗号化してある（js/reborn.enc.json）。合言葉を入れた端末でだけ読めて、転生選手が出る
 // リストの元は _private/reborn.json（Git に入れない）。直したら python tools/reborn_lock.py で暗号化し直す
 //   name ：ゲームに出る名前 ／ team：元の所属球団の地名 ／ note：どんな選手か
-//   kind ：高校 / 大学 / 社会人 / 高卒社会人 ／ q：能力の中心（高校 28〜46・大学 38〜54 くらい）
-//   style：能力ごとに中心から足し引きする値 ／ pot：才能（1.3 で ★5） ／ weight：選ばれやすさ（ふつう 1）
+//   kind ：高校 / 大学 / 社会人 / 高卒社会人 ／ peak：ピーク時の能力 ／ traj：弾道 ／ weight：選ばれやすさ（ふつう 1）
+//   転生選手はみな晩成型・才能 ★5。天才肌になる確率はふつうの選手と同じ
 let REBORN = [];
 const REBORN_PASS_KEY = 'pennant-family-pass';
 

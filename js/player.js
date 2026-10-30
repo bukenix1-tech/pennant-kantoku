@@ -199,9 +199,12 @@ function potStars(pot) {
 function veloKmh(v) { return Math.round(130 + v * 0.3); }
 
 // 才能で決まる伸びしろ（★が多いほど高くまで伸びる。天才はさらに上まで）
-function abilCeil(p) { return CEIL_BASE + p.pot * CEIL_PER_POT + (p.genius ? 10 : 0); }
+// 転生選手は、能力ごとにピーク時の値が上限（p.ceilA）
+function abilCeil(p, k) { return k && p.ceilA && p.ceilA[k] != null ? p.ceilA[k] + (p.genius ? 5 : 0) : CEIL_BASE + p.pot * CEIL_PER_POT + (p.genius ? 10 : 0); }
 // 伸びしろの上限の近くまで来て、練習してもほとんど伸びない能力（衰退期は衰えのほうを見せるので出さない）
-function abilStalled(p, k) { return growthPhase(p).k !== 'decline' && p.a[k] < 99 && abilCeil(p) - p.a[k] <= STALL_GAP; }
+// 能力の天井。転生選手はピーク時の値を（覚醒しても）ほとんど超えない
+function abilMax(p, k) { return p.ceilA && p.ceilA[k] != null ? Math.min(99, abilCeil(p, k) + 2) : 99; }
+function abilStalled(p, k) { return growthPhase(p).k !== 'decline' && p.a[k] < 99 && abilCeil(p, k) - p.a[k] <= STALL_GAP; }
 
 // 1 回の練習（6 日に 1 回とキャンプで呼ぶ）
 function trainPlayer(p, mult) {
@@ -212,12 +215,12 @@ function trainPlayer(p, mult) {
   const special = (p.genius ? 1.6 : 1) * (p.twoWay ? 0.6 : 1);
   const total = 0.6 * p.pot * ageMul * mult * special * U.rnd(0.6, 1.4);
   const focusKey = focusToKey(p);
-  const ceil = abilCeil(p);
   keys.forEach(k => {
+    const ceil = abilCeil(p, k);
     const share = focusKey ? (k === focusKey ? 0.6 : 0.4 / (keys.length - 1)) : 1 / keys.length;
     const cur = p.a[k];
     const gain = total * share * keys.length * 0.5 * U.clamp((ceil - cur) / 40, 0.03, 1);
-    p.a[k] = Math.min(99, cur + gain);
+    p.a[k] = Math.max(cur, Math.min(abilMax(p, k), cur + gain));
   });
 }
 
