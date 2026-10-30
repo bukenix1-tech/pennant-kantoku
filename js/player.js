@@ -254,7 +254,7 @@ function agePlayer(p) {
   const over = p.age - (p.peak + 1);
   if (over > 0) {
     abilKeys(p).forEach(k => {
-      p.a[k] = Math.max(5, p.a[k] - U.rnd(1, 3) * (1 + over * 0.3));
+      p.a[k] = Math.max(5, p.a[k] - U.rnd(1, 3) * (1 + over * 0.3) * (p.retireAge ? 0.5 : 1)); // 長く続けた転生選手は衰えがゆるやか
     });
   }
   if (p.isP) p.role = p.role === '抑え' ? '抑え' : (aptOf(p).sp >= aptOf(p).rp ? '先発' : '中継');

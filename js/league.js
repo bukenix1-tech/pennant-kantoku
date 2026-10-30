@@ -1183,7 +1183,8 @@ function offContract() {
       const o = ovr(p);
       let leave = false;
       const ca = careerAge(p);
-      if (ca >= 38) leave = U.chance(0.85);
+      if (p.retireAge) leave = p.age >= p.retireAge && U.chance(0.7); // 転生選手は、もとの選手が辞めた年ごろまで続ける
+      else if (ca >= 38) leave = U.chance(0.85);
       else if (ca >= 35) leave = U.chance(o < 55 ? 0.7 : 0.3);
       else if (ca >= 31 && o < 45) leave = U.chance(0.5);
       if (p.foreign && o < 55) leave = true;
@@ -1262,21 +1263,31 @@ function addReborn(pool) {
   [U.pickW(cands.map(R => [R, R.weight || 1]))].forEach(R => {
     const age = R.kind === '高校' ? 18 : R.kind === '大学' ? 22 : R.kind === '高卒社会人' ? 21 : 24;
     // ピーク時の能力（R.peak）から、入団時の能力・才能・伸びしろの上限を決める
-    const keys = Object.keys(R.peak), avg = U.sum(keys, k => R.peak[k]) / keys.length;
+    const peakA = { ...R.peak };
+    if (peakA.velo >= 100) peakA.velo = U.clamp((peakA.velo - 130) / 0.3, 5, 99); // 球速は km/h でも書ける
+    const keys = Object.keys(peakA), avg = U.sum(keys, k => peakA[k]) / keys.length;
     const ratio = REBORN_START[R.kind] || 0.65;
     const pot = U.clamp((avg - CEIL_BASE) / CEIL_PER_POT, 1.3, 1.7); // 才能は必ず ★5
     const p = newPlayer(S, { isP: R.isP, pos: R.pos, q: avg * ratio, age, pot });
     p.name = R.name;
-    keys.forEach(k => { p.a[k] = U.clamp(R.peak[k] * ratio + U.gauss() * 2, 5, 99); });
-    p.ceilA = { ...R.peak };
+    keys.forEach(k => { p.a[k] = U.clamp(peakA[k] * ratio + U.gauss() * 2, 5, 99); });
+    p.ceilA = peakA;
+    if (R.isP) {
+      // 先発・中継ぎ・抑えの向き不向き
+      p.apt = R.role === '先発' ? { sp: 2, rp: 1 } : { sp: 0, rp: 2 };
+      p.role = R.role === '先発' ? '先発' : '中継';
+    }
+    if (R.team && TEAM_PREF[R.team]) p.home = TEAM_PREF[R.team]; // 出身地は、元の所属球団の本拠地
+    if (R.retireAge) p.retireAge = R.retireAge;
     if (!R.isP) { p.traj = R.traj || p.traj; p.subs = R.subs || p.subs; }
-    p.type = '晩成'; p.peak = GROWTH_PEAK['晩成']; // 転生選手は晩成型
+    p.type = R.type || '晩成'; p.peak = GROWTH_PEAK[p.type]; // 転生選手はふつう晩成型（R.type で変えられる）
     p.genius = U.chance(GENIUS_CHANCE); // 天才肌になる確率はふつうの選手と同じ
     p.kind = R.kind;
     p.salary = 600;
     p.reborn = R.id;
     if (R.team) p.rebornTeam = R.team;
     finishProspect(p, R.kind);
+    p.amateur.team = '？？？'; // 転生選手の出身校・所属は伏せる
     pool.push(p.id);
   });
 }
@@ -1950,24 +1961,78 @@ function makeMeta() {
   };
 }
 
-// 保存できたら true。容量がいっぱいなどで失敗したら false
+// セーブは圧縮して置く（lz-string。だいたい 9 分の 1 になる）。頭に「LZ1:」が付いていれば圧縮、なければ前の形のまま読む
+const SAVE_LZ = 'LZ1:';
+function packSave(obj) { return SAVE_LZ + LZString.compressToUTF16(JSON.stringify(obj)); }
+function unpackSave(raw) { return JSON.parse(raw.startsWith(SAVE_LZ) ? LZString.decompressFromUTF16(raw.slice(SAVE_LZ.length)) : raw); }
+
+// 圧縮には時間がかかるので、ふだんの保存は少し待ってから裏でまとめてする（save-worker.js）
+let saveOk = true, saveDirty = false, saveTimer = null, saveWorker = null, saveSeq = 0, saveBusy = false;
+
+// 保存を頼む。前の保存がうまくいっていれば true（容量がいっぱいなどで失敗していたら false）
 function saveGame() {
   if (!S || !currentSlot) return true;
+  saveDirty = true;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveInBackground, 600);
+  return saveOk;
+}
+
+// いますぐ保存する（タイトルへ戻る・読み込み直す・閉じるときなど）。できたら true
+function saveGameNow() {
+  clearTimeout(saveTimer);
+  if (!S || !currentSlot) { saveDirty = false; return true; }
+  saveDirty = false;
+  saveSeq++; // 裏で圧縮中の古い分は捨てる
+  saveBusy = false;
   try {
-    localStorage.setItem(slotKey(currentSlot), JSON.stringify(S));
+    localStorage.setItem(slotKey(currentSlot), packSave(S));
     localStorage.setItem(metaKey(currentSlot), JSON.stringify(makeMeta()));
-    return true;
+    saveOk = true;
   } catch (e) {
     console.warn('保存できませんでした', e);
-    return false;
+    saveOk = false;
   }
+  return saveOk;
 }
+function flushSave() { if (saveDirty || saveBusy) saveGameNow(); }
+
+function saveInBackground() {
+  if (!saveDirty || !S || !currentSlot) return;
+  if (!saveWorker) {
+    try { saveWorker = new Worker('js/save-worker.js'); } catch (e) { saveWorker = false; }
+  }
+  if (!saveWorker) { saveGameNow(); return; }
+  const seq = ++saveSeq, slot = currentSlot, meta = JSON.stringify(makeMeta());
+  saveDirty = false;
+  saveBusy = true;
+  saveWorker.onmessage = e => {
+    if (e.data.seq !== saveSeq) return; // もっと新しい保存が来ている
+    saveBusy = false;
+    try {
+      localStorage.setItem(slotKey(slot), SAVE_LZ + e.data.out);
+      localStorage.setItem(metaKey(slot), meta);
+      saveOk = true;
+    } catch (err) {
+      console.warn('保存できませんでした', err);
+      saveOk = false;
+      UI.toast = '保存できませんでした（ブラウザの保存容量がいっぱいかもしれません）。';
+      render();
+    }
+  };
+  saveWorker.onerror = () => { saveWorker = false; saveGameNow(); };
+  saveWorker.postMessage({ seq, json: JSON.stringify(S) });
+}
+// 閉じる・裏に回るときは、待たずに保存しておく
+window.addEventListener('pagehide', flushSave);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushSave(); });
 
 function loadGame(n) {
   try {
+    flushSave();
     const raw = localStorage.getItem(slotKey(n));
     if (!raw) return false;
-    S = JSON.parse(raw);
+    S = unpackSave(raw);
     migrate();
     currentSlot = n;
     return true;
@@ -1979,6 +2044,7 @@ function slotMeta(n) {
 }
 
 function deleteSlot(n) {
+  if (n === currentSlot) { clearTimeout(saveTimer); saveSeq++; saveDirty = false; saveBusy = false; } // 消したあとに、裏の保存で書き戻さない
   try { localStorage.removeItem(slotKey(n)); localStorage.removeItem(metaKey(n)); localStorage.removeItem(expKey(n)); } catch (e) { /* なにもしない */ }
 }
 
@@ -1994,7 +2060,7 @@ function exportSlot(n) {
   else {
     const raw = localStorage.getItem(slotKey(n));
     if (!raw) return null;
-    data = JSON.parse(raw);
+    data = unpackSave(raw);
   }
   const meta = slotMeta(n) || {};
   const d = new Date();
@@ -2026,7 +2092,7 @@ function importToSlot(n, text) {
     S = data;
     migrate();
     currentSlot = n;
-    if (!saveGame()) return '保存できませんでした（ブラウザの保存容量がいっぱいかもしれません）。';
+    if (!saveGameNow()) return '保存できませんでした（ブラウザの保存容量がいっぱいかもしれません）。';
     localStorage.setItem(expKey(n), String(obj.exportedAt || Date.now()));
   } catch (e) {
     return 'セーブの中身がおかしいため、読み込めませんでした。';
@@ -2049,7 +2115,7 @@ function askPersistentStorage() {
 // いまのデータを別のスロットにも残す（バックアップ）
 function copyToSlot(n) {
   try {
-    localStorage.setItem(slotKey(n), JSON.stringify(S));
+    localStorage.setItem(slotKey(n), packSave(S));
     localStorage.setItem(metaKey(n), JSON.stringify(makeMeta()));
     return true;
   } catch (e) { return false; }
@@ -2064,7 +2130,7 @@ function migrateOldSave() {
       S = JSON.parse(old);
       migrate();
       currentSlot = 1;
-      saveGame();
+      saveGameNow();
       S = null;
       currentSlot = null;
     }

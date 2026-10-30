@@ -275,8 +275,8 @@ const ACTIONS = {
     downloadText(f.name, f.text);
     UI.toast = `「${f.name}」を書き出しました。`;
   },
-  saveNow() { closeModal(); UI.toast = saveGame() ? `スロット${currentSlot}に保存しました。` : '保存できませんでした。'; },
-  toTitle() { saveGame(); closeModal(); S = null; currentSlot = null; },
+  saveNow() { closeModal(); UI.toast = saveGameNow() ? `スロット${currentSlot}に保存しました。` : '保存できませんでした。'; },
+  toTitle() { saveGameNow(); closeModal(); S = null; currentSlot = null; },
   reset() {
     if (!confirm(`スロット${currentSlot}のデータを消して、タイトルに戻ります。
 本当によろしいですか？（元に戻せません）`)) return 'keep';
@@ -427,7 +427,7 @@ if ('serviceWorker' in navigator && window.isSecureContext && location.protocol.
     // はじめて入ったときは読み込み直さない。版が入れ替わったときだけ
     if (!hadController || reloading) return;
     reloading = true;
-    if (S) saveGame();
+    if (S) saveGameNow();
     location.reload();
   });
   // iPhone のホーム画面のアプリは、閉じたつもりでも裏で残っていることがあるので、前に戻ってきたときにも確かめる
@@ -444,6 +444,6 @@ async function checkUpdate() {
   try {
     if (swReg) await swReg.update();
   } catch (e) { /* つながらないときは、いまの版のまま */ }
-  if (S) saveGame();
+  if (S) saveGameNow();
   location.reload();
 }
