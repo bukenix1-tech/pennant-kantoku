@@ -542,29 +542,6 @@ function renderOrder() {
   const fielders = activePlayers(t).filter(canBat).sort((a, b) => batOvr(b) - batOvr(a));
   const pitchers = activePlayers(t).filter(canPitch).sort((a, b) => ovr(b) - ovr(a));
   const inLine = new Set(t.lineup.map(s => s.pid));
-  const rows = t.lineup.map((s, i) => {
-    const p = S.players[s.pid];
-    const fit = posFit(p, s.pos);
-    return `<tr>
-      <td><b>${i + 1}</b></td>
-      <td><select data-chg="lpos" data-i="${i}">${LPOS.map(x => `<option ${x === s.pos ? 'selected' : ''}>${x}</option>`).join('')}</select></td>
-      <td class="l"><select data-chg="lplayer" data-i="${i}">${fielders.map(f => `<option value="${f.id}" ${f.id === p.id ? 'selected' : ''}>${batOpt(f)}</option>`).join('')}</select>
-        ${fit < 1 ? `<span class="tag ${fit < 0.7 ? 'bad' : ''}">適性${fit < 0.7 ? '×' : '△'}</span>` : ''}${p.inj ? '<span class="tag bad">故障</span>' : ''}</td>
-      <td>${condCell(p)}</td>${BAT_KEYS.map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}<td>${canBat(p) ? trajOf(p) : '-'}</td>
-      <td>${Math.round(batOvr(p))}</td><td>${U.avg(p.stats.h, p.stats.ab)}</td><td>${p.stats.hr}</td>
-      <td class="nowrap"><button class="sm" data-act="lmove" data-i="${i}" data-d="-1">▲</button><button class="sm" data-act="lmove" data-i="${i}" data-d="1">▼</button></td>
-    </tr>`;
-  }).join('');
-  const lineupCards = isMobile() ? `<div class="pcards">${t.lineup.map((s, i) => {
-    const p = S.players[s.pid];
-    const fit = posFit(p, s.pos);
-    return `<div class="pcard"><div class="pc-top"><div class="order-no">${i + 1}</div>
-        <select data-chg="lpos" data-i="${i}">${LPOS.map(x => `<option ${x === s.pos ? 'selected' : ''}>${x}</option>`).join('')}</select>
-        <select class="grow" data-chg="lplayer" data-i="${i}">${fielders.map(f => `<option value="${f.id}" ${f.id === p.id ? 'selected' : ''}>${batOpt(f)}</option>`).join('')}</select></div>
-      <div class="pc-sub">${posBadge(p)}${condCell(p)}${fit < 1 ? `<span class="tag ${fit < 0.7 ? 'bad' : ''}">適性${fit < 0.7 ? '×' : '△'}</span>` : ''}<span class="muted">打率${U.avg(p.stats.h, p.stats.ab)} ${p.stats.hr}本</span></div>
-      <div class="pc-abil">${BAT_KEYS.map(k => `<span class="ab">${SHORT_LABEL[k]}<span class="g g${U.grade(p.a[k])}">${U.grade(p.a[k])}</span></span>`).join('')}${trajTag(p)}</div>
-      <div class="pc-act"><button class="sm" data-act="lmove" data-i="${i}" data-d="-1">▲ 上へ</button><button class="sm" data-act="lmove" data-i="${i}" data-d="1">▼ 下へ</button></div></div>`;
-  }).join('')}</div>` : '';
   const bench = fielders.filter(p => !inLine.has(p.id));
   const pOpt = (cur, list) => list.map(p => `<option value="${p.id}" ${p.id === cur ? 'selected' : ''}>${pitOpt(p)}</option>`).join('');
   const rot = t.rotation.map((id, i) => `<tr><td>${i + 1}${i === t.rotIdx % t.rotation.length ? ' <span class="tag">次</span>' : ''}</td>
@@ -575,9 +552,8 @@ function renderOrder() {
   return `
   <section class="card">
     <div class="row"><h2>打順と守備</h2><button data-act="autoOrder">おまかせで組む</button></div>
-    <p class="muted">守備位置を変えると、その位置にいた選手と入れ替わります。適性△×は守備が弱くなります。選べるのは一軍の選手だけです（入れ替えは「一軍・二軍」の画面で）。</p>
-    ${isMobile() ? lineupCards : `<div class="scroll"><table class="tbl"><tr><th>打順</th><th>守備</th><th>選手</th><th>調</th>${BAT_KEYS.map(k => `<th>${BAT_LABEL[k]}</th>`).join('')}<th>弾</th><th>総合</th><th>打率</th><th>本</th><th></th></tr>${rows}</table></div>`}
-    <h3>一軍の控え（${bench.length}人）</h3>${benchTable(bench)}
+    <p class="muted">選手をタップして、もう一人をタップすると入れ替わります。打順どうしなら打順を、控えを選ぶとスタメンと交代します。守備図の位置をタップすると、選んだ選手がそこを守ります。適性△×は守備が弱くなります（一軍・二軍の入れ替えは「一軍・二軍」の画面で）。</p>
+    ${orderBoard(t, bench)}
   </section>
   <section class="card">
     <h2>先発ローテーション（${ROTATION_SIZE}人）</h2>
@@ -589,6 +565,63 @@ function renderOrder() {
     <p class="muted">3 点差以内でリードしている 8 回はセットアッパー、9 回は抑えが出ます。リリーフは 3 日続けては投げません。</p>
     <h3>リリーフ陣（${pen.length}人）</h3>${penTable(pen.slice().sort((a, b) => (b.id === t.closer) - (a.id === t.closer) || (b.id === t.setup) - (a.id === t.setup) || relVal(b) - relVal(a)), t)}
   </section>`;
+}
+
+// ---------- オーダー画面（打順表と守備図） ----------
+const FIELD_SPOT = { 捕: [50, 90], 一: [76, 58], 二: [63, 42], 三: [24, 58], 遊: [37, 42], 左: [16, 20], 中: [50, 9], 右: [84, 20] };
+function posClass(pos) { return ['左', '中', '右'].includes(pos) ? '外' : pos; }
+
+function orderRow(p, o) {
+  const fit = o.pos ? posFit(p, o.pos) : 1;
+  return `<button class="po-row${o.sel ? ' sel' : ''}${p.inj ? ' inj' : ''}" data-act="osel" data-k="${o.k}" ${o.k === 'line' ? `data-i="${o.i}"` : `data-pid="${p.id}"`}>
+    <span class="po-no">${o.k === 'line' ? o.i + 1 : ''}</span>
+    <span class="po-pos">${o.pos ? `<span class="pb pb-${posClass(o.pos)}">${o.pos}</span>` : posBadge(p)}</span>
+    <span class="po-name">${h(p.name)}${fit < 1 ? `<span class="tag ${fit < 0.7 ? 'bad' : ''}">適性${fit < 0.7 ? '×' : '△'}</span>` : ''}${p.inj ? '<span class="tag bad">故障</span>' : ''}</span>
+    <span class="po-cond">${condCell(p)}</span>
+    <span class="po-traj">${trajTag(p)}</span>
+    ${BAT_KEYS.map(k => `<span class="po-g">${gradeCell(p.a[k])}</span>`).join('')}
+    <span class="po-st muted">${U.avg(p.stats.h, p.stats.ab)} ${p.stats.hr}本</span>
+  </button>`;
+}
+
+function orderBoard(t, bench) {
+  if (UI.osel && UI.osel.k === 'bench' && !bench.some(p => p.id === UI.osel.pid)) UI.osel = null; // 控えから外れた選手は選びなおし
+  const sel = UI.osel;
+  const head = `<div class="po-row po-head"><span class="po-no">#</span><span class="po-pos">守</span><span class="po-name">選手</span><span class="po-cond">調</span><span class="po-traj">弾</span>${BAT_KEYS.map(k => `<span class="po-g">${SHORT_LABEL[k]}</span>`).join('')}<span class="po-st">打率 本</span></div>`;
+  const lineRows = t.lineup.map((s, i) => orderRow(S.players[s.pid], { k: 'line', i, pos: s.pos, sel: sel && sel.k === 'line' && sel.i === i })).join('');
+  const benchRows = bench.length
+    ? bench.map(p => orderRow(p, { k: 'bench', sel: sel && sel.k === 'bench' && sel.pid === p.id })).join('')
+    : '<p class="muted">なし</p>';
+  const selPid = sel ? (sel.k === 'line' ? t.lineup[sel.i].pid : sel.pid) : null;
+  const spot = (pos, xy) => {
+    const s = t.lineup.find(x => x.pos === pos);
+    const p = s && S.players[s.pid];
+    const bad = p && posFit(p, pos) < 1;
+    return `<button class="fspot${p && p.id === selPid ? ' sel' : ''}${bad ? ' bad' : ''}" style="left:${xy[0]}%;top:${xy[1]}%" data-act="ofield" data-pos="${pos}">
+      <span class="pb pb-${posClass(pos)}">${pos}</span><span class="fname">${p ? h(p.name.split(' ')[0]) : '空き'}</span></button>`;
+  };
+  const hasDH = t.lineup.some(x => x.pos === '指');
+  const nextSp = t.rotation.length ? S.players[t.rotation[t.rotIdx % t.rotation.length]] : null;
+  const field = `<div class="po-field">
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M50 98 L2 50 A68 68 0 0 1 98 50 Z" fill="#3f8f3a"/>
+      <path d="M50 96 L22 66 L50 38 L78 66 Z" fill="#c8945a"/>
+      <path d="M50 90 L30 68 L50 47 L70 68 Z" fill="#4c9d45"/>
+      <circle cx="50" cy="66" r="3.2" fill="#c8945a"/>
+      <path d="M50 96 L2 50 M50 96 L98 50" stroke="#fff" stroke-width=".5" fill="none"/>
+    </svg>
+    ${Object.entries(FIELD_SPOT).map(([pos, xy]) => spot(pos, xy)).join('')}
+    <div class="fmound">${nextSp ? `<span class="pb pb-投">投</span><span class="fname">${h(nextSp.name.split(' ')[0])}</span>` : ''}</div>
+    ${hasDH ? spot('指', [86, 90]) : ''}
+  </div>`;
+  const hint = sel
+    ? `<b>${h(S.players[selPid].name)}</b> を選んでいます。入れ替える相手か、守る位置をタップしてください。 <button class="sm" data-act="oclear">やめる</button>`
+    : '選手をタップして選びます。';
+  return `<div class="po-hint">${hint}</div>
+  <div class="po-wrap">
+    <div class="po-list">${head}${lineRows}<h3>控え（${bench.length}人）</h3>${benchRows}</div>
+    ${field}
+  </div>`;
 }
 
 // ---------- オフの FA ----------
@@ -646,32 +679,41 @@ function renderRoster() {
   const t = myTeam();
   const act = activePlayers(t), farm = teamPlayers(t).filter(p => !t.active.includes(p.id));
   const foreign = act.filter(p => p.foreign).length;
-  const sum = p => abilKeys(p).map(k => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(p.a.velo) + 'km' : `<span class="g g${U.grade(p.a[k])}">${U.grade(p.a[k])}</span>`}`).join(' ') + trajTag(p);
-  const pos = p => posBadge(p);
-  const actAct = p => `<button class="sm" data-act="demote" data-pid="${p.id}">抹消</button>`;
-  const farmAct = p => {
-    const why = cannotPromote(t, p);
-    return why ? `<span class="muted small">${h(why)}</span>` : `<button class="sm primary" data-act="promote" data-pid="${p.id}">登録</button>`;
-  };
-  const actRow = p => `<tr><td class="l">${nameCell(p)}</td><td>${pos(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${condCell(p)}</td><td class="l">${sum(p)}</td><td>${Math.round(ovr(p))}</td>
-    <td>${actAct(p)}</td></tr>`;
-  const farmRow = p => `<tr><td class="l">${nameCell(p)}</td><td>${pos(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${condCell(p)}</td><td class="l">${sum(p)}</td><td>${Math.round(ovr(p))}</td>
-    <td>${farmAct(p)}</td></tr>`;
-  const head = '<tr><th>名前</th><th>守</th><th>年</th><th>調</th><th>能力</th><th>総合</th><th></th></tr>';
+  if (UI.rsel != null && (!S.players[UI.rsel] || S.players[UI.rsel].teamId !== t.id)) UI.rsel = null;
+  const sel = UI.rsel != null ? S.players[UI.rsel] : null;
+  const selAct = sel && isActive(t, sel);
   const byOvr = (a, b) => ovr(b) - ovr(a);
-  const table = (list, row) => (isMobile()
-    ? cardList(list, p => playerCard(p, { action: row === actRow ? actAct(p) : farmAct(p) }))
-    : `<div class="scroll"><table class="tbl">${head}${list.map(row).join('')}</table></div>`);
+  const row = p => {
+    const on = sel && sel.id === p.id;
+    const farm = !isActive(t, p);
+    const why = farm ? cannotPromote(t, p) : null;
+    const abil = abilKeys(p).map(k => `<span class="po-g">${SHORT_LABEL[k]}${k === 'velo' ? `<span class="kmh">${veloKmh(p.a.velo)}</span>` : `<span class="g g${U.grade(p.a[k])}">${U.grade(p.a[k])}</span>`}</span>`).join('');
+    return `<button class="ro-row${on ? ' sel' : ''}${why && why !== '一軍が満員' ? ' locked' : ''}" data-act="rsel" data-pid="${p.id}">
+      <span class="ro-pos">${posBadge(p)}</span>
+      <span class="ro-name">${h(p.name)}${p.foreign ? '<span class="tag">外</span>' : ''}${p.twoWay ? '<span class="tag twoway">二刀流</span>' : ''}${p.inj ? `<span class="tag bad">故障${p.inj}日</span>` : ''}${why && why !== '一軍が満員' && !p.inj ? `<span class="tag">${h(why)}</span>` : ''}</span>
+      <span class="ro-age">${p.age}${phaseMark(p)}</span>
+      <span class="ro-cond">${condCell(p)}</span>
+      <span class="ro-abil">${abil}${trajTag(p)}</span>
+      <span class="ro-ovr">${Math.round(ovr(p))}</span>
+    </button>`;
+  };
+  const group = (list, title) => `<h3>${title}（${list.length}人）</h3>${list.length ? list.sort(byOvr).map(row).join('') : '<p class="muted">なし</p>'}`;
+  const hint = sel
+    ? `<b>${h(sel.name)}</b>（${selAct ? '一軍' : '二軍'}）を選んでいます。${selAct ? '二軍' : '一軍'}の選手をタップすると入れ替わります。
+       ${selAct ? `<button class="sm" data-act="demote" data-pid="${sel.id}">抹消だけする</button>` : `<button class="sm primary" data-act="promote" data-pid="${sel.id}">登録だけする</button>`}
+       <button class="sm" data-act="rclear">やめる</button>`
+    : '選手をタップして選び、反対側の選手をタップすると一軍と二軍が入れ替わります。';
   return `
   <section class="card">
     <div class="row"><h2>一軍・二軍</h2><button data-act="autoActive">一軍をおまかせで組む</button></div>
     <p>一軍 <b>${act.length}/${ACTIVE_MAX}人</b>（投手${act.filter(p => p.isP).length}・野手${act.filter(p => !p.isP).length}）・ 外国人 ${foreign}/${FOREIGN_ACTIVE_MAX} ・ 支配下 ${t.players.length}/${ROSTER_MAX}</p>
     <p class="muted">試合に出られるのは一軍だけです。シーズン中に抹消した選手は${REREGISTER_DAYS}日たつまで一軍に戻せません。ケガをした一軍の選手は自動で抹消され、二軍から代わりが上がります。</p>
-  </section>
-  <div class="grid2">
-    <section class="card"><h2>一軍</h2><h3>投手</h3>${table(act.filter(p => p.isP).sort(byOvr), actRow)}<h3>野手</h3>${table(act.filter(p => !p.isP).sort(byOvr), actRow)}</section>
-    <section class="card"><h2>二軍</h2><h3>投手</h3>${table(farm.filter(p => p.isP).sort(byOvr), farmRow)}<h3>野手</h3>${table(farm.filter(p => !p.isP).sort(byOvr), farmRow)}</section>
-  </div>`;
+    <div class="po-hint">${hint}</div>
+    <div class="ro-wrap">
+      <div class="ro-col ro-act"><h2>一軍</h2>${group(act.filter(p => p.isP), '投手')}${group(act.filter(p => !p.isP), '野手')}</div>
+      <div class="ro-col ro-farm"><h2>二軍</h2>${group(farm.filter(p => p.isP), '投手')}${group(farm.filter(p => !p.isP), '野手')}</div>
+    </div>
+  </section>`;
 }
 
 // ---------- 練習 ----------

@@ -65,12 +65,14 @@ const ACTIONS = {
     const t = myTeam(), p = S.players[+el.dataset.pid];
     const why = cannotPromote(t, p);
     if (why) { UI.toast = why; return; }
+    UI.rsel = null;
     promote(t, p);
     addNews(`${p.name}を一軍に登録しました。`);
     if (!document.getElementById('modal').classList.contains('hidden')) openModal(renderPlayerModal(p));
   },
   demote(el) {
     const t = myTeam(), p = S.players[+el.dataset.pid];
+    UI.rsel = null;
     demote(t, p);
     ensureLineup(S, t);
     addNews(`${p.name}の登録を抹消しました。`);
@@ -103,6 +105,47 @@ const ACTIONS = {
     autoLineup(t); autoRotation(t);
     UI.toast = 'おまかせでオーダーを組みました。';
   },
+  // オーダー画面：1 人目をタップで選び、2 人目（または守備位置）で入れ替える
+  osel(el) {
+    const t = myTeam(), sel = UI.osel;
+    const cur = el.dataset.k === 'line' ? { k: 'line', i: +el.dataset.i } : { k: 'bench', pid: +el.dataset.pid };
+    if (!sel) { UI.osel = cur; return; }
+    UI.osel = null;
+    if (sel.k === 'line' && cur.k === 'line') {
+      if (sel.i !== cur.i) [t.lineup[sel.i], t.lineup[cur.i]] = [t.lineup[cur.i], t.lineup[sel.i]];
+    } else if (sel.k === 'bench' && cur.k === 'bench') {
+      if (sel.pid !== cur.pid) UI.osel = cur;
+    } else {
+      const line = sel.k === 'line' ? sel : cur, b = sel.k === 'bench' ? sel : cur;
+      t.lineup[line.i].pid = b.pid; // 控えの選手が、その打順と守備位置に入る
+    }
+  },
+  ofield(el) {
+    const t = myTeam(), sel = UI.osel, pos = el.dataset.pos;
+    const j = t.lineup.findIndex(s => s.pos === pos);
+    if (!sel) { if (j >= 0) UI.osel = { k: 'line', i: j }; return; }
+    UI.osel = null;
+    if (sel.k === 'bench') { if (j >= 0) t.lineup[j].pid = sel.pid; return; }
+    if (j === sel.i) return;
+    if (j >= 0) t.lineup[j].pos = t.lineup[sel.i].pos;
+    t.lineup[sel.i].pos = pos;
+  },
+  oclear() { UI.osel = null; },
+  // 一軍・二軍：一軍の選手と二軍の選手を続けてタップすると入れ替わる
+  rsel(el) {
+    const t = myTeam(), p = S.players[+el.dataset.pid], sel = UI.rsel != null ? S.players[UI.rsel] : null;
+    if (!sel || sel.id === p.id || isActive(t, sel) === isActive(t, p)) { UI.rsel = sel && sel.id === p.id ? null : p.id; return; }
+    UI.rsel = null;
+    const up = isActive(t, p) ? sel : p, down = isActive(t, p) ? p : sel;
+    const keep = down.downDay;
+    demote(t, down);
+    const why = cannotPromote(t, up);
+    if (why) { promote(t, down); down.downDay = keep; UI.toast = `${up.name}は登録できません（${why}）`; return; }
+    promote(t, up);
+    ensureLineup(S, t);
+    addNews(`${down.name}の登録を抹消し、${up.name}を一軍に登録しました。`);
+  },
+  rclear() { UI.rsel = null; },
   lmove(el) {
     const t = myTeam(), i = +el.dataset.i, j = i + +el.dataset.d;
     if (j < 0 || j >= t.lineup.length) return;
