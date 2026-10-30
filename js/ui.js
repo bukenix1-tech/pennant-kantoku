@@ -460,7 +460,7 @@ const TRAJ_WORD = ['', 'ライナー・ゴロが多い', 'やや低め', 'やや
 function renderPlayerModal(p) {
   const mine = p.teamId === S.myTeamId;
   const keys = abilKeys(p), lbl = ALL_LABEL;
-  const bars = keys.map(k => `<div class="bar"><span class="bl">${lbl[k]}</span>${gradeCell(p.a[k])}
+  const bars = keys.map(k => `<div class="bar"><span class="bl">${lbl[k]}</span>${abilStalled(p, k) ? `<span class="gstack"><span class="grow1">${gradeCell(p.a[k])}</span><small class="stall" title="伸びしろの上限に近く、練習してもほとんど伸びない">停滞</small></span>` : gradeCell(p.a[k])}
     <span class="bt"><span style="width:${Math.round(p.a[k])}%"></span></span>${k === 'velo' ? `<span class="muted">${veloKmh(p.a.velo)}km/h</span>` : ''}</div>`).join('')
     + (canBat(p) ? `<div class="bar"><span class="bl">弾道</span>${trajTag(p)}<span class="muted small">${TRAJ_WORD[trajOf(p)]}</span></div>` : '');
   const careerRows = [...p.career, { y: S.year, t: p.teamId != null ? S.teams[p.teamId].short : '-', s: p.stats, now: true }]
@@ -485,7 +485,7 @@ function renderPlayerModal(p) {
   <div class="bars">${bars}</div>
   <p>総合 <b>${Math.round(ovr(p))}</b>　トレード価値 ${tradeValue(p).toLocaleString()}</p>
   <p class="drafted">${p.drafted
-    ? `📝 入団：<b>${p.drafted.year}年ドラフト${p.drafted.round}位</b>（${h(p.drafted.team)}${p.drafted.note ? `・${h(p.drafted.note)}` : ''}）${p.drafted.from ? ` <span class="muted">${h(p.drafted.from)}から</span>` : ''}`
+    ? `📝 入団：<b>${p.drafted.year}年ドラフト${p.drafted.round}位</b>（${h(p.drafted.team)}${p.drafted.note ? `・${h(p.drafted.note)}` : ''}）${p.rareYears ? ` <span class="muted">「${p.rareYears}年に一人の逸材」と言われた</span>` : ''}${p.drafted.from ? ` <span class="muted">${h(p.drafted.from)}から</span>` : ''}`
     : p.foreign ? '📝 入団：外国人選手として契約' : '<span class="muted">📝 入団：ゲームを始める前からいる選手（ドラフトの記録なし）</span>'}</p>
   <p>出身 ${p.home ? h(p.home) : '海外'}${team && isHomeTeam(p, team) ? ' <span class="tag">地元</span>' : ''}
     ・ ${p.foreign ? 'FA権なし（外国人）' : hasFA(p) ? '<b>FA権あり</b>' : `FA権まであと${Math.max(0, faNeed(p) - faYearsHave(p)).toFixed(1)}年`}（一軍登録 ${faYearsHave(p).toFixed(1)}年）
@@ -1124,7 +1124,7 @@ function prospectTable(ids, mode) {
     const A = p.amateur;
     const on = watch.includes(p.id);
     return `<tr class="${on ? 'sel' : ''}"><td><button class="star-btn ${on ? 'on' : ''}" data-act="watch" data-pid="${p.id}" title="気になる">${on ? '★' : '☆'}</button></td>
-      <td class="l"><b>${h(p.name)}</b>${p.twoWay ? '<span class="tag twoway">二刀流</span>' : ''}</td><td>${p.kind}</td><td>${posBadge(p)}</td><td>${p.age}</td>
+      <td class="l"><b>${h(p.name)}</b>${p.twoWay ? '<span class="tag twoway">二刀流</span>' : ''}${rareTag(p)}</td><td>${p.kind}</td><td>${posBadge(p)}</td><td>${p.age}</td>
       <td>${geniusHint(p) ? '<span class="tag genius">天才肌？</span>' : ''}</td><td class="stars">${potStars(scoutView(p, 'pot'))}</td><td class="stars">${visualStars(p.visual)}</td>
       <td class="l">${keys.map(k => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(scoutView(p, k)) + 'km' : `<span class="g g${U.grade(scoutView(p, k))}">${U.grade(scoutView(p, k))}</span>`}`).join(' ')}${trajTag(p)}</td>
       <td class="l wrap amateur"><div>${tierTag(p)}</div>${A ? `<div>${h(A.team)}</div><div>${h(A.line)}</div>${A.title ? `<div class="atitle">🏆 ${h(A.title)}</div>` : ''}` : ''}
@@ -1137,7 +1137,7 @@ function prospectTable(ids, mode) {
     return playerCard(p, {
       cls: on ? 'sel' : '', view: true, noCond: true, ovr: Math.round(seen(p)),
       lead: `<button class="star-btn ${on ? 'on' : ''}" data-act="watch" data-pid="${p.id}">${on ? '★' : '☆'}</button>`,
-      name: `<b>${h(p.name)}</b>${p.twoWay ? '<span class="tag twoway">二刀流</span>' : ''}${geniusHint(p) ? '<span class="tag genius">天才肌？</span>' : ''}`,
+      name: `<b>${h(p.name)}</b>${p.twoWay ? '<span class="tag twoway">二刀流</span>' : ''}${rareTag(p)}${geniusHint(p) ? '<span class="tag genius">天才肌？</span>' : ''}`,
       sub: `<span>${p.kind}</span><span class="muted">才能</span><span class="stars">${potStars(scoutView(p, 'pot'))}</span><span class="muted">ビジュアル</span><span class="stars">${visualStars(p.visual)}</span>`,
       lines: `<div class="pc-line">${tierTag(p)}</div>${A ? `<div class="pc-line">${h(A.team)}<br>${h(A.line)}</div>${A.title ? `<div class="pc-line atitle">🏆 ${h(A.title)}</div>` : ''}` : ''}<div class="pc-line muted">講評：${h(scoutComment(p))}</div>`,
       action: pickable ? pickBtn(p) : '',

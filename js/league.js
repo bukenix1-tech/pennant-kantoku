@@ -371,6 +371,9 @@ function startSeason() {
   S.foreignCands = null;
   Object.values(S.players).forEach(p => { p.stats = newStats(); p.rest = 7; p.fatigue = 0; p.downDay = null; });
   S.draftClass = makeDraftClass();
+  S.draftClass.map(id => S.players[id]).filter(p => p.rareYears).forEach(p => {
+    addNews(`今年のドラフト候補に「${p.rareYears}年に一人の逸材」と言われる${p.kind === '高校' ? '高校生' : p.kind === '大学' ? '大学生' : '社会人'}がいる！ ${p.name}（${p.amateur ? p.amateur.team : p.kind}）`, 'big');
+  });
   S.watch = [];
   S.teams.forEach(t => {
     t.w = t.l = t.d = t.rs = t.ra = 0;
@@ -1240,10 +1243,20 @@ function makeDraftClass() {
     keys.forEach(k => { p.noise[k] = miss(); });
     p.noise.pot = miss();
     p.amateur = makeAmateur(p, kind);
+    const ry = rareYears(p);
+    if (ry) p.rareYears = ry;
     pool.push(p.id);
   }
   return pool;
 }
+
+// 「〇年に一人の逸材」：本当の能力と才能が、何年に 1 人しか出ない高さか
+function rareYears(p) {
+  const v = draftValue(p) + (p.genius ? 8 : 0);
+  const hit = RARE_PROSPECT.find(r => v >= r[0]);
+  return hit ? hit[1] : 0;
+}
+function rareTag(p) { return p.rareYears ? `<span class="tag rare">${p.rareYears}年に一人の逸材</span>` : ''; }
 
 function offDraftStart() {
   const pool = (S.draftClass || makeDraftClass()).filter(id => S.players[id]);

@@ -54,6 +54,7 @@ const PIT_KEYS = ['velo', 'control', 'stamina', 'breaking'];
 const PIT_LABEL = { velo: '球速', control: 'コントロール', stamina: 'スタミナ', breaking: '変化球' };
 const ALL_LABEL = { ...BAT_LABEL, ...PIT_LABEL };
 const CEIL_BASE = 31, CEIL_PER_POT = 30; // 伸びしろの上限 = CEIL_BASE + 才能 × CEIL_PER_POT（天才は +10）
+const STALL_GAP = 2; // 伸びしろの上限までこれだけしか無い能力に「停滞」を付ける
 const GENIUS_CHANCE = 0.015;   // 天才（伸びがいい）が生まれる確率
 const TWO_WAY_CHANCE = 0.02;   // ドラフト候補が二刀流である確率（才能のある投手だけ）
 const TWO_WAY_MIN_OVR = 60;    // 二刀流に挑戦できるのは総合がこれ以上の選手
@@ -117,6 +118,8 @@ const ACTIVE_MAX = 29;        // 一軍に登録できる人数
 const FOREIGN_ACTIVE_MAX = 4; // 一軍に登録できる外国人の数
 const REREGISTER_DAYS = 10;   // 登録を抹消したら、この日数は一軍に戻せない
 const DRAFT_ROUNDS = 7;
+// 「〇年に一人の逸材」の線（draftValue＋天才 8）。ドラフト候補を 1 万年分作って測った、その年数に 1 人が届く値
+const RARE_PROSPECT = [[110.7, 200], [108.7, 100], [106.7, 50], [105.4, 30], [104.3, 20], [102.4, 10]];
 const SAVE_KEY = 'pennant_save_v2'; // 12 球団にしたので v1 とは別
 
 // 年俸（万円）。成績の目安額 = 800 + 勝利数 × SAL_PER_WIN + 勝利数² × SAL_PER_WIN2
