@@ -52,10 +52,10 @@ function doPA(b, rec, fld) {
   const meet = b.a.meet * cb, pow = b.a.power * cb, spd = b.a.speed;
   const stuff = (p.a.velo * 0.45 + p.a.breaking * 0.55) * cp;
   const ctrl = p.a.control * cp;
-  const pBB = U.clamp(0.098 + (50 - ctrl) * 0.0013, 0.02, 0.2);
-  const pK = U.clamp(0.187 + (stuff - 50) * 0.0035 - (meet - 50) * 0.003, 0.05, 0.42);
+  const pBB = U.clamp(0.107 + (50 - ctrl) * 0.0013, 0.02, 0.2);
+  const pK = U.clamp(0.179 + (stuff - 50) * 0.0035 - (meet - 50) * 0.003, 0.05, 0.42);
   const tj = trajOf(b);
-  const pHR = U.clamp((0.016 + (pow - 50) * 0.00076 - (stuff - 50) * 0.0003) * TRAJ_HR[tj], 0.002, 0.11);
+  const pHR = U.clamp((0.013 + (pow - 50) * 0.00076 - (stuff - 50) * 0.0003) * TRAJ_HR[tj], 0.002, 0.11);
   let r = Math.random();
   if (r < pBB) return { t: 'BB', pc: U.rint(4, 7) };
   r -= pBB;
@@ -139,7 +139,7 @@ function halfInning(g, bat, fld, inning) {
     // 盗塁
     if (bases[0] && !bases[1] && outs < 2) {
       const rn = bases[0], sp = rn.p.a.speed;
-      if (sp >= 50 && Math.random() < (sp - 45) * 0.01) {
+      if (sp >= 50 && Math.random() < (sp - 45) * 0.0075) {
         const ok = Math.random() < U.clamp(0.62 + (sp - 65) * 0.012 - (fld.cArm - 50) * 0.006, 0.3, 0.95);
         bases[0] = null;
         if (ok) {

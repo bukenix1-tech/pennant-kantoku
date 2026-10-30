@@ -156,7 +156,7 @@ function ovr(p) {
 
 function calcSalary(p) {
   const o = ovr(p);
-  let s = 500 + Math.pow(Math.max(0, o - 38), 2.5) * 3;
+  let s = 500 + Math.pow(Math.max(0, o - 46), 2.5) * 3;
   if (p.foreign) s *= 1.3;
   return Math.round(s / 10) * 10;
 }
@@ -185,13 +185,13 @@ function veloKmh(v) { return Math.round(130 + v * 0.3); }
 function trainPlayer(p, mult) {
   const keys = abilKeys(p);
   const age = p.age, peak = p.peak;
-  const ageMul = age <= peak - 3 ? 1.0 : age <= peak ? 0.7 : age <= peak + 3 ? 0.3 : 0.08;
+  const ageMul = age <= peak - 3 ? 1.0 : age <= peak ? 0.35 : age <= peak + 3 ? 0.1 : 0.03;
   // 天才はよく伸びる。二刀流は両方を練習するので、ひとつひとつの伸びは小さめ
   const special = (p.genius ? 1.6 : 1) * (p.twoWay ? 0.6 : 1);
-  const total = 0.7 * p.pot * ageMul * mult * special * U.rnd(0.6, 1.4);
+  const total = 0.6 * p.pot * ageMul * mult * special * U.rnd(0.6, 1.4);
   const focusKey = focusToKey(p);
   // 才能で決まる伸びしろ（★が多いほど高くまで伸びる。天才はさらに上まで）
-  const ceil = 38 + p.pot * 32 + (p.genius ? 10 : 0);
+  const ceil = CEIL_BASE + p.pot * CEIL_PER_POT + (p.genius ? 10 : 0);
   keys.forEach(k => {
     const share = focusKey ? (k === focusKey ? 0.6 : 0.4 / (keys.length - 1)) : 1 / keys.length;
     const cur = p.a[k];

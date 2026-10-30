@@ -53,6 +53,7 @@ const BAT_LABEL = { meet: 'ミート', power: 'パワー', speed: '走力', arm:
 const PIT_KEYS = ['velo', 'control', 'stamina', 'breaking'];
 const PIT_LABEL = { velo: '球速', control: 'コントロール', stamina: 'スタミナ', breaking: '変化球' };
 const ALL_LABEL = { ...BAT_LABEL, ...PIT_LABEL };
+const CEIL_BASE = 31, CEIL_PER_POT = 30; // 伸びしろの上限 = CEIL_BASE + 才能 × CEIL_PER_POT（天才は +10）
 const GENIUS_CHANCE = 0.015;   // 天才（伸びがいい）が生まれる確率
 const TWO_WAY_CHANCE = 0.02;   // ドラフト候補が二刀流である確率（才能のある投手だけ）
 const TWO_WAY_MIN_OVR = 60;    // 二刀流に挑戦できるのは総合がこれ以上の選手

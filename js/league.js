@@ -38,7 +38,7 @@ function newGame(myTeamId, games) {
     };
     if (i !== myTeamId) t.fac.train = U.rint(1, 3);
     S.teams.push(t);
-    const tq = 57 + U.gauss() * 2;
+    const tq = 65 + U.gauss() * 2;
     const fpos = ['捕', '捕', '一', '一', '二', '二', '三', '三', '遊', '遊', '外', '外', '外', '外', '外'];
     const regular = new Set([0, 2, 4, 6, 8, 10, 11, 12]);
     fpos.forEach((pos, j) => {
@@ -951,7 +951,7 @@ function awaken(p) {
     if (k === 'velo') return `球速 +${veloKmh(p.a[k]) - veloKmh(before)}km/h`;
     return `${lbl[k]} +${Math.round(p.a[k]) - Math.round(before)}`;
   });
-  p.pot = Math.min(1.7, p.pot + (big ? 0.15 : 0.05));
+  p.pot = Math.min(1.7, p.pot + (big ? 0.08 : 0.02));
   p.cond = 5;
   p.awakened = (p.awakened || 0) + 1;
   if (big) p.bigAwakened = (p.bigAwakened || 0) + 1;
@@ -1225,7 +1225,7 @@ function makeDraftClass() {
     const age = kind === '高校' ? 18 : kind === '大学' ? 22 : kind === '高卒社会人' ? 21 : U.rint(23, 25);
     const isP = U.chance(0.45);
     const q = (kind === '高校' ? U.rnd(28, 46) : kind === '大学' ? U.rnd(38, 54) : kind === '高卒社会人' ? U.rnd(34, 50) : U.rnd(44, 58)) + (isP ? bias.P : bias.B);
-    const pot = U.clamp(1.05 + U.gauss() * 0.25 + (kind === '高校' ? 0.1 : kind === '高卒社会人' ? 0.05 : 0), 0.6, 1.7);
+    const pot = U.clamp(0.97 + U.gauss() * 0.24 + (kind === '高校' ? 0.08 : kind === '高卒社会人' ? 0.04 : 0), 0.6, 1.7);
     const p = newPlayer(S, { isP, q, age, pot });
     p.kind = kind;
     p.salary = 600;
@@ -1727,7 +1727,7 @@ function scoutForeign() {
   t.money -= FOREIGN_SCOUT_COST; t.fin.invest += FOREIGN_SCOUT_COST;
   const cands = [];
   for (let i = 0; i < 3; i++) {
-    const p = newPlayer(S, { isP: U.chance(0.5), q: U.rnd(58, 76), age: U.rint(26, 33), foreign: true, pot: U.rnd(0.8, 1.1) });
+    const p = newPlayer(S, { isP: U.chance(0.5), q: U.rnd(64, 82), age: U.rint(26, 33), foreign: true, pot: U.rnd(0.8, 1.1) });
     p.salary = calcSalary(p);
     cands.push(p.id);
   }
