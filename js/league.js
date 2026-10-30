@@ -371,6 +371,10 @@ function startSeason() {
   S.foreignCands = null;
   Object.values(S.players).forEach(p => { p.stats = newStats(); p.rest = 7; p.fatigue = 0; p.downDay = null; });
   S.draftClass = makeDraftClass();
+  S.draftClass.map(id => S.players[id]).filter(p => p.reborn).forEach(p => {
+    const R = rebornOf(p);
+    addNews(`転生選手がドラフト候補に現れた！ ${p.name}（${p.amateur ? p.amateur.team : p.kind}）${R ? '― ' + R.note : ''}`, 'big');
+  });
   S.draftClass.map(id => S.players[id]).filter(p => p.rareYears).forEach(p => {
     addNews(`今年のドラフト候補に「${p.rareYears}年に一人の逸材」と言われる${p.kind === '高校' ? '高校生' : p.kind === '大学' ? '大学生' : '社会人'}がいる！ ${p.name}（${p.amateur ? p.amateur.team : p.kind}）`, 'big');
   });
@@ -1236,19 +1240,49 @@ function makeDraftClass() {
       PIT_KEYS.forEach(k => { p.a[k] = Math.min(99, p.a[k] + 6); });
       makeTwoWay(p, q + 4);
     }
-    const keys = abilKeys(p);
-    // 能力ごとの「ずれの向きと大きさ」（-1〜1）を先に決めておく。実際のずれはスカウトの段階で小さくなる
-    const miss = () => ({ unit: U.clamp(U.gauss() * 0.5, -1, 1) });
-    p.noise = {};
-    keys.forEach(k => { p.noise[k] = miss(); });
-    p.noise.pot = miss();
-    p.amateur = makeAmateur(p, kind);
-    const ry = rareYears(p);
-    if (ry) p.rareYears = ry;
+    finishProspect(p, kind);
     pool.push(p.id);
   }
+  addReborn(pool);
   return pool;
 }
+
+// ドラフト候補の仕上げ：スカウトの見立てのずれ・アマチュアの成績・「〇年に一人」
+function finishProspect(p, kind) {
+  // 能力ごとの「ずれの向きと大きさ」（-1〜1）を先に決めておく。実際のずれはスカウトの段階で小さくなる
+  const miss = () => ({ unit: U.clamp(U.gauss() * 0.5, -1, 1) });
+  p.noise = {};
+  abilKeys(p).forEach(k => { p.noise[k] = miss(); });
+  p.noise.pot = miss();
+  p.amateur = makeAmateur(p, kind);
+  const ry = rareYears(p);
+  if (ry) p.rareYears = ry;
+}
+
+// 転生選手（reborn.js）を、毎年だいたい 1 人ドラフト候補にまぜる。いま球界にいる人（候補・選手・自由契約）は出ない。引退したら、また出られる
+function addReborn(pool) {
+  if (!REBORN.length || !U.chance(REBORN_YEAR_CHANCE)) return; // 合言葉が入っていない端末では出ない
+  const alive = new Set(Object.values(S.players).map(p => p.reborn).filter(Boolean));
+  const cands = REBORN.filter(R => !alive.has(R.id));
+  if (!cands.length) return;
+  [U.pickW(cands.map(R => [R, R.weight || 1]))].forEach(R => {
+    const age = R.kind === '高校' ? 18 : R.kind === '大学' ? 22 : R.kind === '高卒社会人' ? 21 : 24;
+    const p = newPlayer(S, { isP: R.isP, pos: R.pos, q: R.q, age, pot: R.pot });
+    p.name = R.name;
+    Object.keys(R.style || {}).forEach(k => { if (p.a[k] != null) p.a[k] = U.clamp(R.q + R.style[k] + U.gauss() * 3, 5, 99); });
+    if (!R.isP) { p.traj = R.traj || p.traj; p.subs = R.subs || p.subs; }
+    if (R.type) { p.type = R.type; p.peak = GROWTH_PEAK[R.type]; }
+    p.genius = false;
+    p.kind = R.kind;
+    p.salary = 600;
+    p.reborn = R.id;
+    if (R.team) p.rebornTeam = R.team;
+    finishProspect(p, R.kind);
+    pool.push(p.id);
+  });
+}
+function rebornOf(p) { return p.reborn ? REBORN.find(R => R.id === p.reborn) || null : null; }
+function rebornTag(p) { return p.reborn ? `<span class="tag reborn" title="名選手をもとにした転生選手">転生</span>` : ''; }
 
 // 「〇年に一人の逸材」：本当の能力と才能が、何年に 1 人しか出ない高さか
 function rareYears(p) {

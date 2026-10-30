@@ -483,7 +483,8 @@ function renderPlayerModal(p) {
   const focusOpts = focusOptions(p).map(f => `<option ${p.focus === f ? 'selected' : ''}>${f}</option>`).join('');
   const team = p.teamId != null ? S.teams[p.teamId] : null;
   return `
-  <h2>${h(p.name)} ${p.foreign ? '<span class="tag">外国人</span>' : ''}</h2>
+  <h2>${h(p.name)} ${p.foreign ? '<span class="tag">外国人</span>' : ''}${rebornTag(p)}</h2>
+  ${rebornOf(p) ? `<p class="muted">転生選手：${h(rebornOf(p).note)}</p>` : ''}
   <p>${team ? teamChip(team) : ''} ${p.twoWay ? `二刀流（投手：${p.role || '-'}・野手：${p.isP ? p.pos2 : p.pos}）` : p.isP ? `投手（${p.role}）` : `野手（${p.pos}）`} ${posBadge(p)}${canBat(p) ? ` ・ サブポジ ${subsOf(p).length ? subsOf(p).join('・') : 'なし'}` : ''} ・ ${p.age}歳 ・ ${p.type}型 ・ 才能 <span class="stars">${potStars(p.pot)}</span>
    ・ 調子 ${condCell(p)} ${COND_LABEL[p.cond]} ・ 年俸 ${U.money(p.salary)} ${p.inj ? `<span class="tag bad">故障 残り${p.inj}日</span>` : ''}${p.awakened ? `<span class="tag awaken-tag">覚醒×${p.awakened}</span>` : ''}${p.bigAwakened ? `<span class="tag awaken-tag big">大覚醒×${p.bigAwakened}</span>` : ''}</p>
   ${growthBox(p)}
@@ -1172,7 +1173,7 @@ function prospectTable(ids, mode) {
     const A = p.amateur;
     const on = watch.includes(p.id);
     return `<tr class="${on ? 'sel' : ''}"><td><button class="star-btn ${on ? 'on' : ''}" data-act="watch" data-pid="${p.id}" title="気になる">${on ? '★' : '☆'}</button></td>
-      <td class="l"><b>${h(p.name)}</b>${p.twoWay ? '<span class="tag twoway">二刀流</span>' : ''}${rareTag(p)}</td><td>${p.kind}</td><td>${posBadge(p)}</td><td>${p.age}</td>
+      <td class="l"><b>${h(p.name)}</b>${p.twoWay ? '<span class="tag twoway">二刀流</span>' : ''}${rebornTag(p)}${rareTag(p)}</td><td>${p.kind}</td><td>${posBadge(p)}</td><td>${p.age}</td>
       <td>${geniusHint(p) ? '<span class="tag genius">天才肌？</span>' : ''}</td><td class="stars">${potStars(scoutView(p, 'pot'))}</td><td class="stars">${visualStars(p.visual)}</td>
       <td class="l">${keys.map(k => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(scoutView(p, k)) + 'km' : `<span class="g g${U.grade(scoutView(p, k))}">${U.grade(scoutView(p, k))}</span>`}`).join(' ')}${trajTag(p)}</td>
       <td class="l wrap amateur"><div>${tierTag(p)}</div>${A ? `<div>${h(A.team)}</div><div>${h(A.line)}</div>${A.title ? `<div class="atitle">🏆 ${h(A.title)}</div>` : ''}` : ''}
@@ -1185,7 +1186,7 @@ function prospectTable(ids, mode) {
     return playerCard(p, {
       cls: on ? 'sel' : '', view: true, noCond: true, ovr: Math.round(seen(p)),
       lead: `<button class="star-btn ${on ? 'on' : ''}" data-act="watch" data-pid="${p.id}">${on ? '★' : '☆'}</button>`,
-      name: `<b>${h(p.name)}</b>${p.twoWay ? '<span class="tag twoway">二刀流</span>' : ''}${rareTag(p)}${geniusHint(p) ? '<span class="tag genius">天才肌？</span>' : ''}`,
+      name: `<b>${h(p.name)}</b>${p.twoWay ? '<span class="tag twoway">二刀流</span>' : ''}${rebornTag(p)}${rareTag(p)}${geniusHint(p) ? '<span class="tag genius">天才肌？</span>' : ''}`,
       sub: `<span>${p.kind}</span><span class="muted">才能</span><span class="stars">${potStars(scoutView(p, 'pot'))}</span><span class="muted">ビジュアル</span><span class="stars">${visualStars(p.visual)}</span>`,
       lines: `<div class="pc-line">${tierTag(p)}</div>${A ? `<div class="pc-line">${h(A.team)}<br>${h(A.line)}</div>${A.title ? `<div class="pc-line atitle">🏆 ${h(A.title)}</div>` : ''}` : ''}<div class="pc-line muted">講評：${h(scoutComment(p))}</div>`,
       action: pickable ? pickBtn(p) : '',
@@ -1483,6 +1484,11 @@ function renderMenu() {
   <h3>バックアップ（別のスロットへ）</h3>
   <p class="muted">いまのデータを別のスロットにも残せます。大事な場面の前に残しておくと、あとでそこからやり直せます。</p>
   <p>${others.map(n => { const m = slotMeta(n); return `<button data-act="copySlot" data-n="${n}">スロット${n}にコピー${m ? `（${h(m.team)} ${m.year}年を上書き）` : '（空き）'}</button>`; }).join(' ')}</p>
+  <h3>家族の合言葉</h3>
+  ${REBORN.length
+    ? `<p>✅ 合言葉が入っています（転生選手 ${REBORN.length}人）。ドラフト候補に、まれに転生選手が現れます。</p><p><button class="sm" data-act="clearPass">この端末から合言葉を消す</button></p>`
+    : `<p class="muted">家族の合言葉を入れると、ドラフト候補に転生選手が現れるようになります（この端末に覚えます）。</p>
+       <p><input id="passIn" type="password" autocomplete="off" placeholder="合言葉"> <button data-act="setPass">入れる</button></p>`}
   <h3>そのほか</h3>
   <p><button data-act="toTitle">タイトルへ戻る</button></p>
   <p><button class="danger" data-act="reset">スロット${currentSlot}のデータを消す</button></p>`;

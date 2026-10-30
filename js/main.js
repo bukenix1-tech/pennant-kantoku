@@ -229,6 +229,26 @@ const ACTIONS = {
   },
   statSort(el) { UI.statSort[el.dataset.kind] = el.dataset.k; },
   menu() { openModal(renderMenu()); return 'keep'; },
+  setPass() {
+    const pass = (document.getElementById('passIn') || {}).value || '';
+    if (!pass) return 'keep';
+    unlockReborn(pass).then(list => {
+      if (!list) { UI.toast = '合言葉がちがいます。'; render(); return; }
+      REBORN = list;
+      try { localStorage.setItem(REBORN_PASS_KEY, pass); } catch (e) { /* 覚えられなくても、このあいだは使える */ }
+      UI.toast = `合言葉を入れました。転生選手 ${list.length}人が現れるようになります。`;
+      openModal(renderMenu());
+      render();
+    });
+    return 'keep';
+  },
+  clearPass() {
+    if (!confirm('この端末から合言葉を消しますか？ これからのドラフト候補に転生選手が出なくなります（もう現れた選手はそのままです）。')) return 'keep';
+    try { localStorage.removeItem(REBORN_PASS_KEY); } catch (e) { /* なにもしない */ }
+    REBORN = [];
+    openModal(renderMenu());
+    return 'keep';
+  },
   checkUpdate() { checkUpdate(); return 'keep'; },
   exportNow() {
     saveGame();
