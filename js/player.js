@@ -50,8 +50,9 @@ function newPlayer(S, opts) {
     BAT_KEYS.forEach(k => { a[k] = c(q + g() + bias[k]); });
   }
   const traj = isP ? null : rollTraj(a.power);
+  const subs = isP ? undefined : rollSubs(pos, a.field);
   const p = {
-    id, name: makeName(opts.foreign), age, isP, pos, role, type, traj,
+    id, name: makeName(opts.foreign), age, isP, pos, subs, role, type, traj,
     peak: GROWTH_PEAK[type] + U.rint(-1, 1), pot, a,
     foreign: !!opts.foreign, teamId: null, salary: 0,
     focus: 'バランス', cond: 3, inj: 0, rest: 5, fatigue: 0,
@@ -112,6 +113,7 @@ function makeTwoWay(p, q) {
     BAT_KEYS.forEach(k => { p.a[k] = c(q + U.gauss() * 8); });
     p.traj = rollTraj(p.a.power);
     p.pos2 = U.pick(['外', '外', '一', '三']);
+    p.subs = rollSubs(p.pos2, p.a.field);
   } else {
     p.a.velo = c(q + U.gauss() * 8); p.a.control = c(q + U.gauss() * 8);
     p.a.stamina = c(q + 5 + U.gauss() * 8); p.a.breaking = c(q + U.gauss() * 8);
@@ -125,6 +127,7 @@ function dropTwoWay(p) {
   (p.isP ? BAT_KEYS : PIT_KEYS).forEach(k => { delete p.a[k]; });
   p.twoWay = false;
   delete p.pos2;
+  if (p.isP) delete p.subs;
   if (!p.isP) p.role = null;
 }
 
@@ -161,15 +164,29 @@ function calcSalary(p) {
   return Math.round(s / 10) * 10;
 }
 
+// サブポジを決める。守備がうまい選手ほど、いろいろ守れやすい
+function rollSubs(prim, field) {
+  let n = U.pickW(SUB_COUNT_W);
+  if (field >= 70 && n < 3 && U.chance(0.3)) n++;
+  const cands = SUB_CANDS[prim].slice();
+  const subs = [];
+  while (subs.length < n && cands.length) {
+    const k = U.pickW(cands);
+    subs.push(k);
+    cands.splice(cands.findIndex(c => c[0] === k), 1);
+  }
+  return LPOS.filter(x => subs.includes(x)).concat(subs.includes('外') ? ['外'] : []);
+}
+function subsOf(p) { return canBat(p) ? p.subs || [] : []; }
+
 // 守備位置への向き不向き（1 = 本職）
 function posFit(p, pos) {
   if (pos === '指') return 1;
   if (p.isP && !p.twoWay) return 0.3;
   const prim = p.isP ? p.pos2 : p.pos;
-  if (prim === pos) return 1;
-  if (prim === '外' && (pos === '左' || pos === '中' || pos === '右')) return 1;
-  const near = { 遊: ['二', '三'], 二: ['遊', '三', '一'], 三: ['一', '二'], 一: [], 捕: ['一'], 外: ['一'] };
-  if (near[prim].includes(pos)) return 0.85;
+  const area = pos === '左' || pos === '中' || pos === '右' ? '外' : pos;
+  if (prim === area) return 1;
+  if ((p.subs || []).includes(area)) return SUB_FIT;
   if (pos === '捕') return 0.4;
   return 0.6;
 }

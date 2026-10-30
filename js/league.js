@@ -1879,6 +1879,7 @@ function migrate() {
   Object.values(S.players).forEach(p => { if (canPitch(p) && !p.apt) p.apt = rollApt(p.a.stamina); });
   Object.values(S.players).forEach(p => { if (p.home === undefined) p.home = p.foreign ? null : U.pick(PREFS); });
   Object.values(S.players).forEach(p => { if (canBat(p) && !p.traj) p.traj = rollTraj(p.a.power); });
+  Object.values(S.players).forEach(p => { if (canBat(p) && !p.subs) p.subs = rollSubs(p.isP ? p.pos2 : p.pos, p.a.field); });
   S.teams.forEach(t => { if (!t.active) { t.active = []; autoActive(t); ensureLineup(S, t); } });
   Object.values(S.players).forEach(p => {
     if (p.visual == null) p.visual = rollVisual();

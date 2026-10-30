@@ -82,10 +82,15 @@ function aptBadge(p) {
   const a = aptOf(p);
   return `<span class="apt a${a.sp}">先${APT_MARK[a.sp]}</span><span class="apt a${a.rp}">中${APT_MARK[a.rp]}</span>`;
 }
+// サブポジ（本職のほかに守れる位置）は、小さく薄い札で
+function subsBadge(p) {
+  const s = subsOf(p);
+  return s.length ? `<span class="subs" title="サブポジ：${s.join('・')}（本職より少し守備が弱い）">${s.map(x => `<span class="pb sub pb-${x}">${x}</span>`).join('')}</span>` : '';
+}
 function posBadge(p) {
   const out = [];
   if (canPitch(p)) out.push(`<span class="pb pb-投">投</span>${aptBadge(p)}`);
-  if (canBat(p)) { const ps = p.isP ? p.pos2 : p.pos; out.push(`<span class="pb pb-${ps}">${ps}</span>`); }
+  if (canBat(p)) { const ps = p.isP ? p.pos2 : p.pos; out.push(`<span class="pb pb-${ps}">${ps}</span>${subsBadge(p)}`); }
   return `<span class="pbs">${out.join('')}</span>`;
 }
 
@@ -479,7 +484,7 @@ function renderPlayerModal(p) {
   const team = p.teamId != null ? S.teams[p.teamId] : null;
   return `
   <h2>${h(p.name)} ${p.foreign ? '<span class="tag">外国人</span>' : ''}</h2>
-  <p>${team ? teamChip(team) : ''} ${p.twoWay ? `二刀流（投手：${p.role || '-'}・野手：${p.isP ? p.pos2 : p.pos}）` : p.isP ? `投手（${p.role}）` : `野手（${p.pos}）`} ${posBadge(p)} ・ ${p.age}歳 ・ ${p.type}型 ・ 才能 <span class="stars">${potStars(p.pot)}</span>
+  <p>${team ? teamChip(team) : ''} ${p.twoWay ? `二刀流（投手：${p.role || '-'}・野手：${p.isP ? p.pos2 : p.pos}）` : p.isP ? `投手（${p.role}）` : `野手（${p.pos}）`} ${posBadge(p)}${canBat(p) ? ` ・ サブポジ ${subsOf(p).length ? subsOf(p).join('・') : 'なし'}` : ''} ・ ${p.age}歳 ・ ${p.type}型 ・ 才能 <span class="stars">${potStars(p.pot)}</span>
    ・ 調子 ${condCell(p)} ${COND_LABEL[p.cond]} ・ 年俸 ${U.money(p.salary)} ${p.inj ? `<span class="tag bad">故障 残り${p.inj}日</span>` : ''}${p.awakened ? `<span class="tag awaken-tag">覚醒×${p.awakened}</span>` : ''}${p.bigAwakened ? `<span class="tag awaken-tag big">大覚醒×${p.bigAwakened}</span>` : ''}</p>
   ${growthBox(p)}
   <div class="bars">${bars}</div>
@@ -517,7 +522,7 @@ function renderPlayerModal(p) {
 // ---------- オーダー ----------
 // 選ぶ欄の中にも能力を出す（ミB パA 走C 肩D 守C）
 const abilText = (p, keys) => keys.map(k => (k === 'velo' ? `${veloKmh(p.a.velo)}km` : `${SHORT_LABEL[k]}${U.grade(p.a[k])}`)).join(' ');
-const batOpt = f => `${h(f.name)}（${f.isP ? f.pos2 : f.pos}）${abilText(f, BAT_KEYS)} 弾${trajOf(f)} 総${Math.round(batOvr(f))}${f.inj ? ' 故障' : ''}`;
+const batOpt = f => `${h(f.name)}（${f.isP ? f.pos2 : f.pos}${subsOf(f).length ? '・' + subsOf(f).join('') : ''}）${abilText(f, BAT_KEYS)} 弾${trajOf(f)} 総${Math.round(batOvr(f))}${f.inj ? ' 故障' : ''}`;
 const pitOpt = p => `${h(p.name)}（${abilText(p, PIT_KEYS)} 総${Math.round(ovr(p))}）${p.inj ? '故障' : ''}`;
 
 // 一軍の控え・中継ぎを、能力つきの表で見せる
@@ -571,12 +576,13 @@ function renderOrder() {
 const FIELD_SPOT = { 捕: [50, 90], 一: [76, 58], 二: [63, 42], 三: [24, 58], 遊: [37, 42], 左: [16, 20], 中: [50, 9], 右: [84, 20] };
 function posClass(pos) { return ['左', '中', '右'].includes(pos) ? '外' : pos; }
 
+function fitTag(fit) { return fit >= SUB_FIT ? '<span class="tag">サブ</span>' : `<span class="tag ${fit < 0.7 ? 'bad' : ''}">適性${fit < 0.7 ? '×' : '△'}</span>`; }
 function orderRow(p, o) {
   const fit = o.pos ? posFit(p, o.pos) : 1;
   return `<button class="po-row${o.sel ? ' sel' : ''}${p.inj ? ' inj' : ''}" data-act="osel" data-k="${o.k}" ${o.k === 'line' ? `data-i="${o.i}"` : `data-pid="${p.id}"`}>
     <span class="po-no">${o.k === 'line' ? o.i + 1 : ''}</span>
-    <span class="po-pos">${o.pos ? `<span class="pb pb-${posClass(o.pos)}">${o.pos}</span>` : posBadge(p)}</span>
-    <span class="po-name">${h(p.name)}${fit < 1 ? `<span class="tag ${fit < 0.7 ? 'bad' : ''}">適性${fit < 0.7 ? '×' : '△'}</span>` : ''}${p.inj ? '<span class="tag bad">故障</span>' : ''}</span>
+    <span class="po-pos">${o.pos ? `<span class="pb pb-${posClass(o.pos)}">${o.pos}</span>` : `<span class="pb pb-${p.isP ? p.pos2 : p.pos}">${p.isP ? p.pos2 : p.pos}</span>`}</span>
+    <span class="po-name">${h(p.name)}<span class="po-can">${o.pos ? posBadge(p) : subsBadge(p)}</span>${fit < 1 ? fitTag(fit) : ''}${p.inj ? '<span class="tag bad">故障</span>' : ''}</span>
     <span class="po-cond">${condCell(p)}</span>
     <span class="po-traj">${trajTag(p)}</span>
     ${BAT_KEYS.map(k => `<span class="po-g">${gradeCell(p.a[k])}</span>`).join('')}
@@ -596,7 +602,7 @@ function orderBoard(t, bench) {
   const spot = (pos, xy) => {
     const s = t.lineup.find(x => x.pos === pos);
     const p = s && S.players[s.pid];
-    const bad = p && posFit(p, pos) < 1;
+    const bad = p && posFit(p, pos) < SUB_FIT;
     return `<button class="fspot${p && p.id === selPid ? ' sel' : ''}${bad ? ' bad' : ''}" style="left:${xy[0]}%;top:${xy[1]}%" data-act="ofield" data-pos="${pos}">
       <span class="pb pb-${posClass(pos)}">${pos}</span><span class="fname">${p ? h(p.name.split(' ')[0]) : '空き'}</span></button>`;
   };

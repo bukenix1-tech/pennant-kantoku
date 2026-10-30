@@ -421,3 +421,15 @@ details.slim summary { cursor: pointer; font-weight: bold; }
   .ro-row { grid-template-columns: auto minmax(0, 1fr) 36px 20px 26px; }
   .ro-abil { grid-column: 2 / -1; grid-row: 2; }
 }
+
+/* サブポジの札 */
+.subs { display: inline-flex; gap: 1px; margin-left: 1px; }
+.pb.sub { background: #fff; border: 1px solid currentColor; min-width: 16px; font-size: 11px; line-height: 14px; padding: 0 2px; margin-right: 0; }
+.pb.sub.pb-捕 { color: #2563eb; }
+.pb.sub.pb-一 { color: #ea580c; }
+.pb.sub.pb-二 { color: #16a34a; }
+.pb.sub.pb-三 { color: #ca8a04; }
+.pb.sub.pb-遊 { color: #0891b2; }
+.pb.sub.pb-外 { color: #7c3aed; }
+.po-can { margin-left: 6px; font-weight: normal; }
+@media (max-width: 760px) { .po-can { display: none; } }
