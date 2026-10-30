@@ -1283,7 +1283,7 @@ function addReborn(pool) {
     const peakA = { ...R.peak };
     if (peakA.velo >= 100) peakA.velo = kmhToVelo(peakA.velo); // 球速は km/h でも書ける
     const keys = Object.keys(peakA), avg = U.sum(keys, k => peakA[k]) / keys.length;
-    const ratio = REBORN_START[R.kind] || 0.65;
+    const ratio = R.start || REBORN_START[R.kind] || 0.65; // start を書けば、その選手だけ入団時の高さを変えられる
     const pot = U.clamp((avg - CEIL_BASE) / CEIL_PER_POT, 1.3, 1.7); // 才能は必ず ★5
     const p = newPlayer(S, { isP: R.isP, pos: R.pos, q: avg * ratio, age, pot });
     p.name = R.name;

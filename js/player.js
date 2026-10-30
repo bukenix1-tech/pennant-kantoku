@@ -212,8 +212,8 @@ function kmhToVelo(km) { return U.clamp(km <= 157 ? (km - 130) / 0.3 : 90 + (km 
 // 転生選手は、能力ごとにピーク時の値が上限（p.ceilA）
 function abilCeil(p, k) { return k && p.ceilA && p.ceilA[k] != null ? p.ceilA[k] + (p.genius ? 5 : 0) : CEIL_BASE + p.pot * CEIL_PER_POT + (p.genius ? 10 : 0); }
 // 伸びしろの上限の近くまで来て、練習してもほとんど伸びない能力（衰退期は衰えのほうを見せるので出さない）
-// 能力の天井。転生選手はピーク時の値を（覚醒しても）ほとんど超えない
-function abilMax(p, k) { return p.ceilA && p.ceilA[k] != null ? Math.min(99, abilCeil(p, k) + 2) : 99; }
+// 能力の天井。転生選手はピーク時の値を練習で目指し、覚醒などで REBORN_OVER まで超えられる（天才肌はさらに +5）
+function abilMax(p, k) { return p.ceilA && p.ceilA[k] != null ? Math.min(99, abilCeil(p, k) + REBORN_OVER) : 99; }
 function abilStalled(p, k) { return growthPhase(p).k !== 'decline' && p.a[k] < 99 && abilCeil(p, k) - p.a[k] <= STALL_GAP; }
 
 // 1 回の練習（6 日に 1 回とキャンプで呼ぶ）
