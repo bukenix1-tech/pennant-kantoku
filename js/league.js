@@ -413,6 +413,7 @@ function dailyUpdate() {
     p.rest++;
     p.fatigue = Math.max(0, p.fatigue - 3);
     if (p.inj > 0) {
+      if (S.phase === 'season') p.stats.injd = (p.stats.injd || 0) + 1; // 今季ケガで休んだ日数（引退を決めるときに見る）
       p.inj -= 1 + (U.chance(t.fac.medical * 0.1) ? 1 : 0);
       if (p.inj <= 0) {
         p.inj = 0;
@@ -1175,6 +1176,18 @@ function offFAResolve() {
 }
 
 // ---------- オフ ----------
+// 引退する確率。年齢と、今季どれだけ一軍に出たかで決める
+function retireChance(p, ca, o) {
+  const st = p.stats, scale = Math.max(1, S.games || 143) / 143;
+  const low = (st.injd || 0) < RETIRE_INJ_DAYS // 長くケガをしていた年は数えない
+    && (!canBat(p) || st.g < RETIRE_LOW_G * scale) && (!canPitch(p) || st.pg < RETIRE_LOW_PG * scale);
+  if (ca >= RETIRE_MAX_AGE) return 0.9; // 43 歳前後でほぼ全員
+  if (low) return ca >= 36 ? 0.8 : ca >= 33 ? 0.5 : ca >= 30 ? 0.25 : 0;
+  if (ca >= 38 && o < 50) return 0.5; // 出てはいても、力が大きく落ちた
+  if (ca >= 31 && o < 45) return 0.5;
+  return 0;
+}
+
 function offContract() {
   const my = myTeam();
   const retired = [], raises = [];
@@ -1184,9 +1197,7 @@ function offContract() {
       let leave = false;
       const ca = careerAge(p);
       if (p.retireAge) leave = p.age >= p.retireAge && U.chance(0.7); // 転生選手は、もとの選手が辞めた年ごろまで続ける
-      else if (ca >= 38) leave = U.chance(0.85);
-      else if (ca >= 35) leave = U.chance(o < 55 ? 0.7 : 0.3);
-      else if (ca >= 31 && o < 45) leave = U.chance(0.5);
+      else leave = U.chance(retireChance(p, ca, o));
       if (p.foreign && o < 55) leave = true;
       if (leave) {
         if (t.id === my.id) retired.push({ name: p.name, age: p.age, why: p.foreign && p.age < 35 ? '退団' : '引退' });

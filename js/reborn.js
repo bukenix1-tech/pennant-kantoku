@@ -6,7 +6,8 @@
 //   name ：ゲームに出る名前 ／ team：元の所属球団の地名 ／ note：どんな選手か
 //   kind ：高校 / 大学 / 社会人 / 高卒社会人 ／ peak：ピーク時の能力 ／ traj：弾道 ／ weight：選ばれやすさ（ふつう 1）
 //   投手は peak に velo（km/h でよい）・control・stamina・breaking、role（先発 / 中継 / 抑え）
-//   home：出身地 ／ type：成長型（書かなければ晩成）。才能は ★5。天才肌になる確率はふつうの選手と同じ。出身校は「？？？」
+//   type：成長型（書かなければ晩成） ／ retireAge：この年齢までは引退しない（衰えもゆるやか）
+//   出身地は team の本拠地。才能は ★5。天才肌になる確率はふつうの選手と同じ。出身校は「？？？」
 let REBORN = [];
 const REBORN_PASS_KEY = 'pennant-family-pass';
 
