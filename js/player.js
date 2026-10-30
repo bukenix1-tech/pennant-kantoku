@@ -52,8 +52,9 @@ function newPlayer(S, opts) {
   const traj = isP ? null : rollTraj(a.power);
   const subs = isP ? undefined : rollSubs(pos, a.field);
   const steal = isP ? undefined : rollSteal();
+  const eye = isP ? undefined : U.pickW(EYE_W);
   const p = {
-    id, name: makeName(opts.foreign), age, isP, pos, subs, steal, role, type, traj,
+    id, name: makeName(opts.foreign), age, isP, pos, subs, steal, eye, role, type, traj,
     peak: GROWTH_PEAK[type] + U.rint(-1, 1), pot, a,
     foreign: !!opts.foreign, teamId: null, salary: 0,
     focus: 'バランス', cond: 3, inj: 0, rest: 5, fatigue: 0,
@@ -116,6 +117,7 @@ function makeTwoWay(p, q) {
     p.pos2 = U.pick(['外', '外', '一', '三']);
     p.subs = rollSubs(p.pos2, p.a.field);
     p.steal = rollSteal();
+    p.eye = U.pickW(EYE_W);
   } else {
     p.a.velo = c(q + U.gauss() * 8); p.a.control = c(q + U.gauss() * 8);
     p.a.stamina = c(q + 5 + U.gauss() * 8); p.a.breaking = c(q + U.gauss() * 8);
@@ -183,6 +185,7 @@ function rollSubs(prim, field) {
 // 盗塁の積極性。足の速さとは別の、走りたがるかどうか
 function rollSteal() { return Math.round(U.clamp(1 + U.gauss() * STEAL_SD, 0.4, 1.8) * 100) / 100; }
 function stealOf(p) { return p.steal || 1; }
+function eyeOf(p) { return p.eye || 0; }
 function stealWord(p) { const s = stealOf(p); return s >= STEAL_HI ? '積極的' : s <= STEAL_LO ? '慎重' : 'ふつう'; }
 function subsOf(p) { return canBat(p) ? p.subs || [] : []; }
 

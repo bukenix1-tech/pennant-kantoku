@@ -1297,7 +1297,7 @@ function addReborn(pool) {
     }
     if (R.team && TEAM_PREF[R.team]) p.home = TEAM_PREF[R.team]; // 出身地は、元の所属球団の本拠地
     if (R.retireAge) p.retireAge = R.retireAge;
-    if (canBat(p)) { p.traj = R.traj || p.traj; if (!R.isP) p.subs = R.subs || p.subs; if (R.steal) p.steal = R.steal; }
+    if (canBat(p)) { p.traj = R.traj || p.traj; if (!R.isP) p.subs = R.subs || p.subs; if (R.steal) p.steal = R.steal; if (R.eye != null) p.eye = R.eye; }
     p.type = R.type || '晩成'; p.peak = GROWTH_PEAK[p.type]; // 転生選手はふつう晩成型（R.type で変えられる）
     p.genius = U.chance(GENIUS_CHANCE); // 天才肌になる確率はふつうの選手と同じ
     p.kind = R.kind;
@@ -1954,6 +1954,7 @@ function migrate() {
   Object.values(S.players).forEach(p => { if (canBat(p) && !p.traj) p.traj = rollTraj(p.a.power); });
   Object.values(S.players).forEach(p => { if (canBat(p) && !p.subs) p.subs = rollSubs(p.isP ? p.pos2 : p.pos, p.a.field); });
   Object.values(S.players).forEach(p => { if (canBat(p) && !p.steal) p.steal = rollSteal(); });
+  Object.values(S.players).forEach(p => { if (canBat(p) && p.eye == null) p.eye = U.pickW(EYE_W); });
   S.teams.forEach(t => { if (!t.active) { t.active = []; autoActive(t); ensureLineup(S, t); } });
   Object.values(S.players).forEach(p => {
     if (p.visual == null) p.visual = rollVisual();
