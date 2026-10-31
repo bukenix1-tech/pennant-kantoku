@@ -978,7 +978,7 @@ function renderMoney() {
   }).join('');
   const fc = (S.foreignCands || []).map(id => S.players[id]).filter(Boolean);
   const fcHtml = fc.length ? `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>能力</th><th>年俸</th><th></th></tr>
-    ${fc.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td>
+    ${fc.map(p => `<tr><td class="l">${nameCell(p)}${rebornTag(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td>
       <td class="l">${abilKeys(p).map(k => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(p.a.velo) + 'km' : `<span class="g g${U.grade(p.a[k])}">${U.grade(p.a[k])}</span>`}`).join(' ')}${trajTag(p)}</td>
       <td>${U.money(p.salary)}</td><td><button data-act="signForeign" data-pid="${p.id}">契約（契約金${U.money(p.salary * 0.5)}）</button></td></tr>`).join('')}</table></div>` : '';
   return `

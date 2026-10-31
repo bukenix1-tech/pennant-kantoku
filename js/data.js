@@ -89,6 +89,8 @@ const REBORN_START = { 高校: 0.6, 高卒社会人: 0.68, 大学: 0.72, 社会�
 // 能力の上限。球速だけは別（103 で 170km）
 const ABIL_MAX = 110, VELO_MAX = 103;
 const REBORN_OVER = 7; // 転生選手がピーク時の値を超えられる幅
+// 転生外国人：外国人スカウトの候補に混ざる確率と、来日したときの能力（ピーク時の何割か）
+const FOREIGN_REBORN_CHANCE = 0.2, FOREIGN_REBORN_START = 0.92;
 const REBORN_YEAR_CHANCE = 0.85; // 転生選手がその年のドラフト候補に現れる確率（現れるのは 1 人）
 const SUB_FIT = 0.9;
 // 盗塁の積極性（試みる回数の倍率）。1 がふつう。これ以上で「積極的」、これ以下で「慎重」

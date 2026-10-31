@@ -374,6 +374,7 @@ function startSeason() {
   S.lastGame = null;
   S.off = null;
   S.post = null;
+  (S.foreignCands || []).forEach(id => { if (S.players[id] && S.players[id].teamId == null) delete S.players[id]; }); // 契約しなかった候補は消す
   S.foreignCands = null;
   Object.values(S.players).forEach(p => { p.stats = newStats(); p.rest = 7; p.fatigue = 0; p.downDay = null; });
   S.draftClass = makeDraftClass();
@@ -1275,39 +1276,44 @@ function finishProspect(p, kind) {
 function addReborn(pool) {
   if (!REBORN.length || !U.chance(REBORN_YEAR_CHANCE)) return; // 合言葉が入っていない端末では出ない
   const alive = new Set(Object.values(S.players).map(p => p.reborn).filter(Boolean));
-  const cands = REBORN.filter(R => !alive.has(R.id));
+  const cands = REBORN.filter(R => !R.foreign && !alive.has(R.id)); // 外国人はドラフトには出ない（外国人スカウトの候補に混ざる）
   if (!cands.length) return;
-  [U.pickW(cands.map(R => [R, R.weight || 1]))].forEach(R => {
-    const age = R.kind === '高校' ? 18 : R.kind === '大学' ? 22 : R.kind === '高卒社会人' ? 21 : 24;
-    // ピーク時の能力（R.peak）から、入団時の能力・才能・伸びしろの上限を決める
-    const peakA = { ...R.peak };
-    if (peakA.velo >= 100) peakA.velo = kmhToVelo(peakA.velo); // 球速は km/h でも書ける
-    const keys = Object.keys(peakA), avg = U.sum(keys, k => peakA[k]) / keys.length;
-    const ratio = R.start || REBORN_START[R.kind] || 0.65; // start を書けば、その選手だけ入団時の高さを変えられる
-    const pot = U.clamp((avg - CEIL_BASE) / CEIL_PER_POT, 1.3, 1.7); // 才能は必ず ★5
-    const p = newPlayer(S, { isP: R.isP, pos: R.pos, q: avg * ratio, age, pot });
-    p.name = R.name;
-    if (R.twoWay) { makeTwoWay(p, avg * ratio); if (R.isP) { p.pos2 = R.pos2 || '外'; p.subs = R.subs || []; } } // 二刀流は peak に投打両方を書く
-    keys.forEach(k => { p.a[k] = U.clamp(peakA[k] * ratio + U.gauss() * 2, 5, ABIL_MAX); });
-    p.ceilA = peakA;
-    if (R.isP) {
-      // 先発・中継ぎ・抑えの向き不向き
-      p.apt = R.apt ? { ...R.apt } : R.role === '先発' ? { sp: 2, rp: 1 } : { sp: 0, rp: 2 }; // apt（0△ 1〇 2◎）を書けばそれを使う
-      p.role = R.role === '先発' ? '先発' : '中継';
-    }
-    if (R.team && TEAM_PREF[R.team]) p.home = TEAM_PREF[R.team]; // 出身地は、元の所属球団の本拠地
-    if (R.retireAge) p.retireAge = R.retireAge;
-    if (canBat(p)) { p.traj = R.traj || p.traj; if (!R.isP) p.subs = R.subs || p.subs; if (R.steal) p.steal = R.steal; if (R.eye != null) p.eye = R.eye; }
-    p.type = R.type || '晩成'; p.peak = GROWTH_PEAK[p.type]; // 転生選手はふつう晩成型（R.type で変えられる）
-    p.genius = U.chance(GENIUS_CHANCE); // 天才肌になる確率はふつうの選手と同じ
-    p.kind = R.kind;
-    p.salary = 600;
-    p.reborn = R.id;
-    if (R.team) p.rebornTeam = R.team;
-    finishProspect(p, R.kind);
-    p.amateur.team = '？？？'; // 転生選手の出身校・所属は伏せる
-    pool.push(p.id);
-  });
+  const p = makeRebornPlayer(U.pickW(cands.map(R => [R, R.weight || 1])));
+  pool.push(p.id);
+}
+
+// 転生選手を 1 人作る。外国人（R.foreign）は 26〜30 歳でピーク近くの力を持って来日する
+function makeRebornPlayer(R) {
+  const age = R.foreign ? R.age || U.rint(26, 30) : R.kind === '高校' ? 18 : R.kind === '大学' ? 22 : R.kind === '高卒社会人' ? 21 : 24;
+  // ピーク時の能力（R.peak）から、入団時の能力・才能・伸びしろの上限を決める
+  const peakA = { ...R.peak };
+  if (peakA.velo >= 100) peakA.velo = kmhToVelo(peakA.velo); // 球速は km/h でも書ける
+  const keys = Object.keys(peakA), avg = U.sum(keys, k => peakA[k]) / keys.length;
+  const ratio = R.start || (R.foreign ? FOREIGN_REBORN_START : REBORN_START[R.kind]) || 0.65; // start を書けば、その選手だけ入団時の高さを変えられる
+  const pot = U.clamp((avg - CEIL_BASE) / CEIL_PER_POT, 1.3, 1.7); // 才能は必ず ★5
+  const p = newPlayer(S, { isP: R.isP, pos: R.pos, q: avg * ratio, age, pot, foreign: !!R.foreign });
+  p.name = R.name;
+  if (R.twoWay) { makeTwoWay(p, avg * ratio); if (R.isP) { p.pos2 = R.pos2 || '外'; p.subs = R.subs || []; } } // 二刀流は peak に投打両方を書く
+  keys.forEach(k => { p.a[k] = U.clamp(peakA[k] * ratio + U.gauss() * 2, 5, ABIL_MAX); });
+  p.ceilA = peakA;
+  if (R.isP) {
+    // 先発・中継ぎ・抑えの向き不向き
+    p.apt = R.apt ? { ...R.apt } : R.role === '先発' ? { sp: 2, rp: 1 } : { sp: 0, rp: 2 }; // apt（0△ 1〇 2◎）を書けばそれを使う
+    p.role = R.role === '先発' ? '先発' : '中継';
+  }
+  if (!R.foreign && R.team && TEAM_PREF[R.team]) p.home = TEAM_PREF[R.team]; // 出身地は、元の所属球団の本拠地
+  if (R.retireAge) p.retireAge = R.retireAge;
+  if (canBat(p)) { p.traj = R.traj || p.traj; if (!R.isP) p.subs = R.subs || p.subs; if (R.steal) p.steal = R.steal; if (R.eye != null) p.eye = R.eye; }
+  p.type = R.type || '晩成'; p.peak = GROWTH_PEAK[p.type]; // 転生選手はふつう晩成型（R.type で変えられる）
+  p.genius = U.chance(GENIUS_CHANCE); // 天才肌になる確率はふつうの選手と同じ
+  p.reborn = R.id;
+  if (R.team) p.rebornTeam = R.team;
+  if (R.foreign) { p.salary = calcSalary(p); return p; }
+  p.kind = R.kind;
+  p.salary = 600;
+  finishProspect(p, R.kind);
+  p.amateur.team = '？？？'; // 転生選手の出身校・所属は伏せる
+  return p;
 }
 function rebornOf(p) { return p.reborn ? REBORN.find(R => R.id === p.reborn) || null : null; }
 function rebornTag(p) { return p.reborn ? `<span class="tag reborn" title="名選手をもとにした転生選手">転生</span>` : ''; }
@@ -1812,7 +1818,16 @@ function scoutForeign() {
   const t = myTeam();
   t.money -= FOREIGN_SCOUT_COST; t.fin.invest += FOREIGN_SCOUT_COST;
   const cands = [];
-  for (let i = 0; i < 3; i++) {
+  // ときどき転生外国人が候補に混ざる（いま球界にいる人は除く）
+  const alive = new Set(Object.values(S.players).filter(p => p.reborn && p.teamId != null).map(p => p.reborn));
+  const fr = REBORN.filter(R => R.foreign && !alive.has(R.id));
+  if (fr.length && U.chance(FOREIGN_REBORN_CHANCE)) {
+    const p = makeRebornPlayer(U.pickW(fr.map(R => [R, R.weight || 1])));
+    cands.push(p.id);
+    const R = rebornOf(p);
+    addNews(`転生外国人が見つかった！ ${p.name}（${p.pos}）${R ? '― ' + R.note : ''}`, 'big');
+  }
+  while (cands.length < 3) {
     const p = newPlayer(S, { isP: U.chance(0.5), q: U.rnd(64, 82), age: U.rint(26, 33), foreign: true, pot: U.rnd(0.8, 1.1) });
     p.salary = calcSalary(p);
     cands.push(p.id);
