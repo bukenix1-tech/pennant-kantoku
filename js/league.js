@@ -1818,8 +1818,9 @@ function scoutForeign() {
   const t = myTeam();
   t.money -= FOREIGN_SCOUT_COST; t.fin.invest += FOREIGN_SCOUT_COST;
   const cands = [];
-  // ときどき転生外国人が候補に混ざる（いま球界にいる人は除く）
-  const alive = new Set(Object.values(S.players).filter(p => p.reborn && p.teamId != null).map(p => p.reborn));
+  // ときどき転生外国人が候補に混ざる。いま球界にいる人・自由契約で残っている人は除く（入れ替わる前の候補だけは数えない）
+  const old = new Set(S.foreignCands || []);
+  const alive = new Set(Object.values(S.players).filter(p => p.reborn && !old.has(p.id)).map(p => p.reborn));
   const fr = REBORN.filter(R => R.foreign && !alive.has(R.id));
   if (fr.length && U.chance(FOREIGN_REBORN_CHANCE)) {
     const p = makeRebornPlayer(U.pickW(fr.map(R => [R, R.weight || 1])));
