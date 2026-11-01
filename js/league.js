@@ -842,13 +842,13 @@ function titlesOf(pid) {
 }
 
 // ---------- 古い年の記録の整理（人が選んだときだけ消す） ----------
-// 順位表は「球団・勝敗・差」だけにし、タイトルは MVP だけ残す。
-// 優勝・日本一・MVP・球団の記録・シーズン記録・通算記録・殿堂入りは変わらない
+// 順位表は「球団・勝敗・差」だけにし、タイトル（MVP も）・ベストナイン・ゴールデングラブの一覧を消す。
+// 優勝・日本一・球団の記録・シーズン記録・通算記録・殿堂入りは変わらない
 function slimHistory(untilYear, lgs) {
   S.awardHist.forEach(y => {
     if (y.year > untilYear) return;
     y.list = y.list.filter(a => {
-      if (a.title === 'MVP' || !lgs.includes(a.lg)) return true;
+      if (!lgs.includes(a.lg)) return true;
       // まだいる選手のタイトルは、選手の詳細と殿堂入りの点に使うので、選手に移しておく
       const p = S.players[a.pid];
       if (p) (p.oldTitles = p.oldTitles || []).push({ year: y.year, title: a.title, lg: a.lg });

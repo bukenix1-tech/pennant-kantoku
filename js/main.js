@@ -230,7 +230,7 @@ const ACTIONS = {
     const myLg = myTeam().lg, other = LEAGUES.find(l => l !== myLg);
     const lgs = UI.slimScope === 'both' ? LEAGUES : [other];
     const from = S.standHist[S.standHist.length - 1].year;
-    if (!confirm(`${from}〜${UI.slimUntil}年の${lgs.map(l => LEAGUE_NAME[l]).join('・')}の、順位表の得点・失点と MVP 以外のタイトルの一覧を消します。\n元に戻せません。先に「ファイルに書き出す」で残しておくと安心です。よろしいですか？`)) return 'keep';
+    if (!confirm(`${from}〜${UI.slimUntil}年の${lgs.map(l => LEAGUE_NAME[l]).join('・')}の、順位表の得点・失点と、MVP を含むタイトル・ベストナイン・ゴールデングラブの一覧を消します。\n元に戻せません。先に「ファイルに書き出す」で残しておくと安心です。よろしいですか？`)) return 'keep';
     slimHistory(UI.slimUntil, lgs);
     UI.toast = '古い年の記録を整理しました。';
   },

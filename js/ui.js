@@ -867,7 +867,7 @@ function recHist() {
   const slimNote = (yr.slim || []).map(lg => LEAGUE_NAME[lg]);
   return `<div class="scroll"><table class="tbl"><tr><th>年</th>${LEAGUES.map(lg => `<th>${LEAGUE_NAME[lg]}優勝</th>`).join('')}<th>日本一</th>${LEAGUES.map(lg => `<th>${LEAGUE_NAME[lg]}MVP</th>`).join('')}<th>${h(myTeam().short)}</th></tr>${rows}</table></div>
     <div class="row"><h3>タイトル</h3><select data-chg="recYear">${H.map(x => `<option value="${x.year}" ${x.year === UI.recYear ? 'selected' : ''}>${x.year}年</option>`).join('')}</select></div>
-    ${slimNote.length ? `<p class="muted small">${slimNote.join('・')}は整理したので、MVP のほかのタイトルは消してあります（選手の詳細にはまだ残っています）。</p>` : ''}
+    ${slimNote.length ? `<p class="muted small">${slimNote.join('・')}は整理したので、MVP などのタイトルは消してあります（まだいる選手の分は、選手の詳細に残っています）。</p>` : ''}
     ${detail}
     ${posAwards('ベストナイン', yr.b9)}${posAwards('ゴールデングラブ', yr.gg)}
     ${slimPanel(H)}`;
@@ -890,8 +890,8 @@ function slimPanel(H) {
   const save = slimSaving(UI.slimUntil, lgs);
   const from = years[years.length - 1];
   return `<details class="slim"><summary>🧹 古い年の記録を整理する（セーブを軽くする）</summary>
-    <p>選んだ年までの<b>順位表の得点・失点</b>と、<b>MVP 以外のタイトルの一覧</b>を消します。</p>
-    <p class="muted small">残るもの：優勝・日本一・MVP・各球団の順位と勝敗・球団の記録・シーズン記録・通算記録・殿堂入り。
+    <p>選んだ年までの<b>順位表の得点・失点</b>と、<b>MVP を含むタイトル・ベストナイン・ゴールデングラブの一覧</b>を消します。年表の MVP の列は「-」になります。</p>
+    <p class="muted small">残るもの：優勝・日本一・各球団の順位と勝敗・球団の記録・シーズン記録・通算記録・殿堂入り。
       まだいる選手が取ったタイトルは、選手の詳細と殿堂入りの点には残ります。</p>
     <p><select data-chg="slimUntil">${years.map(y => `<option value="${y}" ${y === UI.slimUntil ? 'selected' : ''}>${from}〜${y}年</option>`).join('')}</select>
       <select data-chg="slimScope"><option value="other" ${UI.slimScope !== 'both' ? 'selected' : ''}>${LEAGUE_NAME[other]}（自分のいないリーグ）だけ</option><option value="both" ${UI.slimScope === 'both' ? 'selected' : ''}>両リーグ</option></select></p>
