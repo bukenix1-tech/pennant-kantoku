@@ -95,7 +95,8 @@ const ABIL_MAX = 110, VELO_MAX = 103;
 const REBORN_OVER = 7; // 転生選手がピーク時の値を超えられる幅
 // 転生外国人：外国人スカウトの候補に混ざる確率と、来日したときの能力（ピーク時の何割か）
 const FOREIGN_REBORN_CHANCE = 0.2, FOREIGN_REBORN_START = 0.92;
-const REBORN_YEAR_CHANCE = 0.85; // 転生選手がその年のドラフト候補に現れる確率（現れるのは 1 人）
+const REBORN_YEAR_CHANCE = 0.85; // 転生選手がその年のドラフト候補に現れる確率
+const REBORN_MORE_CHANCE = [0.15, 0.25]; // 現れた年に、2 人目・3 人目も現れる確率（前の人が現れたときだけ）
 const SUB_FIT = 0.9;
 // 盗塁の積極性（試みる回数の倍率）。1 がふつう。これ以上で「積極的」、これ以下で「慎重」
 const STEAL_SD = 0.3, STEAL_HI = 1.3, STEAL_LO = 0.7;

@@ -1351,9 +1351,13 @@ function addReborn(pool) {
   if (!REBORN.length || !U.chance(REBORN_YEAR_CHANCE)) return; // 合言葉が入っていない端末では出ない
   const alive = new Set(Object.values(S.players).map(p => p.reborn).filter(Boolean));
   const cands = REBORN.filter(R => !R.foreign && !alive.has(R.id)); // 外国人はドラフトには出ない（外国人スカウトの候補に混ざる）
-  if (!cands.length) return;
-  const p = makeRebornPlayer(U.pickW(cands.map(R => [R, R.weight || 1])));
-  pool.push(p.id);
+  // ふつうは 1 人。たまに 2 人・3 人出る
+  for (let i = 0; i < 1 + REBORN_MORE_CHANCE.length && cands.length; i++) {
+    if (i > 0 && !U.chance(REBORN_MORE_CHANCE[i - 1])) break;
+    const R = U.pickW(cands.map(R => [R, R.weight || 1]));
+    cands.splice(cands.indexOf(R), 1);
+    pool.push(makeRebornPlayer(R).id);
+  }
 }
 
 // 転生選手を 1 人作る。外国人（R.foreign）は 26〜30 歳でピーク近くの力を持って来日する
