@@ -45,6 +45,8 @@ const SEASON_FORMATS = {
 const ROTATION_SIZE = 6;  // 先発ローテは 6 人
 const STARTER_REST = 6;   // 中 5 日以上あいていれば投げられる（ふつうは月曜休みで中 6 日になる）
 const TRADE_DEADLINE_MONTH = 7; // 7 月末までトレードできる
+// 金銭トレード：お金 CASH_PER_VALUE 万円を、トレード価値 1 として数える。主力（総合で上から TRADE_CORE_N 人）はお金だけでは出してもらえない
+const CASH_PER_VALUE = 10, TRADE_CORE_N = 8;
 const WEEKDAYS = '日月火水木金土';
 
 

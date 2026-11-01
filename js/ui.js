@@ -3,7 +3,7 @@
 // 画面を描く（状態 S を読んで HTML を作るだけ）
 
 const UI = {
-  tab: 'home', viewTeam: null, trade: { team: null, give: [], get: [] }, toast: '',
+  tab: 'home', viewTeam: null, trade: { team: null, give: [], get: [], cash: 0 }, toast: '',
   sortKey: null, newTeam: 0, newGames: 143, lg: null, newSlot: null, watchOnly: false, pkind: '', faDraft: {}, histYear: null, posf: { team: '', draft: '', fa: '' }, geniusOnly: false, teamView: 'list', statSort: { bat: 'avg', pit: 'era' }, goodsType: 'towel', goodsPid: null, draftYearF: '', dhYear: null, recView: 'hist', recYear: null, slimUntil: null, slimScope: 'other',
 };
 
@@ -521,9 +521,9 @@ function renderPlayerModal(p) {
       ? `<button data-act="dropTwoWay" data-pid="${p.id}">二刀流をやめる</button> <span class="muted">${p.isP ? '打撃' : '投球'}の能力がなくなり、本業に専念します</span>`
       : p.age <= 27 && ovr(p) < TWO_WAY_MIN_OVR ? `<span class="muted">二刀流に挑戦できるのは総合${TWO_WAY_MIN_OVR}以上の選手です（いま${Math.round(ovr(p))}）</span>`
       : p.age <= 27 ? `<button data-act="tryTwoWay" data-pid="${p.id}">二刀流に挑戦させる</button> <span class="muted">${p.isP ? '打撃' : '投球'}の練習を始めます（最初は低い能力から。練習の伸びは両方に分かれます）</span>` : ''}</p>
-    ${releaseOpen()
+    ${faOpen()
       ? `<p><button class="danger" data-act="release" data-pid="${p.id}">自由契約にする</button> <span class="muted">チームから外します。他球団に拾われることもあります</span></p>`
-      : '<p class="muted">自由契約にできるのは、オフの契約更改〜開幕前だけです。</p>'}` : ''}
+      : '<p class="muted">自由契約にできるのは、オフの契約更改〜開幕前と、シーズン中の7月末までです。</p>'}` : ''}
   ${S.freeAgents.includes(p.id) ? `<p><span class="tag">自由契約</span> 前所属 ${h(p.lastTeam || '-')} ・ 希望年俸 ${U.money(p.salary)}</p>` : ''}`;
 }
 
@@ -973,14 +973,14 @@ function renderMoney() {
   const facs = Object.keys(FACILITIES).map(k => {
     const lv = t.fac[k];
     const cost = facilityCost(lv);
-    return `<tr><td class="l"><b>${FACILITIES[k].name}</b><br><span class="muted">${FACILITIES[k].desc}</span></td><td>${'■'.repeat(lv)}${'□'.repeat(FAC_MAX - lv)} Lv${lv}</td>
-      <td>${lv < FAC_MAX ? `<button data-act="upgrade" data-k="${k}" ${t.money < cost ? 'disabled' : ''}>改修 ${U.money(cost)}</button>` : '最大'}</td></tr>`;
+    return `<tr><td class="l"><b>${FACILITIES[k].name}</b><br><span class="muted">${FACILITIES[k].desc}</span></td><td class="nowrap">${'■'.repeat(lv)}${'□'.repeat(FAC_MAX - lv)} Lv${lv}<br>
+      ${lv < FAC_MAX ? `<button class="sm" data-act="upgrade" data-k="${k}" ${t.money < cost ? 'disabled' : ''}>改修 ${U.money(cost)}</button>` : '最大'}</td></tr>`;
   }).join('');
   const fc = (S.foreignCands || []).map(id => S.players[id]).filter(Boolean);
-  const fcHtml = fc.length ? `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>能力</th><th>年俸</th><th></th></tr>
-    ${fc.map(p => `<tr><td class="l">${nameCell(p)}${rebornTag(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td>
+  const fcHtml = fc.length ? `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>能力</th><th>年俸</th></tr>
+    ${fc.map(p => `<tr><td class="l">${nameCell(p)}${rebornTag(p)}<br><button class="sm primary" data-act="signForeign" data-pid="${p.id}">契約（契約金${U.money(p.salary * 0.5)}）</button></td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td>
       <td class="l">${abilKeys(p).map(k => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(p.a.velo) + 'km' : `<span class="g g${U.grade(p.a[k])}">${U.grade(p.a[k])}</span>`}`).join(' ')}${trajTag(p)}</td>
-      <td>${U.money(p.salary)}</td><td><button data-act="signForeign" data-pid="${p.id}">契約（契約金${U.money(p.salary * 0.5)}）</button></td></tr>`).join('')}</table></div>` : '';
+      <td>${U.money(p.salary)}</td></tr>`).join('')}</table></div>` : '';
   return `
   <div class="grid2">
     <section class="card"><h2>今季の収支</h2>
@@ -1009,7 +1009,9 @@ function renderMoney() {
   <section class="card"><h2>施設</h2><table class="tbl">${facs}</table></section>
   <section class="card"><h2>助っ人外国人</h2>
     <p>海外に調査を出すと、候補が 3 人見つかります（調査費 ${U.money(FOREIGN_SCOUT_COST)}）。</p>
-    <button data-act="scoutForeign">調査に出す</button>
+    <button data-act="scoutForeign" ${faOpen() ? '' : 'disabled'}>調査に出す</button>
+    ${!faOpen() ? '<p class="muted">外国人と契約できるのは、オフの契約更改〜開幕前と、シーズン中の7月末までです。</p>'
+      : t.players.length >= ROSTER_MAX ? `<p class="neg">支配下が${ROSTER_MAX}人で一杯です。契約するには、先に選手を自由契約にして枠を空けてください（選手の詳しい画面から）。</p>` : ''}
     ${fcHtml}
   </section>`;
 }
@@ -1057,16 +1059,23 @@ function renderTrade() {
   const other = S.teams[T.team], me = myTeam();
   const list = (team, sel, side) => teamPlayers(team).sort((a, b) => a.isP - b.isP || ovr(b) - ovr(a)).map(p => `
     <tr class="${sel.includes(p.id) ? 'sel' : ''}"><td><input type="checkbox" data-chg="tsel" data-side="${side}" data-pid="${p.id}" ${sel.includes(p.id) ? 'checked' : ''}></td>
-    <td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${Math.round(ovr(p))}</td><td>${tradeValue(p).toLocaleString()}</td></tr>`).join('');
-  const vGive = U.sum(T.give.map(id => S.players[id]).filter(Boolean), tradeValue);
-  const vGet = U.sum(T.get.map(id => S.players[id]).filter(Boolean), tradeValue);
+    <td class="l">${nameCell(p)}${coreMark(p, side)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${Math.round(ovr(p))}</td><td>${tradeValue(p).toLocaleString()}</td></tr>`).join('');
+  const cash = T.cash || 0;
+  const vGive = U.sum(T.give.map(id => S.players[id]).filter(Boolean), tradeValue) + (cash > 0 ? cashValue(cash) : 0);
+  const vGet = U.sum(T.get.map(id => S.players[id]).filter(Boolean), tradeValue) + (cash < 0 ? cashValue(cash) : 0);
+  const core = tradeCore(other);
+  const coreMark = (p, side) => side === 'get' && core.includes(p.id) ? ' <span class="tag">主力</span>' : '';
   const ratio = vGet ? vGive / vGet : (vGive ? 2 : 0);
-  const mood = !vGive && !vGet ? '選手を選んでください' : ratio >= 1.08 ? '😊 相手は乗り気です' : ratio >= 0.9 ? '🤔 もう一声…' : '😠 話になりません';
+  const mood = !T.give.length && !T.get.length ? '選手を選んでください' : ratio >= 1.08 ? '😊 相手は乗り気です' : ratio >= 0.9 ? '🤔 もう一声…' : '😠 話になりません';
   const head = '<tr><th></th><th>名前</th><th>守</th><th>年</th><th>総合</th><th>価値</th></tr>';
   return `
   <section class="card">
     <div class="row"><h2>トレード</h2>
       <select data-chg="tteam">${LEAGUES.map(lg => `<optgroup label="${LEAGUE_NAME[lg]}">${S.teams.filter(t => t.lg === lg && t.id !== S.myTeamId).map(t => `<option value="${t.id}" ${t.id === T.team ? 'selected' : ''}>${h(t.name)}</option>`).join('')}</optgroup>`).join('')}</select></div>
+    <p>お金 <select data-chg="tcash" data-k="dir"><option value="1" ${cash >= 0 ? 'selected' : ''}>こちらが払う</option><option value="-1" ${cash < 0 ? 'selected' : ''}>こちらがもらう</option></select>
+      <input type="number" data-chg="tcash" data-k="amt" min="0" step="1000" value="${Math.abs(cash)}" style="width:7em"> 万円
+      <span class="muted">（資金 ${U.money(me.money)} ・ 相手 ${U.money(other.money)}。${CASH_PER_VALUE}万円で価値 1）</span></p>
+    <p class="muted">選手をお金だけで買うこともできます（金銭トレード）。ただし相手の主力（総合で上から${TRADE_CORE_N}人）はお金だけでは出してくれません。</p>
     <p>出す価値 <b>${vGive.toLocaleString()}</b> ⇔ もらう価値 <b>${vGet.toLocaleString()}</b>　${mood}</p>
     <button class="primary" data-act="propose">この条件で申し込む</button>
     <div class="grid2">

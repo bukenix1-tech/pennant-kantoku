@@ -374,8 +374,6 @@ function startSeason() {
   S.lastGame = null;
   S.off = null;
   S.post = null;
-  (S.foreignCands || []).forEach(id => { if (S.players[id] && S.players[id].teamId == null) delete S.players[id]; }); // 契約しなかった候補は消す
-  S.foreignCands = null;
   Object.values(S.players).forEach(p => { p.stats = newStats(); p.rest = 7; p.fatigue = 0; p.downDay = null; });
   S.draftClass = makeDraftClass();
   announceDraftClass();
@@ -635,6 +633,7 @@ function endRegular() {
   LEAGUES.forEach(lg => { snap[lg] = standings(lg).map(r => ({ id: r.t.id, name: r.t.name, short: r.t.short, color: r.t.color, w: r.t.w, l: r.t.l, d: r.t.d, rs: r.t.rs, ra: r.t.ra, gb: r.gb })); });
   S.standHist.unshift({ year: S.year, games: S.games, lg: snap, jp: null });
   S.phase = 'post';
+  clearForeignCands(); // 契約できる期間が終わったので、契約しなかった候補は消す
   const awards = [];
   const champs = {};
   LEAGUES.forEach(lg => {
@@ -1790,10 +1789,23 @@ function tradeOpen() {
   return S.schedule[Math.min(S.day, S.schedule.length - 1)].m <= TRADE_DEADLINE_MONTH;
 }
 
-function proposeTrade(otherId, giveIds, getIds) {
+// お金をトレード価値に直す
+function cashValue(cash) { return Math.round(Math.abs(cash || 0) / CASH_PER_VALUE); }
+
+// 相手チームの主力（総合で上から TRADE_CORE_N 人）
+function tradeCore(t) { return teamPlayers(t).sort((a, b) => ovr(b) - ovr(a)).slice(0, TRADE_CORE_N).map(p => p.id); }
+
+// cash：こちらが払うお金（万円）。マイナスならこちらがもらう
+function proposeTrade(otherId, giveIds, getIds, cash = 0) {
   const me = myTeam(), other = S.teams[otherId];
   const give = giveIds.map(id => S.players[id]), get = getIds.map(id => S.players[id]);
   if (!give.length && !get.length) return { ok: false, msg: '選手を選んでください。' };
+  if (cash > 0 && me.money < cash) return { ok: false, msg: 'お金が足りません。' };
+  if (cash < 0 && other.money < -cash) return { ok: false, msg: `${other.short}「そんなお金はありませんよ。」` };
+  if (!give.length && cash > 0) {
+    const core = tradeCore(other);
+    if (get.some(p => core.includes(p.id))) return { ok: false, msg: `${other.short}「主力をお金で手放すことはできません。」` };
+  }
   const meAfter = me.players.length - give.length + get.length;
   const otAfter = other.players.length - get.length + give.length;
   if (meAfter > ROSTER_MAX) return { ok: false, msg: `こちらの人数が${ROSTER_MAX}人を超えます。` };
@@ -1802,13 +1814,16 @@ function proposeTrade(otherId, giveIds, getIds) {
     - out.filter(p => p.isP === isP).length + inn.filter(p => p.isP === isP).length;
   if (count(other, get, give, false) < 12 || count(other, get, give, true) < 11) return { ok: false, msg: '相手の選手が足りなくなるので断られました。' };
   if (count(me, give, get, false) < 10 || count(me, give, get, true) < 8) return { ok: false, msg: 'こちらの選手が足りなくなります。' };
-  const vGive = U.sum(give, tradeValue), vGet = U.sum(get, tradeValue);
+  const vGive = U.sum(give, tradeValue) + (cash > 0 ? cashValue(cash) : 0), vGet = U.sum(get, tradeValue) + (cash < 0 ? cashValue(cash) : 0);
   if (vGive < vGet * 1.08) return { ok: false, msg: `${other.short}「その条件では受けられませんね。」` };
+  if (cash > 0) { me.money -= cash; me.fin.invest += cash; other.money += cash; other.fin.other += cash; }
+  if (cash < 0) { me.money -= cash; me.fin.other -= cash; other.money += cash; other.fin.invest -= cash; }
   give.forEach(p => { removeFromTeam(p); signPlayer(other, p); p.loyalty = 20; });
   get.forEach(p => { removeFromTeam(p); signPlayer(me, p); p.loyalty = 20; });
   autoActive(other); autoLineup(other); autoRotation(other);
   ensureLineup(S, me);
-  addNews(`トレード成立！ ${give.map(p => p.name).join('・') || 'なし'} ⇔ ${get.map(p => p.name).join('・') || 'なし'}（${other.short}）`, 'big');
+  const side = (ps, c) => [ps.map(p => p.name).join('・'), c > 0 ? `金銭${U.money(c)}` : ''].filter(Boolean).join('＋') || 'なし';
+  addNews(`${cash ? '金銭' : ''}トレード成立！ ${side(give, cash)} ⇔ ${side(get, -cash)}（${other.short}）`, 'big');
   return { ok: true, msg: 'トレード成立！' };
 }
 
@@ -1833,15 +1848,22 @@ function scoutForeign() {
     p.salary = calcSalary(p);
     cands.push(p.id);
   }
-  (S.foreignCands || []).forEach(id => { if (S.players[id] && S.players[id].teamId == null) delete S.players[id]; });
+  clearForeignCands();
   S.foreignCands = cands;
+}
+
+function clearForeignCands() {
+  (S.foreignCands || []).forEach(id => { if (S.players[id] && S.players[id].teamId == null) delete S.players[id]; });
+  S.foreignCands = null;
 }
 
 function signForeign(pid) {
   const t = myTeam(), p = S.players[pid];
   if (!faOpen()) return '外国人と契約できるのは、オフの契約更改〜開幕前と、シーズン中の7月末までです。';
-  if (t.players.length >= ROSTER_MAX) return `人数が${ROSTER_MAX}人で一杯です。先に自由契約にしてください。`;
+  if (!p || !(S.foreignCands || []).includes(pid)) return 'その選手はもういません。';
+  if (t.players.length >= ROSTER_MAX) return `支配下が${ROSTER_MAX}人で一杯です。先に選手を自由契約にして枠を空けてください。`;
   const fee = Math.round(p.salary * 0.5);
+  if (t.money < fee) return 'お金が足りません。';
   t.money -= fee; t.fin.invest += fee;
   signPlayer(t, p);
   p.loyalty = 30;
@@ -1853,7 +1875,7 @@ function signForeign(pid) {
 function releasePlayer(pid) {
   const p = S.players[pid];
   const t = myTeam();
-  if (!releaseOpen()) return '自由契約にできるのは、オフの契約更改〜開幕前だけです。';
+  if (!faOpen()) return '自由契約にできるのは、オフの契約更改〜開幕前と、シーズン中の7月末までです。';
   if (t.players.length <= 20) return 'これ以上は減らせません。';
   toFreeAgent(p);
   ensureLineup(S, t);

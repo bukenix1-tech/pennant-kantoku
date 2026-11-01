@@ -159,6 +159,7 @@ const ACTIONS = {
     stopGoods(+el.dataset.id);
   },
   scoutForeign() {
+    if (!faOpen()) { UI.toast = '外国人と契約できるのは、オフの契約更改〜開幕前と、シーズン中の7月末までです。'; return; }
     if (myTeam().money < FOREIGN_SCOUT_COST) { UI.toast = 'お金が足りません。'; return; }
     scoutForeign();
   },
@@ -166,9 +167,9 @@ const ACTIONS = {
   signForeign(el) { const err = signForeign(+el.dataset.pid); UI.toast = err || '契約しました！'; },
   propose() {
     const T = UI.trade;
-    const r = proposeTrade(T.team, T.give, T.get);
+    const r = proposeTrade(T.team, T.give, T.get, T.cash || 0);
     UI.toast = r.msg;
-    if (r.ok) { T.give = []; T.get = []; }
+    if (r.ok) { T.give = []; T.get = []; T.cash = 0; }
   },
   offNext() {
     const step = S.off.step;
@@ -351,7 +352,13 @@ const CHANGES = {
   },
   goodsType(el) { UI.goodsType = el.value; },
   goodsPid(el) { UI.goodsPid = +el.value; },
-  tteam(el) { UI.trade = { team: +el.value, give: [], get: [] }; },
+  tteam(el) { UI.trade = { team: +el.value, give: [], get: [], cash: 0 }; },
+  // 金銭：向き（払う/もらう）と金額（万円）
+  tcash(el) {
+    const T = UI.trade, dir = el.dataset.k === 'dir' ? +el.value : Math.sign(T.cash || 0) || 1;
+    const amt = el.dataset.k === 'amt' ? Math.max(0, Math.round((+el.value || 0) / 100) * 100) : Math.abs(T.cash || 0);
+    T.cash = dir * amt;
+  },
   tsel(el) {
     const arr = UI.trade[el.dataset.side], pid = +el.dataset.pid;
     const k = arr.indexOf(pid);
