@@ -945,8 +945,27 @@ function awakenCheck(mult) {
       const ageMul = p.age <= p.peak - 3 ? 1.5 : p.age <= p.peak ? 1 : p.age <= p.peak + 1 ? 0.5 : 0.15;
       const ch = 0.0015 * p.pot * p.pot * ageMul * fac * (p.cond >= 4 ? 1.5 : 1) * mult;
       if (U.chance(ch)) awaken(p);
+      else limitBreakCheck(p, mult);
     });
   });
+}
+
+// 上限解放：停滞している能力の伸びしろの上限が広がり、少し伸びる。衰退期には起きない
+function limitBreakCheck(p, mult) {
+  if (growthPhase(p).k === 'decline') return;
+  const keys = abilKeys(p).filter(k => abilStalled(p, k) && ((p.ceilUp && p.ceilUp[k]) || 0) < LIMIT_BREAK_MAX);
+  if (!keys.length || !U.chance(LIMIT_BREAK_CHANCE * mult)) return;
+  const k = U.pick(keys), before = p.a[k];
+  p.ceilUp = p.ceilUp || {};
+  p.ceilUp[k] = Math.min(LIMIT_BREAK_MAX, (p.ceilUp[k] || 0) + U.rint(LIMIT_BREAK_UP[0], LIMIT_BREAK_UP[1]));
+  p.a[k] = Math.min(abilMax(p, k), p.a[k] + U.rint(2, 4));
+  p.limitBroken = (p.limitBroken || 0) + 1;
+  if (p.teamId === S.myTeamId) {
+    const up = k === 'velo' ? `球速 +${veloKmh(p.a[k]) - veloKmh(before)}km/h` : `${ALL_LABEL[k]} +${Math.round(p.a[k]) - Math.round(before)}`;
+    const text = `${p.name}が壁を破った！ ${ALL_LABEL[k]}の伸びしろが広がった（${up}）`;
+    addNews('【上限解放】' + text, 'awaken');
+    S.popups.push({ pid: p.id, text, limit: true });
+  }
 }
 
 const BIG_AWAKEN_CHANCE = 0.07; // 覚醒のうち、ごくまれに大爆発（大覚醒）する

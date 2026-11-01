@@ -493,7 +493,7 @@ function renderPlayerModal(p) {
   <h2>${h(p.name)} ${p.foreign ? '<span class="tag">外国人</span>' : ''}${rebornTag(p)}</h2>
   ${rebornOf(p) ? `<p class="muted">転生選手：${h(rebornOf(p).note)}</p>` : ''}
   <p>${team ? teamChip(team) : ''} ${p.twoWay ? `二刀流（投手：${p.role || '-'}・野手：${p.isP ? p.pos2 : p.pos}）` : p.isP ? `投手（${p.role}）` : `野手（${p.pos}）`} ${posBadge(p)}${canBat(p) ? ` ・ サブポジ ${subsOf(p).length ? subsOf(p).join('・') : 'なし'}` : ''} ・ ${p.age}歳 ・ ${p.type}型 ・ 才能 <span class="stars">${potStars(p.pot)}</span>
-   ・ 調子 ${condCell(p)} ${COND_LABEL[p.cond]} ・ 年俸 ${U.money(p.salary)} ${p.inj ? `<span class="tag bad">故障 残り${p.inj}日</span>` : ''}${p.awakened ? `<span class="tag awaken-tag">覚醒×${p.awakened}</span>` : ''}${p.bigAwakened ? `<span class="tag awaken-tag big">大覚醒×${p.bigAwakened}</span>` : ''}</p>
+   ・ 調子 ${condCell(p)} ${COND_LABEL[p.cond]} ・ 年俸 ${U.money(p.salary)} ${p.inj ? `<span class="tag bad">故障 残り${p.inj}日</span>` : ''}${p.awakened ? `<span class="tag awaken-tag">覚醒×${p.awakened}</span>` : ''}${p.bigAwakened ? `<span class="tag awaken-tag big">大覚醒×${p.bigAwakened}</span>` : ''}${p.limitBroken ? `<span class="tag awaken-tag">上限解放×${p.limitBroken}</span>` : ''}</p>
   ${growthBox(p)}
   <div class="bars">${bars}</div>
   <p>総合 <b>${Math.round(ovr(p))}</b>　トレード価値 ${tradeValue(p).toLocaleString()}</p>
@@ -1479,7 +1479,7 @@ function renderPost() {
 function renderAwaken(list) {
   const big = list.some(x => x.big);
   return `<div class="awaken-box ${big ? 'big' : ''}">
-    <div class="awaken-title">${big ? '💥 大 覚 醒 💥' : '⚡ 覚 醒 ⚡'}</div>
+    <div class="awaken-title">${big ? '💥 大 覚 醒 💥' : list.every(x => x.limit) ? '🔓 上 限 解 放 🔓' : '⚡ 覚 醒 ⚡'}</div>
     ${list.map(x => `<p class="awaken-text ${x.big ? 'big' : ''}">${h(x.text)}</p>`).join('')}
     <p><button class="primary big" data-act="closeModal">${big ? 'すごすぎる！！' : 'やったね！'}</button></p>
   </div>`;

@@ -213,7 +213,10 @@ function kmhToVelo(km) { return U.clamp(km <= 157 ? (km - 130) / 0.3 : 90 + (km 
 
 // 才能で決まる伸びしろ（★が多いほど高くまで伸びる。天才はさらに上まで）
 // 転生選手は、能力ごとにピーク時の値が上限（p.ceilA）
-function abilCeil(p, k) { return k && p.ceilA && p.ceilA[k] != null ? p.ceilA[k] + (p.genius ? 5 : 0) : CEIL_BASE + p.pot * CEIL_PER_POT + (p.genius ? 10 : 0); }
+function abilCeil(p, k) {
+  const up = (k && p.ceilUp && p.ceilUp[k]) || 0; // 上限解放で広がった分
+  return (k && p.ceilA && p.ceilA[k] != null ? p.ceilA[k] + (p.genius ? 5 : 0) : CEIL_BASE + p.pot * CEIL_PER_POT + (p.genius ? 10 : 0)) + up;
+}
 // 伸びしろの上限の近くまで来て、練習してもほとんど伸びない能力（衰退期は衰えのほうを見せるので出さない）
 // 能力の天井。転生選手はピーク時の値を練習で目指し、覚醒などで REBORN_OVER まで超えられる（天才肌はさらに +5）
 function abilMax(p, k) {

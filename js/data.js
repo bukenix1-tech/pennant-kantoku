@@ -56,6 +56,8 @@ const PIT_KEYS = ['velo', 'control', 'stamina', 'breaking'];
 const PIT_LABEL = { velo: '球速', control: 'コントロール', stamina: 'スタミナ', breaking: '変化球' };
 const ALL_LABEL = { ...BAT_LABEL, ...PIT_LABEL };
 const CEIL_BASE = 31, CEIL_PER_POT = 30; // 伸びしろの上限 = CEIL_BASE + 才能 × CEIL_PER_POT（天才は +10）
+// 上限解放：停滞した能力の伸びしろの上限が、ときどき広がる（1 週間ごとに 1 人あたりこの確率。キャンプは 3 倍）
+const LIMIT_BREAK_CHANCE = 0.0025, LIMIT_BREAK_UP = [6, 12], LIMIT_BREAK_MAX = 20;
 const STALL_GAP = 2; // 伸びしろの上限までこれだけしか無い能力に「停滞」を付ける
 const GENIUS_CHANCE = 0.015;   // 天才（伸びがいい）が生まれる確率
 const TWO_WAY_CHANCE = 0.02;   // ドラフト候補が二刀流である確率（才能のある投手だけ）
