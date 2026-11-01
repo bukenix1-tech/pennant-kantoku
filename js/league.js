@@ -652,11 +652,18 @@ function endRegular() {
     if (mvp) awards.unshift({ lg, title: 'MVP', pid: mvp.id, name: mvp.name, team: champ.short, val: '' });
   });
   awards.forEach(a => addFame(S.players[a.pid], a.title === 'MVP' ? 25 : 15));
-  S.awardHist.unshift({ year: S.year, list: awards.map(a => ({ ...a })) });
+  const b9 = LEAGUES.flatMap(bestNine), gg = LEAGUES.flatMap(goldenGlove);
+  b9.forEach(a => { const p = S.players[a.pid]; p.b9 = (p.b9 || 0) + 1; addFame(p, 5); });
+  gg.forEach(a => { const p = S.players[a.pid]; p.gg = (p.gg || 0) + 1; addFame(p, 3); });
+  const myB9 = b9.filter(a => S.players[a.pid].teamId === S.myTeamId).map(a => a.name);
+  const myGG = gg.filter(a => S.players[a.pid].teamId === S.myTeamId).map(a => a.name);
+  if (myB9.length) addNews(`ベストナインに${myB9.join('・')}が選ばれた！`, 'good');
+  if (myGG.length) addNews(`ゴールデングラブ賞に${myGG.join('・')}が選ばれた！`, 'good');
+  S.awardHist.unshift({ year: S.year, list: awards.map(a => ({ ...a })), b9, gg });
   updateSeasonRecords();
   // シーズン終わりから CS まで数日あく
   Object.values(S.players).forEach(p => { p.rest += 3; p.fatigue = 0; });
-  S.post = { stage: 'cs1', series: [], awards, champs, ranks: {}, day: 0, jp: null };
+  S.post = { stage: 'cs1', series: [], awards, b9, gg, champs, ranks: {}, day: 0, jp: null };
   LEAGUES.forEach(lg => {
     const ids = standings(lg).map(r => r.t.id);
     S.post.ranks[lg] = ids;
@@ -664,6 +671,43 @@ function endRegular() {
   });
   const my = myTeam();
   addNews(`レギュラーシーズン終了！ ${LEAGUES.map(lg => `${LEAGUE_NAME[lg]}優勝は${S.teams[champs[lg]].name}`).join('、')}。${my.short}は${rankOf(my.id)}位。`, 'big');
+}
+
+// ---------- ベストナイン・ゴールデングラブ ----------
+// 守った位置：シーズン終わりのスタメンの位置（いなければ本来の位置）。左・中・右は外野にまとめる
+function seasonPos(p) {
+  const t = S.teams[p.teamId], s = t && t.lineup.find(x => x.pid === p.id);
+  const pos = s ? s.pos : (p.isP ? p.pos2 : p.pos);
+  return ['左', '中', '右'].includes(pos) ? '外' : pos;
+}
+function lgPlayers(lg) { return S.teams.filter(t => t.lg === lg).flatMap(teamPlayers); }
+function awardRow(lg, pos, p, val) { return { lg, pos, pid: p.id, name: p.name, team: S.teams[p.teamId].short, val }; }
+const AWARD_POS = ['捕', '一', '二', '三', '遊', '外', '外', '外'];
+
+// ベストナイン：投手と、守った位置ごとにいちばん打った選手（外野は 3 人、指名打者も 1 人）
+function bestNine(lg) {
+  const all = lgPlayers(lg), out = [];
+  const pitScore = p => p.stats.w * 8 + p.stats.sv * 3 + p.stats.outs / 3 - p.stats.per * 2;
+  const pit = all.filter(p => canPitch(p) && p.stats.outs >= S.games * 1.5).sort((a, b) => pitScore(b) - pitScore(a))[0];
+  if (pit) out.push(awardRow(lg, '投', pit, `${pit.stats.w}勝 防御率${U.era(pit.stats.per, pit.stats.outs)}`));
+  const batScore = p => ops(p.stats) * p.stats.pa * 0.4 + p.stats.hr * 2 + p.stats.sb * 0.5;
+  const bats = all.filter(p => canBat(p) && p.stats.pa >= S.games * 2).sort((a, b) => batScore(b) - batScore(a));
+  [...AWARD_POS, '指'].forEach(pos => {
+    const p = bats.find(x => seasonPos(x) === pos && !out.some(a => a.pid === x.id));
+    if (p) out.push(awardRow(lg, pos, p, `打率${U.avg(p.stats.h, p.stats.ab)} ${p.stats.hr}本`));
+  });
+  return out;
+}
+
+// ゴールデングラブ：守った位置ごとに、守備がいちばんうまいレギュラー（捕手は肩も重く見る）
+function goldenGlove(lg) {
+  const all = lgPlayers(lg).filter(p => canBat(p) && p.stats.pa >= S.games * 2), out = [];
+  const def = (p, pos) => (pos === '捕' ? p.a.field * 0.5 + p.a.arm * 0.5 : p.a.field * 0.8 + p.a.arm * 0.2) * posFit(p, pos === '外' ? '中' : pos);
+  AWARD_POS.forEach(pos => {
+    const p = all.filter(x => seasonPos(x) === pos && !out.some(a => a.pid === x.id)).sort((a, b) => def(b, pos) - def(a, pos))[0];
+    if (p) out.push(awardRow(lg, pos, p, `守備${U.grade(p.a.field)} 肩${U.grade(p.a.arm)}`));
+  });
+  return out;
 }
 
 function newSeries(stage, lg, top, low) {
@@ -766,7 +810,7 @@ function endPost(jpId) {
     }
   });
   S.phase = 'off';
-  S.off = { step: 'awards', awards: P.awards, prize, rank, champ: jp.name, post, contract: null, draft: null };
+  S.off = { step: 'awards', awards: P.awards, b9: P.b9 || [], gg: P.gg || [], prize, rank, champ: jp.name, post, contract: null, draft: null };
 }
 
 // ---------- 記録・歴史・殿堂入り ----------
@@ -810,6 +854,7 @@ function slimHistory(untilYear, lgs) {
       if (p) (p.oldTitles = p.oldTitles || []).push({ year: y.year, title: a.title, lg: a.lg });
       return false;
     });
+    ['b9', 'gg'].forEach(k => { if (y[k]) y[k] = y[k].filter(a => !lgs.includes(a.lg)); });
     y.slim = [...new Set([...(y.slim || []), ...lgs])];
   });
   S.standHist.forEach(y => {
@@ -892,7 +937,7 @@ function meritPts(c, titles) {
     + mvp * 0.15 + (titles.length - mvp) * 0.05;
 }
 // 功績（0〜1。1 で殿堂入りくらい）
-function meritOf(p) { return U.clamp(meritPts(careerTotal(p), titlesOf(p.id)), 0, 1); }
+function meritOf(p) { return U.clamp(meritPts(careerTotal(p), titlesOf(p.id)) + (p.b9 || 0) * 0.04 + (p.gg || 0) * 0.02, 0, 1); }
 
 function retireRecord(p) {
   if (!S.retired) S.retired = [];

@@ -493,7 +493,7 @@ function renderPlayerModal(p) {
   <h2>${h(p.name)} ${p.foreign ? '<span class="tag">外国人</span>' : ''}${rebornTag(p)}</h2>
   ${rebornOf(p) ? `<p class="muted">転生選手：${h(rebornOf(p).note)}</p>` : ''}
   <p>${team ? teamChip(team) : ''} ${p.twoWay ? `二刀流（投手：${p.role || '-'}・野手：${p.isP ? p.pos2 : p.pos}）` : p.isP ? `投手（${p.role}）` : `野手（${p.pos}）`} ${posBadge(p)}${canBat(p) ? ` ・ サブポジ ${subsOf(p).length ? subsOf(p).join('・') : 'なし'}` : ''} ・ ${p.age}歳 ・ ${p.type}型 ・ 才能 <span class="stars">${potStars(p.pot)}</span>
-   ・ 調子 ${condCell(p)} ${COND_LABEL[p.cond]} ・ 年俸 ${U.money(p.salary)} ${p.inj ? `<span class="tag bad">故障 残り${p.inj}日</span>` : ''}${p.awakened ? `<span class="tag awaken-tag">覚醒×${p.awakened}</span>` : ''}${p.bigAwakened ? `<span class="tag awaken-tag big">大覚醒×${p.bigAwakened}</span>` : ''}${p.limitBroken ? `<span class="tag awaken-tag">上限解放×${p.limitBroken}</span>` : ''}</p>
+   ・ 調子 ${condCell(p)} ${COND_LABEL[p.cond]} ・ 年俸 ${U.money(p.salary)} ${p.inj ? `<span class="tag bad">故障 残り${p.inj}日</span>` : ''}${p.awakened ? `<span class="tag awaken-tag">覚醒×${p.awakened}</span>` : ''}${p.bigAwakened ? `<span class="tag awaken-tag big">大覚醒×${p.bigAwakened}</span>` : ''}${p.limitBroken ? `<span class="tag awaken-tag">上限解放×${p.limitBroken}</span>` : ''}${p.b9 ? `<span class="tag">ベストナイン×${p.b9}</span>` : ''}${p.gg ? `<span class="tag">GG×${p.gg}</span>` : ''}</p>
   ${growthBox(p)}
   <div class="bars">${bars}</div>
   <p>総合 <b>${Math.round(ovr(p))}</b>　トレード価値 ${tradeValue(p).toLocaleString()}</p>
@@ -863,12 +863,21 @@ function recHist() {
   const detail = list.length ? `<div class="grid2">${LEAGUES.map(lg => `<div><h3>${LEAGUE_NAME[lg]}</h3><table class="tbl">${list.filter(a => a.lg === lg)
     .map(a => `<tr><td class="l">${h(a.title)}</td><td class="l">${pName(a.pid, a.name)}<span class="muted">（${h(a.team)}）</span></td><td>${h(String(a.val))}</td></tr>`).join('')}</table></div>`).join('')}</div>`
     : '<p class="muted">この年のタイトルの記録はありません。</p>';
-  const slimNote = ((S.awardHist.find(x => x.year === UI.recYear) || {}).slim || []).map(lg => LEAGUE_NAME[lg]);
+  const yr = S.awardHist.find(x => x.year === UI.recYear) || {};
+  const slimNote = (yr.slim || []).map(lg => LEAGUE_NAME[lg]);
   return `<div class="scroll"><table class="tbl"><tr><th>年</th>${LEAGUES.map(lg => `<th>${LEAGUE_NAME[lg]}優勝</th>`).join('')}<th>日本一</th>${LEAGUES.map(lg => `<th>${LEAGUE_NAME[lg]}MVP</th>`).join('')}<th>${h(myTeam().short)}</th></tr>${rows}</table></div>
     <div class="row"><h3>タイトル</h3><select data-chg="recYear">${H.map(x => `<option value="${x.year}" ${x.year === UI.recYear ? 'selected' : ''}>${x.year}年</option>`).join('')}</select></div>
     ${slimNote.length ? `<p class="muted small">${slimNote.join('・')}は整理したので、MVP のほかのタイトルは消してあります（選手の詳細にはまだ残っています）。</p>` : ''}
     ${detail}
+    ${posAwards('ベストナイン', yr.b9)}${posAwards('ゴールデングラブ', yr.gg)}
     ${slimPanel(H)}`;
+}
+
+// ベストナイン・ゴールデングラブの表（両リーグを並べる）
+function posAwards(title, list) {
+  if (!list || !list.length) return '';
+  return `<h3>${title}</h3><div class="grid2">${LEAGUES.map(lg => `<div><h4>${LEAGUE_NAME[lg]}</h4><table class="tbl">${list.filter(a => a.lg === lg)
+    .map(a => `<tr class="${S.players[a.pid] && S.players[a.pid].teamId === S.myTeamId ? 'me' : ''}"><th>${a.pos === '指' ? 'DH' : a.pos}</th><td class="l">${pName(a.pid, a.name)}<span class="muted">（${h(a.team)}）</span></td><td>${h(a.val)}</td></tr>`).join('')}</table></div>`).join('')}</div>`;
 }
 
 // 古い年の記録の整理
@@ -1150,6 +1159,7 @@ function renderOff() {
       <div class="grid2">${LEAGUES.map(lg => `<div><h3>${LEAGUE_NAME[lg]}</h3>${standTable(standings(lg), true)}</div>`).join('')}</div>
     </section>
     <section class="card"><h2>表彰</h2><div class="grid2">${LEAGUES.map(lg => `<div><h3>${LEAGUE_NAME[lg]}</h3><table class="tbl">${O.awards.filter(a => (a.lg || lg) === lg).map(a => `<tr class="${S.players[a.pid] && S.players[a.pid].teamId === S.myTeamId ? 'me' : ''}"><th class="l">${a.title}</th><td class="l">${h(a.name)}（${h(a.team)}）</td><td>${a.val}</td></tr>`).join('')}</table></div>`).join('')}</div>
+      ${posAwards('ベストナイン', O.b9)}${posAwards('ゴールデングラブ', O.gg)}
       <button class="primary big" data-act="offNext">FAへ ▶</button></section>`;
   } else if (O.step === 'fa') {
     body = renderFAStep();
