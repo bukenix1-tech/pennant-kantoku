@@ -164,7 +164,10 @@ const ACTIONS = {
     scoutForeign();
   },
   signFA(el) { const err = signFreeAgentMine(+el.dataset.pid); UI.toast = err || '契約しました！'; },
-  signForeign(el) { const err = signForeign(+el.dataset.pid); UI.toast = err || '契約しました！'; },
+  signForeign(el) {
+    const p = S.players[+el.dataset.pid];
+    if (p && !confirm(`${p.name}と契約しますか？（契約金${U.money(p.salary * 0.5)}・年俸${U.money(p.salary)}）`)) return 'keep';
+    const err = signForeign(+el.dataset.pid); UI.toast = err || '契約しました！'; },
   propose() {
     const T = UI.trade;
     const r = proposeTrade(T.team, T.give, T.get, T.cash || 0);
