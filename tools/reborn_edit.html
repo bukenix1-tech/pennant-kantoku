@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>転生選手の編集</title>
+<style>
+  :root { --line: #e5e7eb; --muted: #6b7280; --pri: #2563eb; --bad: #dc2626; --bg: #f3f4f6; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; background: var(--bg); color: #111827; font-size: 14px; }
+  header { background: #1e40af; color: #fff; padding: 10px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; flex: 1; }
+  main { display: grid; grid-template-columns: 260px 1fr; gap: 12px; padding: 12px; max-width: 1100px; margin: 0 auto; }
+  @media (max-width: 720px) { main { grid-template-columns: 1fr; } }
+  .card { background: #fff; border-radius: 8px; padding: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+  .list button { display: block; width: 100%; text-align: left; margin: 0 0 4px; }
+  .list button.on { background: #dbeafe; border-color: var(--pri); }
+  button { font: inherit; padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; cursor: pointer; }
+  button.primary { background: var(--pri); color: #fff; border-color: var(--pri); }
+  button.danger { color: var(--bad); border-color: #fca5a5; }
+  fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 12px; padding: 8px 12px 12px; }
+  legend { font-weight: 600; padding: 0 4px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 12px; }
+  label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: #374151; }
+  label.row { flex-direction: row; align-items: center; gap: 6px; font-size: 14px; }
+  input, select { font: inherit; padding: 5px 6px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; }
+  input.warn { border-color: var(--bad); background: #fef2f2; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .msg { padding: 8px 12px; border-radius: 6px; margin: 0 0 12px; }
+  .msg.ok { background: #dcfce7; } .msg.bad { background: #fee2e2; } .msg.warn { background: #fef9c3; }
+  .subs { display: flex; gap: 10px; flex-wrap: wrap; }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>転生選手の編集</h1>
+  <span id="count"></span>
+</header>
+<main>
+  <section class="card list">
+    <p><button class="primary" id="add">＋ 新しい選手</button></p>
+    <div id="list"></div>
+  </section>
+  <section class="card">
+    <div id="msg"></div>
+    <div id="form"></div>
+    <fieldset>
+      <legend>保存</legend>
+      <p class="muted">全員分を _private/reborn.json に書き、家族の合言葉で暗号化し直します（1 つ前の版は _private/reborn.bak.json に残ります）。
+        合言葉が今の暗号化ファイルと合わないときは保存しません。ゲームに出すには、そのあと push します。</p>
+      <div class="bar">
+        <input type="password" id="pass" placeholder="家族の合言葉" autocomplete="off">
+        <button class="primary" id="save">保存して暗号化</button>
+      </div>
+    </fieldset>
+  </section>
+</main>
+<script>
+'use strict';
+const TEAMS = ['東京', '大阪', '名古屋', '横浜', '広島', '京都', '福岡', '札幌', '仙台', '千葉', '埼玉', '神戸'];
+const KINDS = ['高校', '大学', '社会人', '高卒社会人'];
+const TYPES = ['早熟', '普通', '晩成', '超晩成'];
+const POS = ['捕', '一', '二', '三', '遊', '外', '指'];
+const SUBS = ['捕', '一', '二', '三', '遊', '外'];
+const BAT = [['meet', 'ミート'], ['power', 'パワー'], ['speed', '走力'], ['arm', '肩力'], ['field', '守備力']];
+const PIT = [['velo', '球速（km/h）'], ['control', 'コントロール'], ['stamina', 'スタミナ'], ['breaking', '変化球']];
+const APT = [['', '役割から'], ['0', '△'], ['1', '〇'], ['2', '◎']];
+const EYE = [['', 'なし'], ['-1', '早打ち'], ['1', '○'], ['2', '◎']];
+
+let players = [], cur = -1, dirty = false;
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const kindOf = p => p.twoWay ? 'two' : p.isP ? 'P' : 'B';
+const showBat = p => kindOf(p) !== 'P', showPit = p => kindOf(p) !== 'B';
+
+function say(text, cls) { $('msg').innerHTML = text ? `<div class="msg ${cls}">${esc(text)}</div>` : ''; }
+
+// 能力の注意：ピークは 100 以下（球速は 170km 以下）で作る
+function warnings(p) {
+  const w = [];
+  if (!p.name) w.push('名前が空です');
+  if (!p.foreign && !p.kind) w.push('区分を選んでください');
+  const keys = [...(showBat(p) ? BAT : []), ...(showPit(p) ? PIT : [])];
+  keys.forEach(([k, l]) => {
+    const v = p.peak && p.peak[k];
+    if (v == null || v === '') w.push(`${l}が空です`);
+    else if (k === 'velo' ? v > 170 : v > 100) w.push(`${l}が${k === 'velo' ? '170km' : '100'}を超えています（${v}）`);
+  });
+  return w;
+}
+
+function renderList() {
+  $('count').textContent = `${players.length} 人${dirty ? '（未保存の変更あり）' : ''}`;
+  $('list').innerHTML = players.map((p, i) => {
+    const pos = p.twoWay ? '二刀流' : p.isP ? (p.role || '投手') : p.pos;
+    const bad = warnings(p).length ? ' ⚠' : '';
+    return `<button data-i="${i}" class="${i === cur ? 'on' : ''}">${esc(p.name || '（名前なし）')}${bad}<br><span class="muted">${esc(p.foreign ? '外国人' : p.kind || '')}・${esc(pos || '')}・${esc(p.team || '')}</span></button>`;
+  }).join('') || '<p class="muted">まだいません</p>';
+}
+
+function sel(name, opts, val) {
+  return `<select data-k="${name}">${opts.map(o => { const [v, l] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(v)}" ${String(val ?? '') === String(v) ? 'selected' : ''}>${esc(l)}</option>`; }).join('')}</select>`;
+}
+function num(name, val, attrs = '') { return `<input type="number" data-k="${name}" value="${esc(val ?? '')}" ${attrs}>`; }
+
+function renderForm() {
+  if (cur < 0) { $('form').innerHTML = '<p class="muted">左の一覧から選ぶか、「新しい選手」を押してください。</p>'; return; }
+  const p = players[cur], k = kindOf(p), pk = p.peak || {};
+  const peakIn = ([key, l]) => {
+    const v = pk[key], over = v !== '' && v != null && (key === 'velo' ? v > 170 : v > 100);
+    return `<label>${l}<input type="number" data-peak="${key}" value="${esc(v ?? '')}" class="${over ? 'warn' : ''}" ${key === 'velo' ? 'min="120" max="170"' : 'min="1" max="100"'}></label>`;
+  };
+  const w = warnings(p);
+  $('form').innerHTML = `
+  ${w.length ? `<div class="msg warn">${w.map(esc).join('<br>')}</div>` : ''}
+  <fieldset><legend>基本</legend><div class="grid">
+    <label>名前<input data-k="name" value="${esc(p.name)}"></label>
+    <label>id（英数字。重ならないように）<input data-k="id" value="${esc(p.id)}"></label>
+    <label>元の所属（出身地になる）${sel('team', [['', '（なし）'], ...TEAMS], p.team)}</label>
+    <label>種類${sel('kind3', [['B', '野手'], ['P', '投手'], ['two', '二刀流']], k)}</label>
+    <label class="row"><input type="checkbox" data-k="foreign" ${p.foreign ? 'checked' : ''}> 外国人</label>
+    ${p.foreign ? `<label>来日の年齢（空なら 26〜30）${num('age', p.age, 'min="18" max="40"')}</label>`
+      : `<label>区分（ドラフトのとき）${sel('kind', [['', '選ぶ'], ...KINDS], p.kind)}</label>`}
+  </div>
+  <p><label>説明（転生のニュースに出る）<input data-k="note" value="${esc(p.note)}" style="width:100%"></label></p></fieldset>
+
+  ${showBat(p) ? `<fieldset><legend>打つ・守る</legend><div class="grid">
+    <label>${k === 'two' ? '野手のときの守備位置' : '守備位置'}${sel(k === 'two' ? 'pos2' : 'pos', POS, k === 'two' ? p.pos2 : p.pos)}</label>
+    <label>弾道${sel('traj', [['', 'おまかせ'], '1', '2', '3', '4'], p.traj)}</label>
+    <label>選球眼${sel('eye', EYE, p.eye)}</label>
+    <label>盗塁の積極性（1 がふつう、1.3 以上で積極的）${num('steal', p.steal, 'step="0.1" min="0.4" max="1.8"')}</label>
+  </div>
+  ${k === 'B' ? `<p class="muted">守れるほかの位置</p><div class="subs">${SUBS.filter(s => s !== p.pos).map(s => `<label class="row"><input type="checkbox" data-sub="${s}" ${(p.subs || []).includes(s) ? 'checked' : ''}> ${s}</label>`).join('')}</div>` : ''}
+  <p class="muted">ピーク時の能力（100 以下で）</p><div class="grid">${BAT.map(peakIn).join('')}</div></fieldset>` : ''}
+
+  ${showPit(p) ? `<fieldset><legend>投げる</legend><div class="grid">
+    <label>役割${sel('role', ['先発', '中継'], p.role || '先発')}</label>
+    <label>先発の向き${sel('apt_sp', APT, p.apt ? p.apt.sp : '')}</label>
+    <label>中継ぎの向き${sel('apt_rp', APT, p.apt ? p.apt.rp : '')}</label>
+  </div>
+  <p class="muted">ピーク時の能力（100 以下で。球速は km/h で 170 まで）</p><div class="grid">${PIT.map(peakIn).join('')}</div></fieldset>` : ''}
+
+  <fieldset><legend>成長と出やすさ</legend><div class="grid">
+    <label>成長型${sel('type', TYPES, p.type || '晩成')}</label>
+    <label>この年齢までは引退しない（空なら ふつう）${num('retireAge', p.retireAge, 'min="30" max="50"')}</label>
+    <label>入団時の能力（ピークの何割か。空なら区分ごと）${num('start', p.start, 'step="0.01" min="0.3" max="1"')}</label>
+    <label>選ばれやすさ（ふつう 1）${num('weight', p.weight ?? 1, 'step="0.1" min="0.1" max="5"')}</label>
+  </div></fieldset>
+  <p class="bar"><button class="danger" id="del">この選手を消す</button></p>`;
+}
+
+// 種類に合わない項目を消して、データの形をそろえる
+function tidy(p) {
+  const k = kindOf(p);
+  const keep = [...(k !== 'P' ? BAT : []), ...(k !== 'B' ? PIT : [])].map(x => x[0]);
+  p.peak = Object.fromEntries(keep.filter(x => p.peak && p.peak[x] !== '' && p.peak[x] != null).map(x => [x, p.peak[x]]));
+  if (k === 'B') { delete p.role; delete p.apt; delete p.pos2; delete p.twoWay; p.isP = false; if (!p.pos || p.pos === '投') p.pos = '外'; }
+  else { p.pos = '投'; p.isP = true; if (!p.role) p.role = '先発'; }
+  if (k === 'P') { ['traj', 'eye', 'steal', 'subs', 'pos2', 'twoWay'].forEach(x => delete p[x]); }
+  if (k === 'two') { p.twoWay = true; if (!p.pos2) p.pos2 = '指'; p.subs = p.subs || []; }
+  if (p.foreign) delete p.kind; else delete p.age;
+  if (p.type === '晩成') delete p.type;
+  Object.keys(p).forEach(x => { if (p[x] === '' || p[x] == null) delete p[x]; });
+  if (p.apt && p.apt.sp == null && p.apt.rp == null) delete p.apt;
+  return p;
+}
+
+function onInput(e) {
+  const t = e.target, p = players[cur];
+  if (!p) return;
+  const numKeys = ['traj', 'eye', 'steal', 'age', 'retireAge', 'start', 'weight'];
+  if (t.dataset.peak) { p.peak = p.peak || {}; p.peak[t.dataset.peak] = t.value === '' ? '' : +t.value; }
+  else if (t.dataset.sub) { const s = new Set(p.subs || []); t.checked ? s.add(t.dataset.sub) : s.delete(t.dataset.sub); p.subs = SUBS.filter(x => s.has(x)); }
+  else if (t.dataset.k === 'kind3') { p.isP = t.value !== 'B'; p.twoWay = t.value === 'two'; tidy(p); }
+  else if (t.dataset.k === 'foreign') p.foreign = t.checked || undefined;
+  else if (t.dataset.k === 'apt_sp' || t.dataset.k === 'apt_rp') {
+    p.apt = p.apt || {};
+    const side = t.dataset.k.slice(4);
+    if (t.value === '') delete p.apt[side]; else p.apt[side] = +t.value;
+    if (p.apt.sp == null || p.apt.rp == null) { if (p.apt.sp == null && p.apt.rp == null) delete p.apt; }
+  } else if (t.dataset.k) p[t.dataset.k] = numKeys.includes(t.dataset.k) ? (t.value === '' ? '' : +t.value) : t.value;
+  dirty = true;
+  // 文字を打っている間は描き直さない（打ちにくくなるので）。選ぶ・切り替える項目だけ描き直す
+  if (e.type === 'change' && (t.tagName === 'SELECT' || t.type === 'checkbox')) renderForm();
+  renderList();
+}
+
+$('form').addEventListener('input', onInput);
+$('form').addEventListener('change', e => { onInput(e); if (e.target.type === 'number') renderForm(); });
+$('form').addEventListener('click', e => {
+  if (e.target.id !== 'del') return;
+  if (!confirm(`${players[cur].name || 'この選手'}を消しますか？（保存するまでは元に戻せます：画面を読み込み直す）`)) return;
+  players.splice(cur, 1); cur = -1; dirty = true; renderList(); renderForm();
+});
+$('list').addEventListener('click', e => {
+  const b = e.target.closest('button[data-i]');
+  if (!b) return;
+  cur = +b.dataset.i; renderList(); renderForm(); say('');
+});
+$('add').onclick = () => {
+  players.push({ id: 'r' + Date.now().toString(36), name: '', team: '', note: '', isP: false, pos: '外', subs: [], kind: '', peak: {}, weight: 1 });
+  cur = players.length - 1; dirty = true; renderList(); renderForm();
+};
+$('save').onclick = async () => {
+  const bad = players.map(p => [p, warnings(p)]).filter(([, w]) => w.length);
+  if (bad.length && !confirm(`注意のある選手が ${bad.length} 人います（${bad.map(([p]) => p.name || '名前なし').join('・')}）。このまま保存しますか？`)) return;
+  if (!$('pass').value) { say('家族の合言葉を入れてください', 'bad'); return; }
+  players.forEach(tidy);
+  $('save').disabled = true; say('保存しています…（暗号化に数秒かかります）', 'warn');
+  try {
+    const r = await fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ players, pass: $('pass').value }) });
+    const j = await r.json();
+    say(j.msg, r.ok ? 'ok' : 'bad');
+    if (r.ok) { dirty = false; $('pass').value = ''; }
+  } catch (e) { say('保存できませんでした。黒い画面（道具）が動いているか確かめてください', 'bad'); }
+  $('save').disabled = false; renderList(); renderForm();
+};
+window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+fetch('/api/list').then(r => r.json()).then(list => { players = list; renderList(); renderForm(); })
+  .catch(() => say('リストを読めませんでした', 'bad'));
+</script>
+</body>
+</html>
