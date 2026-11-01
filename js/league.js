@@ -34,7 +34,7 @@ function newGame(myTeamId, games) {
       players: [], active: [], lineup: [], rotation: [], closer: null, setup: null, rotIdx: 0,
       w: 0, l: 0, d: 0, rs: 0, ra: 0,
       money: 150000 + U.rint(0, 10) * 5000, pop: U.rint(40, 60), goods: [], nextGoodsId: 1,
-      fac: { train: 1, stadium: 1, scout: 1, medical: 1 }, intensity: '普通', fin: newFin(),
+      fac: { train: 1, stadium: 1, scout: 1, medical: 1, dorm: 1, gym: 1, analysis: 1 }, promoUsed: [], intensity: '普通', fin: newFin(),
     };
     if (i !== myTeamId) t.fac.train = U.rint(1, 3);
     S.teams.push(t);
@@ -383,6 +383,7 @@ function startSeason() {
     t.rotIdx = 0;
     t.fin = newFin();
     t.goods.forEach(g => { g.season = 0; });
+    t.promoUsed = [];
     const sponsor = Math.round((t.pop * 800 + 20000) * S.games / 143);
     t.money += sponsor; t.fin.sponsor += sponsor;
     if (t.id !== S.myTeamId) { autoActive(t); autoLineup(t); autoRotation(t); }
@@ -511,7 +512,8 @@ function weeklyTraining() {
     teamPlayers(t).forEach(p => {
       if (p.inj) return;
       const farm = t.active && !isActive(t, p) && p.age <= 25 ? 1.15 : 1; // 二軍の若手は二軍戦で経験を積む
-      trainPlayer(p, mult * farm);
+      const dorm = p.age <= 25 ? 1 + (facLv(t, 'dorm') - 1) * DORM_GROW : 1; // 寮
+      trainPlayer(p, mult * farm * dorm);
       if (U.chance(it.inj * (1.2 - t.fac.medical * 0.1))) injure(p, U.rint(5, 20));
       if (it.cond && U.chance(0.3)) p.cond = U.clamp(p.cond + it.cond, 1, 5);
     });
@@ -883,15 +885,21 @@ function milestoneNews(p) {
 function draftLabel(p) { return p.drafted ? `${p.drafted.year}年ドラフト${p.drafted.round}位（${p.drafted.team}）` : ''; }
 
 // 引退するときに、名を残す選手の記録をとっておく（選手そのものは消える）
+// 殿堂入りの点：いちばん節目に近い記録（節目で 1）に、MVP とタイトルの数を足す。25 年で 40 人ほど（年に 1〜2 人）になるように測った
+function meritPts(c, titles) {
+  const mvp = titles.filter(t => t.title === 'MVP').length;
+  return Math.max(c.h / byGames(2000), c.hr / byGames(400), c.w / byGames(200), c.sv / byGames(250), c.pk / byGames(2500))
+    + mvp * 0.15 + (titles.length - mvp) * 0.05;
+}
+// 功績（0〜1。1 で殿堂入りくらい）
+function meritOf(p) { return U.clamp(meritPts(careerTotal(p), titlesOf(p.id)), 0, 1); }
+
 function retireRecord(p) {
   if (!S.retired) S.retired = [];
   const c = careerTotal(p);
   const titles = titlesOf(p.id);
   const ms = MILESTONES.filter(m => c[m.k] >= byGames(m.n)).map(m => m.label);
-  const mvp = titles.filter(t => t.title === 'MVP').length;
-  // 殿堂入りの点：いちばん節目に近い記録（節目で 1）に、MVP とタイトルの数を足す。25 年で 40 人ほど（年に 1〜2 人）になるように測った
-  const pts = Math.max(c.h / byGames(2000), c.hr / byGames(400), c.w / byGames(200), c.sv / byGames(250), c.pk / byGames(2500))
-    + mvp * 0.15 + (titles.length - mvp) * 0.05;
+  const pts = meritPts(c, titles);
   const hof = ms.length > 0 || pts >= 1;
   const notable = hof || titles.length > 0 || pts >= 0.6;
   if (!notable) return;
@@ -1026,8 +1034,11 @@ function renewSalary(p) {
     if (seasonWins(p) < 0.5) now = Math.min(old, target); // 出ても働けなかった人は上げない
     else now = target > old ? Math.min(old + (target - old) * 0.6, old * 3 + 2000) : old - (old - target) * 0.5;
   }
-  // 減額制限（1 億円以下は 25%、1 億円を超えると 40% まで）
-  now = Math.max(now, old * (old > 10000 ? 0.6 : 0.75));
+  // 功績のある選手（通算の記録・タイトル）は下げ幅をゆるめる
+  const m = meritOf(p);
+  if (now < old) now = old - (old - now) * (1 - m * MERIT_SOFT);
+  // 減額制限（1 億円以下は 25%、1 億円を超えると 40% まで。功績があるほどゆるい）
+  now = Math.max(now, old * ((old > 10000 ? 0.6 : 0.75) + m * MERIT_FLOOR));
   return Math.max(MIN_SALARY, Math.round(now / 10) * 10);
 }
 
@@ -1883,14 +1894,36 @@ function releasePlayer(pid) {
   return null;
 }
 
+function facLv(t, k) { return t.fac[k] || 1; }
+
 function upgradeFacility(k) {
   const t = myTeam();
-  const lv = t.fac[k];
+  const lv = facLv(t, k);
   if (lv >= FAC_MAX) return;
-  const cost = facilityCost(lv);
+  const cost = facilityCost(lv, k);
+  if (t.money < cost) return;
   t.money -= cost; t.fin.invest += cost;
-  t.fac[k]++;
+  t.fac[k] = lv + 1;
   addNews(`${FACILITIES[k].name}をレベル${t.fac[k]}に改修しました（${U.money(cost)}）。`, 'good');
+}
+
+// ---------- 宣伝 ----------
+// 人気が高いほど上がりにくい
+function promoGain(t, k) { return PROMOS[k].pop * U.clamp((100 - t.pop) / 50, 0.2, 1); }
+
+function runPromo(k) {
+  const t = myTeam(), pr = PROMOS[k];
+  if (!pr) return 'その宣伝はありません。';
+  if (S.phase !== 'season') return '宣伝はシーズン中にしかできません。';
+  if (t.promoUsed.includes(k)) return `${pr.name}は今季もう行いました。`;
+  if (t.pop >= 100) return '人気はもう最高です。';
+  if (t.money < pr.cost) return 'お金が足りません。';
+  const g = promoGain(t, k);
+  t.money -= pr.cost; t.fin.invest += pr.cost;
+  t.pop = U.clamp(t.pop + g, 0, 100);
+  t.promoUsed.push(k);
+  addNews(`${pr.name}を行いました（${U.money(pr.cost)}）。人気が ${g.toFixed(1)} 上がった！`, 'good');
+  return null;
 }
 
 // ---------- グッズ ----------
@@ -1974,6 +2007,7 @@ function migrate() {
     if (t.setup === undefined) t.setup = null;
     delete t.ticket;
   });
+  S.teams.forEach(t => { ['dorm', 'gym', 'analysis'].forEach(k => { if (!t.fac[k]) t.fac[k] = 1; }); if (!t.promoUsed) t.promoUsed = []; });
   if (!S.popups) S.popups = [];
   if (!S.freeAgents) S.freeAgents = [];
   if (!S.watch) S.watch = [];

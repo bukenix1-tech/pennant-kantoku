@@ -152,7 +152,16 @@ const ACTIONS = {
     [t.lineup[i], t.lineup[j]] = [t.lineup[j], t.lineup[i]];
   },
   intensity(el) { myTeam().intensity = el.dataset.k; },
-  upgrade(el) { upgradeFacility(el.dataset.k); },
+  upgrade(el) {
+    const k = el.dataset.k, cost = facilityCost(facLv(myTeam(), k), k);
+    if (!confirm(`${FACILITIES[k].name}を ${U.money(cost)} で改修しますか？`)) return 'keep';
+    upgradeFacility(k);
+  },
+  promo(el) {
+    const pr = PROMOS[el.dataset.k];
+    if (!confirm(`${pr.name}を ${U.money(pr.cost)} で行いますか？`)) return 'keep';
+    const err = runPromo(el.dataset.k); UI.toast = err || `${pr.name}を行いました！`;
+  },
   devGoods() { const err = developGoods(UI.goodsType, UI.goodsPid); UI.toast = err || '開発を始めました！'; },
   stopGoods(el) {
     if (!confirm('このグッズの販売を終了しますか？')) return 'keep';

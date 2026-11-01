@@ -971,9 +971,9 @@ function renderMoney() {
   const f = t.fin;
   const inc = f.gate + f.food + (f.tv || 0) + f.goods + f.sponsor + f.other, exp = f.salary + f.ops + f.invest;
   const facs = Object.keys(FACILITIES).map(k => {
-    const lv = t.fac[k];
-    const cost = facilityCost(lv);
-    return `<tr><td class="l"><b>${FACILITIES[k].name}</b><br><span class="muted">${FACILITIES[k].desc}</span></td><td class="nowrap">${'■'.repeat(lv)}${'□'.repeat(FAC_MAX - lv)} Lv${lv}<br>
+    const lv = facLv(t, k);
+    const cost = facilityCost(lv, k);
+    return `<tr><td class="l" style="white-space:normal"><b>${FACILITIES[k].name}</b><br><span class="muted">${FACILITIES[k].desc}</span></td><td class="nowrap">${'■'.repeat(lv)}${'□'.repeat(FAC_MAX - lv)} Lv${lv}<br>
       ${lv < FAC_MAX ? `<button class="sm" data-act="upgrade" data-k="${k}" ${t.money < cost ? 'disabled' : ''}>改修 ${U.money(cost)}</button>` : '最大'}</td></tr>`;
   }).join('');
   const fc = (S.foreignCands || []).map(id => S.players[id]).filter(Boolean);
@@ -1009,6 +1009,15 @@ function renderMoney() {
       <p class="muted">入場料はほぼ決まった収入です。ファンが多い（人気が高い）と少しだけ増えます。大きく稼ぐならグッズを。</p>
     </section>
   </div>
+  <section class="card"><h2>宣伝</h2>
+    <p class="muted">お金を払って人気を上げます。人気が上がると、入場料・スポンサー・グッズの収入が増えます。どれも 1 シーズンに 1 回まで。人気が高いほど上がりにくくなります。</p>
+    <table class="tbl">${Object.keys(PROMOS).map(k => {
+      const pr = PROMOS[k], used = (t.promoUsed || []).includes(k);
+      return `<tr><td class="l" style="white-space:normal"><b>${pr.name}</b><br><span class="muted">${pr.desc}・人気 +${promoGain(t, k).toFixed(1)}</span></td>
+        <td class="nowrap">${used ? '今季は済み' : `<button class="sm" data-act="promo" data-k="${k}" ${t.money < pr.cost || S.phase !== 'season' || t.pop >= 100 ? 'disabled' : ''}>${U.money(pr.cost)}</button>`}</td></tr>`;
+    }).join('')}</table>
+    ${S.phase !== 'season' ? '<p class="muted">宣伝はシーズン中にしかできません。</p>' : ''}
+  </section>
   ${renderGoods(t)}
   <section class="card"><h2>施設</h2><table class="tbl">${facs}</table></section>
   <section class="card"><h2>助っ人外国人</h2>

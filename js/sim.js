@@ -46,12 +46,14 @@ function fatigueMul(rec) {
   return over > 0 ? Math.max(0.75, 1 - over * 0.004) : 1;
 }
 
-function doPA(b, rec, fld) {
+function doPA(b, rec, fld, bat) {
   const p = rec.p;
   const cb = COND_MUL[b.cond], cp = COND_MUL[p.cond] * fatigueMul(rec) * aptMul(p, rec.start);
-  const meet = b.a.meet * cb, pow = b.a.power * cb, spd = b.a.speed;
-  const stuff = (p.a.velo * 0.45 + p.a.breaking * 0.55) * cp;
-  const ctrl = p.a.control * cp;
+  // データ分析室：打つ側は打者が、守る側は投手が少し有利になる
+  const anB = bat ? (facLv(bat.team, 'analysis') - 1) * ANALYSIS_BONUS : 0, anP = (facLv(fld.team, 'analysis') - 1) * ANALYSIS_BONUS;
+  const meet = b.a.meet * cb + anB, pow = b.a.power * cb + anB, spd = b.a.speed;
+  const stuff = (p.a.velo * 0.45 + p.a.breaking * 0.55) * cp + anP;
+  const ctrl = p.a.control * cp + anP;
   const eye = eyeOf(b); // 選球眼：見極めのいい打者ほど四球が多く、三振が少ない
   const pBB = U.clamp((0.102 + (50 - ctrl) * 0.0013) * EYE_BB[eye], 0.02, 0.25);
   const pK = U.clamp((0.179 + (stuff - 50) * 0.0035 - (meet - 50) * 0.003) * EYE_K[eye], 0.05, 0.42);
@@ -158,7 +160,7 @@ function halfInning(g, bat, fld, inning) {
     const b = slot.p;
     const before = g.score[bat.idx] - g.score[fld.idx];
     const runsBefore = g.score[bat.idx];
-    const res = doPA(b, rec, fld);
+    const res = doPA(b, rec, fld, bat);
     rec.pc += res.pc;
     b.stats.pa++;
     const runner = { p: b, rec, slot };

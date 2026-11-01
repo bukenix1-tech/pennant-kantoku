@@ -134,10 +134,23 @@ const FACILITIES = {
   stadium: { name: '球場',     desc: '入れられるお客さんが増える' },
   scout:   { name: 'スカウト', desc: 'ドラフト候補の能力の見立てが外れにくくなる' },
   medical: { name: '医療施設', desc: 'ケガが早く治り、ケガをしにくくなる' },
+  dorm:     { name: '寮',               desc: '25歳以下の若手の伸びが良くなる', cost: 0.5 },
+  gym:      { name: 'トレーニングルーム', desc: 'ベテランの衰えがゆるやかになる', cost: 0.5 },
+  analysis: { name: 'データ分析室',     desc: '相手の研究で、打者も投手も試合で少し有利になる', cost: 0.5 },
 };
 const FAC_MAX = 5;
-// 次の段階に上げる費用（万円）
-function facilityCost(level) { return level * 120000; }
+// 次の段階に上げる費用（万円）。cost のある施設はその割合
+function facilityCost(level, k) { return Math.round(level * 120000 * ((FACILITIES[k] && FACILITIES[k].cost) || 1)); }
+// 施設の効き目（レベル 1 で効き目なし。1 つ上がるごと）
+const DORM_GROW = 0.06, GYM_SLOW = 0.08, ANALYSIS_BONUS = 0.6;
+// 功績のある選手の減俸をゆるめる：功績 1（殿堂入りくらい）で、下げ幅を MERIT_SOFT だけ減らし、減額制限を MERIT_FLOOR だけ上げる
+const MERIT_SOFT = 0.5, MERIT_FLOOR = 0.15;
+// 宣伝：お金を払って人気を上げる。どれも 1 シーズンに 1 回まで。人気が高いほど上がりにくい
+const PROMOS = {
+  web:   { name: 'ネット広告',         cost: 8000,  pop: 1, desc: '手軽に名前を広める' },
+  event: { name: 'ファン感謝イベント', cost: 20000, pop: 3, desc: '球場でファンと選手が交流する' },
+  cm:    { name: 'テレビCM',           cost: 50000, pop: 6, desc: '全国に流して一気に知ってもらう' },
+};
 
 // チケット代は固定（円）。入場料はファンの数で少しだけ変わる
 const TICKET_PRICE = 4000;
