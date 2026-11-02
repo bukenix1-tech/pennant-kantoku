@@ -7,9 +7,15 @@ let S = null; // いまのゲームの状態（まるごと保存する）
 function myTeam() { return S.teams[S.myTeamId]; }
 function teamPlayers(t) { return t.players.map(id => S.players[id]); }
 function addNews(text, kind) {
-  S.news.unshift({ y: S.year, d: curDateLabel(), text, kind: kind || '' });
+  const n = { y: S.year, d: curDateLabel(), text, kind: kind || '' };
+  S.news.unshift(n);
   if (S.news.length > 80) S.news.length = 80;
+  return n;
 }
+
+// 日本シリーズ・国際大会の決勝は、試合を見るまで結果を隠す（人の言葉 2026-11-02「結果が分からないから追うのが楽しい」）
+function pbpUnseen(i) { const g = S.pbp && S.pbp[i]; return !!g && !g.seen; }
+function pbpUnseenKind(kind) { return (S.pbp || []).some(g => g.kind === kind && !g.seen); }
 
 function dateLabel(e) { return `${e.m}/${e.d}(${WEEKDAYS[e.w]})`; }
 function curDateLabel() {
@@ -887,7 +893,9 @@ function offIntl() {
   if (!S.intlHist) S.intlHist = [];
   S.intlHist.unshift({ y: S.year, champ: champ.name, jp: jpResult, w: U.sum(reached, g => (g.away === jpName ? g.score[0] > g.score[1] : g.score[1] > g.score[0]) ? 1 : 0), l: U.sum(reached, g => (g.away === jpName ? g.score[0] < g.score[1] : g.score[1] < g.score[0]) ? 1 : 0), mvp: mvp ? [mvp.name, mvp.team] : null });
   const mine = japan.filter(x => S.players[x.pid].teamId === S.myTeamId).map(x => x.name);
-  addNews(`国際大会：${champ.name}が優勝！ 日本は${jpResult}。${mvp ? `MVP は${mvp.name}（${mvp.team}）。` : ''}`, champ.jp ? 'big' : '');
+  const fi = (S.pbp || []).findIndex(g => g.kind === 'intl');
+  const n = addNews(`国際大会：${champ.name}が優勝！ 日本は${jpResult}。${mvp ? `MVP は${mvp.name}（${mvp.team}）。` : ''}`, champ.jp ? 'big' : '');
+  if (fi >= 0) n.hide = fi;
   if (mine.length) addNews(`日本代表に${mine.join('・')}が選ばれていました。`, 'good');
   S.off.step = 'intl';
 }
@@ -1028,7 +1036,7 @@ function advancePost() {
     const topScore = m.home === s.top ? res.score[1] : res.score[0];
     const lowScore = m.home === s.top ? res.score[0] : res.score[1];
     if (topScore > lowScore) s.wTop++; else if (lowScore > topScore) s.wLow++;
-    s.games.push({ home: m.home, away: m.away, score: res.score });
+    s.games.push({ home: m.home, away: m.away, score: res.score, ...(res.pbp ? { pbi: S.pbp.length - 1 } : {}) });
     if (s.wTop >= rule.need) finishSeries(s, s.top);
     else if (s.wLow >= rule.need) finishSeries(s, s.low);
     else if (s.stage !== 'js' && s.games.length >= rule.max) finishSeries(s, s.top); // 決まらなければ上位が勝ち抜け
@@ -1044,7 +1052,9 @@ function finishSeries(s, winner) {
   const w = S.teams[winner], l = S.teams[winner === s.top ? s.low : s.top];
   const mine = winner === S.myTeamId || l.id === S.myTeamId;
   const upset = s.stage !== 'js' && s.top !== winner ? '・下剋上' : '';
-  addNews(`${seriesLabel(s)}：${w.name}が${l.short}を破りました（${Math.max(s.wTop, s.wLow)}勝${Math.min(s.wTop, s.wLow)}敗${upset}）`, mine ? (winner === S.myTeamId ? 'good' : 'bad') : '');
+  const n = addNews(`${seriesLabel(s)}：${w.name}が${l.short}を破りました（${Math.max(s.wTop, s.wLow)}勝${Math.min(s.wTop, s.wLow)}敗${upset}）`, mine ? (winner === S.myTeamId ? 'good' : 'bad') : '');
+  const g = s.games[s.games.length - 1];
+  if (g && g.pbi != null) n.hide = g.pbi;
 }
 
 function nextStage() {
@@ -1085,7 +1095,9 @@ function endPost(jpId) {
   if (jpId === my.id) prize += 50000;
   if (prize) { my.money += prize; my.fin.other += prize; }
   S.history.unshift({ year: S.year, lg: my.lg, lgChamp: S.teams[P.champs[my.lg]].name, jp: jp.name, rank, post, w: my.w, l: my.l, d: my.d });
-  addNews(`日本一は${jp.name}！`, 'big');
+  const jsLast = P.series.find(s => s.stage === 'js').games.slice(-1)[0];
+  const n = addNews(`日本一は${jp.name}！`, 'big');
+  if (jsLast && jsLast.pbi != null) n.hide = jsLast.pbi;
   if (S.standHist && S.standHist[0] && S.standHist[0].year === S.year) S.standHist[0].jp = jp.name;
   // 成績を年度別に残す（FA で球団が変わる前に）
   Object.values(S.players).forEach(p => {

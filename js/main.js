@@ -48,6 +48,10 @@ const ACTIONS = {
     } else if (n === 'postall') {
       while (advancePost());
     }
+    if (n === 'post1' || n === 'postall') {
+      const i = (S.pbp || []).findIndex(g => g.kind === 'js' && !g.seen);
+      if (i >= 0) UI.autoPbp = i;
+    }
     if (before !== S.phase) { UI.tab = S.phase === 'post' ? 'post' : S.phase === 'off' ? 'off' : 'home'; window.scrollTo(0, 0); }
     // シーズンが終わったら、セーブをファイルに書き出すかを聞く
     if (before !== 'off' && S.phase === 'off' && !backupAskOff()) UI.backupAsk = true;
@@ -57,6 +61,10 @@ const ACTIONS = {
   player(el) { openModal(renderPlayerModal(S.players[+el.dataset.pid])); return 'keep'; },
   pbp(el) { UI.pbpView = { i: +el.dataset.i, step: 0 }; openModal(renderPbp()); return 'keep'; },
   pbpGo(el) { pbpGo(el.dataset.to); openModal(renderPbp()); return 'keep'; },
+  pbpSkip(el) {
+    if (!confirm('試合を見ずに、結果を出しますか？')) return 'keep';
+    (S.pbp || []).forEach(g => { if (g.kind === el.dataset.kind) g.seen = true; });
+  },
   release(el) {
     const p = S.players[+el.dataset.pid];
     if (!confirm(`${p.name}を自由契約にしますか？（元に戻せません）`)) return 'keep';
@@ -412,6 +420,7 @@ function showPopups() {
     saveGame();
     return;
   }
+  if (UI.autoPbp != null) { UI.pbpView = { i: UI.autoPbp, step: 0 }; UI.autoPbp = null; openModal(renderPbp()); return; }
   if (UI.backupAsk) { UI.backupAsk = false; openModal(renderBackupAsk()); }
 }
 

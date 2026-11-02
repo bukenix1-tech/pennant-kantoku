@@ -308,8 +308,9 @@ function renderHome() {
 }
 
 function newsList(n) {
-  if (!S.news.length) return '<p class="muted">まだありません。</p>';
-  return `<ul class="news">${S.news.slice(0, n).map(x => `<li class="${x.kind}"><span class="muted">${x.y} ${typeof x.d === 'number' ? `第${x.d}戦` : x.d}</span> ${h(x.text)}</li>`).join('')}</ul>`;
+  const list = S.news.filter(x => x.hide == null || !pbpUnseen(x.hide));
+  if (!list.length) return '<p class="muted">まだありません。</p>';
+  return `<ul class="news">${list.slice(0, n).map(x => `<li class="${x.kind}"><span class="muted">${x.y} ${typeof x.d === 'number' ? `第${x.d}戦` : x.d}</span> ${h(x.text)}</li>`).join('')}</ul>`;
 }
 
 function boxScore(g) {
@@ -825,11 +826,11 @@ function renderStandHist() {
   if (!H.some(x => x.year === UI.histYear)) UI.histYear = H[0].year;
   const y = H.find(x => x.year === UI.histYear);
   const table = rows => `<div class="scroll"><table class="tbl"><tr><th>順</th><th>球団</th><th>勝</th><th>敗</th><th>分</th><th>勝率</th><th>差</th><th>得点</th><th>失点</th></tr>
-    ${rows.map((r, i) => `<tr class="${r.id === S.myTeamId ? 'me' : ''}"><td>${i + 1}</td><td class="l"><span class="chip" style="background:${r.color}">${h(r.short)}</span> ${h(r.name)}${y.jp === r.name ? ' <span class="tag awaken-tag">日本一</span>' : ''}</td>
+    ${rows.map((r, i) => `<tr class="${r.id === S.myTeamId ? 'me' : ''}"><td>${i + 1}</td><td class="l"><span class="chip" style="background:${r.color}">${h(r.short)}</span> ${h(r.name)}${y.jp === r.name && !(y.year === S.year && pbpUnseenKind('js')) ? ' <span class="tag awaken-tag">日本一</span>' : ''}</td>
       <td>${r.w}</td><td>${r.l}</td><td>${r.d}</td><td>${(r.w + r.l ? r.w / (r.w + r.l) : 0).toFixed(3).replace(/^0/, '')}</td><td>${i ? r.gb.toFixed(1) : '-'}</td><td>${r.rs != null ? r.rs : '-'}</td><td>${r.ra != null ? r.ra : '-'}</td></tr>`).join('')}</table></div>`;
   return `<section class="card"><div class="row"><h2>過去の順位</h2>
     <select data-chg="histYear">${H.map(x => `<option value="${x.year}" ${x.year === UI.histYear ? 'selected' : ''}>${x.year}年</option>`).join('')}</select></div>
-    <p>${y.year}年（${y.games}試合）${y.jp ? ` ・ 日本一：<b>${h(y.jp)}</b>` : ''}</p>
+    <p>${y.year}年（${y.games}試合）${y.jp && !(y.year === S.year && pbpUnseenKind('js')) ? ` ・ 日本一：<b>${h(y.jp)}</b>` : ''}</p>
     <div class="grid2">${LEAGUES.map(lg => `<div><h3>${LEAGUE_NAME[lg]}${(y.slim || []).includes(lg) ? ' <span class="muted small">（整理済み：得点・失点は消しました）</span>' : ''}</h3>${table(y.lg[lg].map(histRow))}</div>`).join('')}</div>
   </section>`;
 }
@@ -857,8 +858,8 @@ function recHist() {
   const mine = y => S.history.find(x => x.year === y);
   const rows = H.map(y => {
     const m = mine(y.year);
-    return `<tr><td>${y.year}</td>${LEAGUES.map(lg => `<td class="l">${teamTag(histRow(y.lg[lg][0]))}</td>`).join('')}<td class="l">${y.jp ? `🏆 ${h(y.jp)}` : '-'}</td>
-      ${LEAGUES.map(lg => `<td class="l">${mvp(y.year, lg)}</td>`).join('')}<td class="l">${m ? `${m.rank}位${m.post ? ` ${h(m.post)}` : ''}` : '-'}</td></tr>`;
+    return `<tr><td>${y.year}</td>${LEAGUES.map(lg => `<td class="l">${teamTag(histRow(y.lg[lg][0]))}</td>`).join('')}<td class="l">${y.year === S.year && pbpUnseenKind('js') ? '？' : y.jp ? `🏆 ${h(y.jp)}` : '-'}</td>
+      ${LEAGUES.map(lg => `<td class="l">${mvp(y.year, lg)}</td>`).join('')}<td class="l">${m ? `${m.rank}位${m.post && !(y.year === S.year && pbpUnseenKind('js')) ? ` ${h(m.post)}` : ''}` : '-'}</td></tr>`;
   }).join('');
   if (!H.some(x => x.year === UI.recYear)) UI.recYear = H[0].year;
   const list = aw(UI.recYear);
@@ -960,9 +961,14 @@ function recHof() {
 const PBP_WORD = { BB: '四球', K: '三振', HR: 'ホームラン', '1B': 'ヒット', '2B': 'ツーベースヒット', '3B': 'スリーベースヒット', GO: '内野ゴロ', FO: '外野フライ', DP: '併殺打', SF: '犠牲フライ' };
 // 結果が分からないように、ボタンには点を出さない
 function pbpButtons(kind) {
-  const list = (S.pbp || []).map((g, i) => [g, i]).filter(([g]) => g.kind === kind);
+  let list = (S.pbp || []).map((g, i) => [g, i]).filter(([g]) => g.kind === kind);
+  // 何戦まであったかも結果のうちなので、まだ見ていない試合は次の 1 試合だけ出す
+  const first = list.findIndex(([g]) => !g.seen);
+  if (first >= 0) list = list.slice(0, first + 1);
   if (!list.length) return '';
-  return `<p class="pbp-btns">${list.map(([g, i], k) => `<button data-act="pbp" data-i="${i}">▶ ${kind === 'js' ? `第${k + 1}戦` : '決勝'}を見る</button>`).join(' ')}</p>`;
+  const name = k => (kind === 'js' ? `第${k + 1}戦` : '決勝');
+  return `<p class="pbp-btns">${list.map(([g, i], k) => (g.seen ? `<button data-act="pbp" data-i="${i}">${name(k)}をもう一度</button>`
+    : `<button class="primary" data-act="pbp" data-i="${i}">▶ ${name(k)}を見る</button>`)).join(' ')}</p>`;
 }
 function pbpHalf(e) { return typeof e[0] === 'number' ? [e[0], e[1]] : [e[1], e[2]]; }
 // いまの場面（回・アウト・塁・点）を、見せたところまでの記録から作る
@@ -1022,6 +1028,10 @@ function renderPbp() {
 }
 function pbpGo(to) {
   const v = UI.pbpView, G = S.pbp[v.i], ev = G.ev;
+  pbpMove(v, ev, to);
+  if (v.step >= ev.length) G.seen = true;
+}
+function pbpMove(v, ev, to) {
   if (to === 'start') v.step = 0;
   else if (to === 'end') v.step = ev.length;
   else if (to === 'pa') {
@@ -1042,11 +1052,16 @@ function renderIntl(I) {
   const groupTbl = (g, i) => `<div><h4>${'AB'[i]}組</h4><table class="tbl"><tr><th>国</th><th>勝</th><th>敗</th><th>分</th><th>得失点</th></tr>${g.map(c => `<tr class="${c.name === '日本' ? 'me' : ''}"><td class="l">${h(c.name)}</td><td>${c.w}</td><td>${c.l}</td><td>${c.d}</td><td>${c.rs - c.ra >= 0 ? '+' : ''}${c.rs - c.ra}</td></tr>`).join('')}</table></div>`;
   const gHead = '<tr><th></th><th>試合</th><th>殊勲</th></tr>';
   const gRow = g => `<tr class="${g.away === '日本' || g.home === '日本' ? 'me' : ''}"><td>${h(g.stage)}</td><td class="l">${h(g.away)} <b>${g.score[0]} - ${g.score[1]}</b> ${h(g.home)}${g.tb ? ' <span class="muted">（タイブレーク）</span>' : ''}</td><td class="l muted">${g.star ? h(g.star) : ''}</td></tr>`;
+  const hideFinal = pbpUnseenKind('intl');
+  const fin = I.games.find(g => g.stage === '決勝');
+  const top = hideFinal
+    ? `<p class="big-text">決勝：${h(fin.away)} vs ${h(fin.home)}</p><p>優勝は、決勝を見てから分かります。</p>${pbpButtons('intl')}
+      <p><button data-act="pbpSkip" data-kind="intl">見ずに結果を見る</button></p>`
+    : `<p class="big-text">優勝：${h(I.champ)}</p>
+    <p>日本は <b>${h(I.jp)}</b>${I.mvp ? ` ・ 大会MVP ${h(I.mvp.name)}（${h(I.mvp.team)}）` : ''}</p>${pbpButtons('intl')}`;
   return `<section class="card"><h2>🌏 ${I.year}年 国際大会</h2>
-    <p class="big-text">優勝：${h(I.champ)}</p>
-    <p>日本は <b>${h(I.jp)}</b>${I.mvp ? ` ・ 大会MVP ${h(I.mvp.name)}（${h(I.mvp.team)}）` : ''}</p>
-    ${pbpButtons('intl')}
-    <h3>決勝トーナメント</h3><div class="scroll"><table class="tbl">${gHead}${I.games.filter(g => g.stage !== '1次リーグ').map(gRow).join('')}</table></div>
+    ${top}
+    <h3>決勝トーナメント</h3><div class="scroll"><table class="tbl">${gHead}${I.games.filter(g => g.stage !== '1次リーグ' && !(hideFinal && g.stage === '決勝')).map(gRow).join('')}</table></div>
     <h3>1次リーグ</h3><div class="grid2">${I.table.map(groupTbl).join('')}</div>
     <details><summary>1次リーグの全試合</summary><div class="scroll"><table class="tbl">${gHead}${I.games.filter(g => g.stage === '1次リーグ').map(gRow).join('')}</table></div></details>
     <h3>日本代表（${I.japan.length}人）</h3><p class="muted small">12 球団の日本人選手から、能力で自動で選ばれました。出た選手は人気が上がります（優勝するとさらに）。</p>
@@ -1060,8 +1075,10 @@ function recIntl() {
   const next = S.year + ((INTL_EVERY - (S.year % INTL_EVERY)) % INTL_EVERY);
   const note = `<p class="muted">${INTL_EVERY} 年に 1 回、日本シリーズのあとに 8 か国で行います。${H.length && H[0].y === S.year ? '' : `次は ${next}年のオフです。`}</p>`;
   if (!H.length) return note;
+  const shown = H.filter(y => !(y.y === S.year && pbpUnseenKind('intl')));
+  if (!shown.length) return note;
   return `${note}<div class="scroll"><table class="tbl"><tr><th>年</th><th>優勝</th><th>日本</th><th>大会MVP</th></tr>
-    ${H.map(y => `<tr><td>${y.y}</td><td class="l">${y.champ === '日本' ? '🏆 ' : ''}${h(y.champ)}</td><td class="l">${h(y.jp)}<span class="muted">（${y.w}勝${y.l}敗）</span></td><td class="l">${y.mvp ? `${h(y.mvp[0])}<span class="muted">（${h(y.mvp[1])}）</span>` : '-'}</td></tr>`).join('')}</table></div>`;
+    ${shown.map(y => `<tr><td>${y.y}</td><td class="l">${y.champ === '日本' ? '🏆 ' : ''}${h(y.champ)}</td><td class="l">${h(y.jp)}<span class="muted">（${y.w}勝${y.l}敗）</span></td><td class="l">${y.mvp ? `${h(y.mvp[0])}<span class="muted">（${h(y.mvp[1])}）</span>` : '-'}</td></tr>`).join('')}</table></div>`;
 }
 
 // オールスター：今年の出場選手と、歴代の結果・MVP（守る位置の順に並べる）
@@ -1285,7 +1302,12 @@ function renderOff() {
   const steps = [['awards', '表彰'], ...(O.intl || intlYear() ? [['intl', '国際大会']] : []), ['fa', 'FA'], ['contract', '契約更改'], ['draft', 'ドラフト'], ['camp', 'キャンプ']];
   const bar = `<div class="steps">${steps.map(([k, n]) => `<span class="${O.step === k ? 'on' : ''}">${n}</span>`).join('→')}</div>`;
   let body = '';
-  if (O.step === 'awards') {
+  if (O.step === 'awards' && pbpUnseenKind('js')) {
+    body = `<section class="card"><h2>🏆 日本シリーズ</h2>
+      <p>まだ見ていない試合があります。結果（日本一）は、試合を見てから出ます。</p>
+      ${pbpButtons('js')}
+      <p><button data-act="pbpSkip" data-kind="js">見ずに結果へ進む</button></p></section>`;
+  } else if (O.step === 'awards') {
     body = `
     <section class="card"><h2>${S.year}年 シーズン終了</h2>
       <p class="big-text">日本一：${h(O.champ)}</p>
@@ -1604,17 +1626,26 @@ function renderPost() {
   const card = s => {
     const top = S.teams[s.top], low = S.teams[s.low];
     const rule = SERIES_RULE[s.stage];
-    const cells = s.games.map(g => {
+    // まだ見ていない日本シリーズの試合は「？」にして、勝ち数にも入れない
+    const hid = g => g.pbi != null && pbpUnseen(g.pbi);
+    const anyHid = s.games.some(hid);
+    let wTop = rule.adv, wLow = 0;
+    const cut = s.games.findIndex(hid);
+    const games = cut >= 0 ? s.games.slice(0, cut + 1) : s.games;
+    const cells = games.map(g => {
+      if (hid(g)) return '<td>？</td>';
       const ts = g.home === s.top ? g.score[1] : g.score[0], ls = g.home === s.top ? g.score[0] : g.score[1];
+      if (ts > ls) wTop++; else if (ls > ts) wLow++;
       return `<td class="${ts > ls ? 'win' : ts < ls ? 'lose' : ''}">${ts}-${ls}</td>`;
     }).join('');
+    if (!anyHid) { wTop = s.wTop; wLow = s.wLow; }
     const mine = s.top === my || s.low === my;
     return `<div class="series ${mine ? 'mine' : ''}">
       <h3>${seriesLabel(s)}</h3>
-      <p class="vsline">${teamChip(top)} ${h(top.name)} <b class="big-num">${s.wTop}</b> - <b class="big-num">${s.wLow}</b> ${h(low.name)} ${teamChip(low)}</p>
+      <p class="vsline">${teamChip(top)} ${h(top.name)} <b class="big-num">${wTop}</b> - <b class="big-num">${wLow}</b> ${h(low.name)} ${teamChip(low)}</p>
       <p class="muted">${rule.need}勝で勝ち抜け${rule.adv ? '（リーグ1位に1勝のアドバンテージ・全試合1位の本拠地）' : s.stage === 'cs1' ? '（全試合2位の本拠地）' : '（2-3-2 の本拠地）'}
-        ${s.done ? ` → <b>${h(S.teams[s.winner].name)}</b> ${s.stage === 'js' ? '日本一！' : '勝ち抜け'}` : ''}</p>
-      ${s.games.length ? `<div class="scroll"><table class="tbl"><tr>${s.games.map((_, i) => `<th>第${i + 1}戦</th>`).join('')}</tr><tr>${cells}</tr></table></div>` : '<p class="muted">これから</p>'}
+        ${s.done && !anyHid ? ` → <b>${h(S.teams[s.winner].name)}</b> ${s.stage === 'js' ? '日本一！' : '勝ち抜け'}` : ''}</p>
+      ${games.length ? `<div class="scroll"><table class="tbl"><tr>${games.map((_, i) => `<th>第${i + 1}戦</th>`).join('')}</tr><tr>${cells}</tr></table></div>` : '<p class="muted">これから</p>'}
       ${s.stage === 'js' ? pbpButtons('js') : ''}
     </div>`;
   };
@@ -1625,7 +1656,7 @@ function renderPost() {
     <p>${inIt ? '<b>あなたのチームが戦っています！</b>' : 'あなたのチームはいま試合がありません。最後まで見届けましょう。'}</p>
     ${stages.map(st => `<div class="grid2">${P.series.filter(s => s.stage === st).map(card).join('')}</div>`).join('')}
   </section>
-  ${S.lastGame && /CS|日本シリーズ/.test(S.lastGame.label) ? `<section class="card"><h2>前の試合（${h(S.lastGame.label)}）</h2>${boxScore(S.lastGame)}</section>` : ''}
+  ${S.lastGame && /CS|日本シリーズ/.test(S.lastGame.label) && !(S.pbp || []).some(g => g.label === S.lastGame.label && !g.seen) ? `<section class="card"><h2>前の試合（${h(S.lastGame.label)}）</h2>${boxScore(S.lastGame)}</section>` : ''}
   <section class="card"><h2>ニュース</h2>${newsList(12)}</section>`;
 }
 
