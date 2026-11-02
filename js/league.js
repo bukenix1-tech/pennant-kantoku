@@ -503,9 +503,24 @@ function advanceDay() {
   return true;
 }
 
+// 人気度の下限：功績のある選手は、活躍しない年でもここより下がらない
+// 功績の計算は重いので、タイトルが増えたときだけ数え直す（保存はしない）
+let fameFloorCache = { key: '', map: {} };
+function fameFloor(p) {
+  const key = `${S.year}:${(S.awardHist || []).length}`;
+  if (fameFloorCache.key !== key) fameFloorCache = { key, map: {} };
+  const m = fameFloorCache.map;
+  if (m[p.id] == null) m[p.id] = 5 + meritOf(p) * FAME_FLOOR_MERIT;
+  return m[p.id];
+}
+
 function weeklyTraining() {
-  // 人気度は活躍しないと少しずつ下がる
-  Object.values(S.players).forEach(p => { if (p.fame > 5) p.fame -= (p.fame - 5) * 0.08; });
+  // 人気度は活躍しないと少しずつ下がる（下限まで）
+  Object.values(S.players).forEach(p => {
+    if (p.fame <= 5) return;
+    const fl = fameFloor(p);
+    if (p.fame > fl) p.fame -= (p.fame - fl) * FAME_DECAY;
+  });
   S.teams.forEach(t => {
     const it = INTENSITY[t.intensity];
     const mult = it.grow * (0.8 + t.fac.train * 0.1);

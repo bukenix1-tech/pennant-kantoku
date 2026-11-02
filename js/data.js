@@ -148,6 +148,8 @@ function facilityCost(level, k) { return Math.round(level * 120000 * ((FACILITIE
 const DORM_GROW = 0.06, GYM_SLOW = 0.08, ANALYSIS_BONUS = 0.6;
 // 功績のある選手の減俸をゆるめる：功績 1（殿堂入りくらい）で、下げ幅を MERIT_SOFT だけ減らし、減額制限を MERIT_FLOOR だけ上げる
 const MERIT_SOFT = 0.5, MERIT_FLOOR = 0.15;
+// 人気度は毎週、下限との差の FAME_DECAY ずつ下がる。下限は 5 ＋ 功績×FAME_FLOOR_MERIT（殿堂入りくらいで 60）
+const FAME_DECAY = 0.05, FAME_FLOOR_MERIT = 55;
 // 宣伝：お金を払って人気を上げる。どれも 1 シーズンに 1 回まで。人気が高いほど上がりにくい
 const PROMOS = {
   web:   { name: 'ネット広告',         cost: 8000,  pop: 1, desc: '手軽に名前を広める' },
