@@ -246,6 +246,19 @@ const ACTIONS = {
     slimHistory(UI.slimUntil, lgs);
     UI.toast = '古い年の記録を整理しました。';
   },
+  retain(el) {
+    const r = S.off && S.off.contract && S.off.contract.retired[+el.dataset.i];
+    if (!r || r.res) return 'keep';
+    if (!confirm(`${r.name}を慰留しますか？\n残ってくれたら、来季の査定額に 1 割上乗せした年俸の 1 年契約になります。断られたら、もう引き止められません。`)) return 'keep';
+    const ok = retainPlayer(r);
+    if (ok === null) return 'keep';
+    UI.toast = ok ? `${r.name}が慰留に応じました！` : `${r.name}は引退の意志が固いようです。`;
+  },
+  honorView(el) {
+    const x = S.off && S.off.contract && S.off.contract.honor[+el.dataset.i];
+    if (x) openModal(renderHonorModal(x));
+    return 'keep';
+  },
   retireNo(el) {
     const x = S.off && S.off.contract && S.off.contract.honor[+el.dataset.i];
     if (!x || x.done) return 'keep';

@@ -1578,8 +1578,56 @@ function honorCheck(t, p, honor) {
   if (years < RETIRE_NO_YEARS) return;
   const m = meritOf(p);
   if (m < RETIRE_NO_MERIT) return;
-  if (t.id === S.myTeamId) honor.push({ name: p.name, no: p.no, years, merit: Math.round(m * 100) });
+  if (t.id === S.myTeamId) honor.push({ name: p.name, no: p.no, years, merit: Math.round(m * 100), card: honorCard(p) });
   else if (m >= RETIRE_NO_AUTO && years >= RETIRE_NO_AUTO_YEARS && U.chance(RETIRE_NO_AUTO_CHANCE)) retireNumber(t, p.no, p.name);
+}
+
+// 候補の成績（選手はこのあと消えるので、見るための分だけ写しておく。次のシーズンが始まると S.off ごと消える）
+function honorCard(p) {
+  const rows = (p.career || []).map(c => ({ y: c.y, t: c.t, s: c.s }));
+  const tags = [['as', 'オールスター'], ['b9', 'ベストナイン'], ['gg', 'ゴールデングラブ'], ['jp', '日本代表']];
+  return {
+    pos: canPitch(p) && !p.twoWay ? '投' : p.twoWay ? '二刀流' : p.pos, age: p.age,
+    bat: canBat(p), pit: canPitch(p), twoWay: !!p.twoWay, rows, total: careerTotal(p),
+    titles: titlesOf(p.id).map(t => `${t.year} ${t.title}`),
+    ms: MILESTONES.filter(m => careerTotal(p)[m.k] >= byGames(m.n)).map(m => m.label),
+    honors: tags.filter(([k]) => p[k]).map(([k, w]) => `${w}×${p[k]}`),
+  };
+}
+
+function retireLeave(p) {
+  retireRecord(p);
+  removeFromTeam(p);
+  delete S.players[p.id];
+}
+// 慰留しなかった（断られた）選手を、ここで引退させる
+function retireFinish() {
+  Object.values(S.players).filter(p => p.retiring).forEach(retireLeave);
+}
+// 慰留して残ってくれる見込み
+function retainChance(p) {
+  const ca = careerAge(p);
+  if (ca >= RETIRE_MAX_AGE) return RETAIN_MIN;
+  return U.clamp(RETAIN_BASE + (p.loyalty || 0) / 100 * RETAIN_LOYAL - Math.max(0, ca - RETAIN_AGE) * RETAIN_AGE_DROP, RETAIN_MIN, RETAIN_MAX);
+}
+// 慰留する。残ったら、ほかの選手と同じく 1 つ歳を取り、上乗せした年俸の 1 年契約になる
+function retainPlayer(r) {
+  const p = S.players[r.pid];
+  if (!p || !p.retiring || r.res) return null;
+  const ok = U.chance(retainChance(p));
+  r.res = ok ? 'stay' : 'no';
+  if (!ok) return false;
+  p.retiring = false;
+  const old = p.salary;
+  p.salary = Math.round(renewSalary(p) * (1 + RETAIN_RAISE));
+  p.contractYears = 0;
+  agePlayer(p);
+  addLoyalty(p, 3);
+  const c = S.off.contract;
+  c.raises.push({ pid: p.id, name: p.name, old, now: p.salary, locked: false });
+  c.honor = (c.honor || []).filter(x => x.name !== p.name || x.done); // 引退しないので、永久欠番の候補から外す
+  addNews(`${p.name}が慰留を受け入れ、現役を続けることになりました。`, 'big');
+  return true;
 }
 
 function retireChance(p, ca, o) {
@@ -1605,17 +1653,18 @@ function offContract() {
       else leave = U.chance(retireChance(p, ca, o));
       if (p.foreign && o < 55) leave = true;
       if (leave) {
-        if (t.id === my.id) retired.push({ name: p.name, age: p.age, why: p.foreign && p.age < 35 ? '退団' : '引退' });
+        const can = t.id === my.id && !(p.foreign && o < 55); // 力が足りずに出ていく外国人選手は引き止めない
+        if (t.id === my.id) retired.push({ pid: p.id, name: p.name, age: p.age, why: p.foreign && p.age < 35 ? '退団' : '引退', can });
         honorCheck(t, p, honor);
-        retireRecord(p);
-        removeFromTeam(p);
-        delete S.players[p.id];
+        if (can) p.retiring = true; // ドラフトへ進むときに引退する（retireFinish）
+        else retireLeave(p);
       }
     });
   });
   agingFreeAgents();
   S.teams.forEach(t => {
     teamPlayers(t).forEach(p => {
+      if (p.retiring) return;
       const old = p.salary;
       const locked = p.contractYears > 0;
       if (locked) p.contractYears--; // 複数年契約のあいだは年俸がそのまま
@@ -1741,6 +1790,7 @@ function rareYears(p) {
 function rareTag(p) { return p.rareYears ? `<span class="tag rare">${p.rareYears}年に一人の逸材</span>` : ''; }
 
 function offDraftStart() {
+  retireFinish();
   const pool = (S.draftClass || makeDraftClass()).filter(id => S.players[id]);
   S.draftClass = null;
   // 2 巡目からはウェーバー（下位から、両リーグ交互）。3 巡目は逆（上位から）、4 巡目はまた下位から…と入れ替わる

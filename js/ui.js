@@ -129,7 +129,8 @@ function nameCell(p) {
   const tw = p.twoWay ? '<span class="tag twoway">二刀流</span>' : '';
   const gn = p.geniusKnown ? '<span class="tag genius">天才</span>' : '';
   const gr = t && t.id === S.myTeamId && grumbling(t, p) ? '<span class="tag bad" title="力はあるのに出番が少なく、忠誠心が下がっています">不満</span>' : '';
-  return `<a href="#" data-act="player" data-pid="${p.id}">${h(p.name)}</a>${tw}${gn}${fr}${farm}${inj}${gr}`;
+  const rt = p.retiring ? '<span class="tag bad">引退予定</span>' : '';
+  return `<a href="#" data-act="player" data-pid="${p.id}">${h(p.name)}</a>${tw}${gn}${fr}${farm}${inj}${gr}${rt}`;
 }
 function teamChip(t) { return `<span class="chip" style="background:${t.color}">${h(t.short)}</span>`; }
 
@@ -469,6 +470,41 @@ function growthBox(p) {
 
 const TRAJ_WORD = ['', 'ライナー・ゴロが多い', 'やや低め', 'やや高め', '高く上がるアーチスト'];
 
+// 年度別の成績表（選手の詳細と、引退する永久欠番の候補で使う）
+function careerTables(rows, total, bat, pit, twoWay) {
+  const crow = (c, isP) => {
+    const s = c.s;
+    return isP
+      ? `<tr><td>${c.y}${c.now ? '（今季）' : ''}</td><td>${h(c.t)}</td><td>${s.pg}</td><td>${s.w}</td><td>${s.l}</td><td>${s.sv}</td><td>${U.era(s.per, s.outs)}</td><td>${U.ip(s.outs)}</td><td>${s.pk}</td></tr>`
+      : `<tr><td>${c.y}${c.now ? '（今季）' : ''}</td><td>${h(c.t)}</td><td>${s.g}</td><td>${U.avg(s.h, s.ab)}</td><td>${s.h}</td><td>${s.hr}</td><td>${s.rbi}</td><td>${s.sb}</td><td>${s.pa ? ops(s).toFixed(3) : '-'}</td></tr>`;
+  };
+  const totalRow = isP => (rows.length > 1 ? crow({ y: '通算', t: '', s: total }, isP).replace('<tr>', '<tr class="total">') : '');
+  const headP = '<tr><th>年</th><th>球団</th><th>登板</th><th>勝</th><th>敗</th><th>S</th><th>防御率</th><th>回</th><th>三振</th></tr>';
+  const headB = '<tr><th>年</th><th>球団</th><th>試合</th><th>打率</th><th>安打</th><th>本</th><th>点</th><th>盗</th><th>OPS</th></tr>';
+  return `${bat ? `<h3>成績${twoWay ? '（打撃）' : ''}</h3><div class="scroll"><table class="tbl">${headB}${rows.map(c => crow(c, false)).join('')}${totalRow(false)}</table></div>` : ''}
+  ${pit ? `<h3>成績${twoWay ? '（投球）' : ''}</h3><div class="scroll"><table class="tbl">${headP}${rows.map(c => crow(c, true)).join('')}${totalRow(true)}</table></div>` : ''}`;
+}
+// 引退・退団の欄の慰留ボタン
+function retainCell(r, i, c) {
+  if (!r.can) return '';
+  if (r.res === 'stay') return '　<b>→ 慰留に応じて、現役を続けます</b>';
+  if (r.res === 'no') return '　<span class="muted">→ 慰留を断りました</span>';
+  const p = S.players[r.pid];
+  if (!p) return '';
+  if ((c.honor || []).some(x => x.name === r.name && x.done)) return '';
+  const v = retainChance(p);
+  return `　<button class="sm" data-act="retain" data-i="${i}">慰留する</button> <span class="muted small">見込み：${v >= 0.6 ? '高い' : v >= 0.35 ? '五分' : '低い'}・忠誠心 ${Math.round(p.loyalty || 0)}</span>`;
+}
+// 永久欠番の候補（もう引退して選手はいない）：引退のときに残した成績を見せる
+function renderHonorModal(x) {
+  const c = x.card;
+  if (!c) return `<h2>#${x.no} ${h(x.name)}</h2><p class="muted">この候補の成績は残っていません。</p>`;
+  return `<h2>#${x.no} ${h(x.name)} <span class="muted small">${h(c.pos)}・${x.years}年在籍・${c.age}歳で引退</span></h2>
+    ${c.ms.length ? `<div class="atitle">${c.ms.map(h).join('・')}</div>` : ''}
+    ${c.honors.length ? `<p>${c.honors.map(h).join('　')}</p>` : ''}
+    ${c.titles.length ? `<p class="muted small">🏆 ${c.titles.map(h).join('、')}</p>` : ''}
+    ${careerTables(c.rows, c.total, c.bat, c.pit, c.twoWay)}`;
+}
 function renderPlayerModal(p) {
   const mine = p.teamId === S.myTeamId;
   const keys = abilKeys(p), lbl = ALL_LABEL;
@@ -479,16 +515,7 @@ function renderPlayerModal(p) {
       <div class="bar"><span class="bl">盗塁</span><span class="tag steal s-${stealWord(p)}">${stealWord(p)}</span><span class="muted small">${stealWord(p) === '積極的' ? 'すきがあればどんどん走る' : stealWord(p) === '慎重' ? 'あまり走らない' : ''}</span></div>` : '');
   const careerRows = [...p.career, { y: S.year, t: p.teamId != null ? S.teams[p.teamId].short : '-', s: p.stats, now: true }]
     .filter((c, i, arr) => !(c.now && arr.some(x => !x.now && x.y === S.year)));
-  const crow = (c, pit) => {
-    const s = c.s;
-    return pit
-      ? `<tr><td>${c.y}${c.now ? '（今季）' : ''}</td><td>${h(c.t)}</td><td>${s.pg}</td><td>${s.w}</td><td>${s.l}</td><td>${s.sv}</td><td>${U.era(s.per, s.outs)}</td><td>${U.ip(s.outs)}</td><td>${s.pk}</td></tr>`
-      : `<tr><td>${c.y}${c.now ? '（今季）' : ''}</td><td>${h(c.t)}</td><td>${s.g}</td><td>${U.avg(s.h, s.ab)}</td><td>${s.h}</td><td>${s.hr}</td><td>${s.rbi}</td><td>${s.sb}</td><td>${s.pa ? ops(s).toFixed(3) : '-'}</td></tr>`;
-  };
   const titles = titlesOf(p.id);
-  const totalRow = pit => (careerRows.length > 1 ? crow({ y: '通算', t: '', s: careerTotal(p) }, pit).replace('<tr>', '<tr class="total">') : '');
-  const headP = '<tr><th>年</th><th>球団</th><th>登板</th><th>勝</th><th>敗</th><th>S</th><th>防御率</th><th>回</th><th>三振</th></tr>';
-  const headB = '<tr><th>年</th><th>球団</th><th>試合</th><th>打率</th><th>安打</th><th>本</th><th>点</th><th>盗</th><th>OPS</th></tr>';
   const focusOpts = focusOptions(p).map(f => `<option ${p.focus === f ? 'selected' : ''}>${f}</option>`).join('');
   const team = p.teamId != null ? S.teams[p.teamId] : null;
   return `
@@ -510,8 +537,7 @@ function renderPlayerModal(p) {
     <div class="bar"><span class="bl">忠誠心</span><small class="num">${Math.round(p.loyalty)}</small><span class="bt"><span class="loyal" style="width:${Math.round(p.loyalty)}%"></span></span></div>
     <div class="bar"><span class="bl">ビジュアル</span><span class="stars">${visualStars(p.visual)}</span></div>
   </div>
-  ${canBat(p) ? `<h3>成績${p.twoWay ? '（打撃）' : ''}</h3><div class="scroll"><table class="tbl">${headB}${careerRows.map(c => crow(c, false)).join('')}${totalRow(false)}</table></div>` : ''}
-  ${canPitch(p) ? `<h3>成績${p.twoWay ? '（投球）' : ''}</h3><div class="scroll"><table class="tbl">${headP}${careerRows.map(c => crow(c, true)).join('')}${totalRow(true)}</table></div>` : ''}
+  ${careerTables(careerRows, careerTotal(p), canBat(p), canPitch(p), p.twoWay)}
   ${titles.length ? `<p>🏆 タイトル：${titles.map(t => `${t.year} ${h(t.title)}`).join('、')}</p>` : ''}
   ${p.amateur ? `<p class="muted">アマ時代：${h(p.amateur.team)} ・ ${h(p.amateur.line)}${p.amateur.title ? ` ・ 🏆 ${h(p.amateur.title)}` : ''}</p>` : ''}
   ${mine ? `<h3>監督の指示</h3>
@@ -1391,11 +1417,12 @@ function renderOff() {
   } else if (O.step === 'contract') {
     const c = O.contract;
     body = `
-    <section class="card"><h2>引退・退団</h2>${c.retired.length ? `<ul>${c.retired.map(r => `<li>${h(r.name)}（${r.age}歳）${r.why}</li>`).join('')}</ul>` : '<p>いません。</p>'}</section>
+    <section class="card"><h2>引退・退団</h2>${c.retired.length ? `<ul>${c.retired.map((r, i) => `<li>${h(r.name)}（${r.age}歳）${r.why}${retainCell(r, i, c)}</li>`).join('')}</ul>
+      ${c.retired.some(r => r.can) ? '<p class="muted small">「慰留する」で引き止められます（1 人 1 回）。忠誠心が高く若い選手ほど残ってくれやすく、残ったら、来季の査定額に 1 割上乗せした年俸の 1 年契約になります。ドラフトへ進むと引退します。</p>' : ''}` : '<p>いません。</p>'}</section>
     ${(c.honor || []).length ? `<section class="card"><h2>永久欠番</h2>
       <p>長くチームを支えた名選手が引退しました。背番号を永久欠番にすると、これから先だれもその番号を付けられなくなり、球団の人気が少し上がります。</p>
-      <p class="muted small">ドラフトへ進むと、選べなくなります。</p>
-      <table class="tbl">${c.honor.map((x, i) => `<tr><td class="l"><b>#${x.no}</b> ${h(x.name)}</td><td>${x.years}年在籍</td><td>功績 ${x.merit}</td>
+      <p class="muted small">名前を押すと、その選手の成績が見られます。ドラフトへ進むと、選べなくなります。</p>
+      <table class="tbl">${c.honor.map((x, i) => `<tr><td class="l"><b>#${x.no}</b> <a href="#" data-act="honorView" data-i="${i}">${h(x.name)}</a></td><td>${x.years}年在籍</td><td>功績 ${x.merit}</td>
         <td>${x.done ? '<b>永久欠番にしました</b>' : `<button data-act="retireNo" data-i="${i}">永久欠番にする</button>`}</td></tr>`).join('')}</table></section>` : ''}
     <section class="card"><h2>契約更改</h2><p class="muted">成績と能力で来季の年俸が決まりました。選手は 1 つ歳を取りました。</p>
       <div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年齢</th><th>総合</th><th>今季</th><th>来季</th><th>増減</th></tr>
