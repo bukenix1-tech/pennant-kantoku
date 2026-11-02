@@ -82,7 +82,27 @@ function newFarmPlayer(tq, opts) {
 
 function signPlayer(team, p) {
   p.teamId = team.id;
+  p.no = pickNumber(team, p);
   team.players.push(p.id);
+}
+
+// 背番号：前の番号が空いていればそのまま、なければ好まれる番号から（永久欠番は使わない）
+function pickNumber(t, p) {
+  const used = new Set([...teamPlayers(t).filter(x => x && x.id !== p.id).map(x => x.no), ...(t.retiredNos || []).map(r => r.no)]);
+  if (p.no != null && !used.has(p.no)) return p.no;
+  const pool = NO_POOL[p.isP ? 'P' : p.pos === '捕' ? 'C' : 'B'].filter(n => !used.has(n));
+  if (pool.length) return U.pick(pool.slice(0, 4));
+  for (let n = 0; n < 100; n++) if (!used.has(n)) return n;
+  return null;
+}
+
+function retireNumber(t, no, name) {
+  if (!t.retiredNos) t.retiredNos = [];
+  if (t.retiredNos.some(r => r.no === no)) return;
+  t.retiredNos.push({ no, name, year: S.year });
+  t.retiredNos.sort((a, b) => a.no - b.no);
+  t.pop = U.clamp(t.pop + RETIRE_NO_POP, 0, 100);
+  addNews(`${t.short}が${name}の背番号${no}を永久欠番にしました。`, t.id === S.myTeamId ? 'good' : '');
 }
 
 function removeFromTeam(p) {
@@ -348,7 +368,15 @@ function makeSchedule(games) {
   const sched = [];
   const d = openingDay(S.year);
   let gi = 0;
+  const asAt = Math.round(gameDays.length * AS_AT);
   while (gi < gameDays.length) {
+    // オールスター休み：休み・第 1 戦・第 2 戦・休み
+    if (gi === asAt && !sched.some(e => e.allstar)) {
+      [0, 1, 2, 0].forEach(n => {
+        sched.push({ m: d.getMonth() + 1, d: d.getDate(), w: d.getDay(), games: [], ...(n ? { allstar: n } : {}) });
+        d.setDate(d.getDate() + 1);
+      });
+    }
     const entry = { m: d.getMonth() + 1, d: d.getDate(), w: d.getDay(), games: [] };
     if (d.getDay() !== 1) entry.games = gameDays[gi++];
     sched.push(entry);
@@ -485,6 +513,7 @@ function advanceDay() {
   if (S.phase !== 'season' || S.day >= S.schedule.length) return false;
   const entry = S.schedule[S.day];
   dailyUpdate();
+  if (entry.allstar) allStarDay(entry.allstar);
   entry.games.forEach(m => playOne(m, dateLabel(entry), false));
   S.teams.forEach(t => t.active.forEach(id => { const p = S.players[id]; if (p) p.actDays = (p.actDays || 0) + 1; }));
   if (entry.games.length) {
@@ -532,6 +561,26 @@ function weeklyTraining() {
       if (U.chance(it.inj * (1.2 - t.fac.medical * 0.1))) injure(p, U.rint(5, 20));
       if (it.cond && U.chance(0.3)) p.cond = U.clamp(p.cond + it.cond, 1, 5);
     });
+  });
+  if (S.phase === 'season') S.teams.forEach(grumbleCheck);
+}
+
+// 起用への不満：チームで上位の力があるのに、今季あまり出られていない（ケガで休んだ日は数えない）
+function grumbling(t, p) {
+  const gp = gamesPlayed(t);
+  if (S.phase !== 'season' || gp < GRUMBLE_FROM || p.inj || ovr(p) < 50 || depthAt(t, p) > GRUMBLE_RANK[p.isP ? 'P' : 'B']) return false;
+  const s = p.stats, g = Math.max(1, gp - (s.injd || 0) * 0.85);
+  const share = canPitch(p) && !(canBat(p) && s.pa > s.outs) ? s.outs / g : s.pa / (g * 3.1);
+  return share < GRUMBLE_SHARE;
+}
+function grumbleCheck(t) {
+  teamPlayers(t).forEach(p => {
+    if (!grumbling(t, p)) return;
+    addLoyalty(p, -GRUMBLE_LOYALTY);
+    if (t.id === S.myTeamId && p.grumble !== S.year) {
+      p.grumble = S.year;
+      addNews(`${p.name}が起用に不満を漏らしているようです（力はあるのに出番が少ない。忠誠心が下がっていきます）。`, 'bad');
+    }
   });
 }
 
@@ -723,6 +772,110 @@ function goldenGlove(lg) {
     if (p) out.push(awardRow(lg, pos, p, `守備${U.grade(p.a.field)} 肩${U.grade(p.a.arm)}`));
   });
   return out;
+}
+
+// ---------- オールスター ----------
+// ファン投票（人気度）で守る位置ごとの野手 9 人と、先発・中継ぎ・抑えを 1 人ずつ。残りは監督推薦（成績）。どの球団からも 1 人は選ぶ
+function selectAllStars() {
+  const sel = {};
+  const byFame = (a, b) => b.fame - a.fame;
+  const batScore = p => ops(p.stats) * p.stats.pa * 0.4 + p.stats.hr * 2 + p.stats.sb * 0.5;
+  const pitScore = p => p.stats.w * 8 + p.stats.sv * 4 + p.stats.outs / 3 - p.stats.per * 2 + p.stats.pk * 0.3;
+  LEAGUES.forEach(lg => {
+    const teams = S.teams.filter(t => t.lg === lg);
+    const gp = Math.max(1, ...teams.map(gamesPlayed));
+    const all = lgPlayers(lg).filter(p => !p.inj);
+    const out = [];
+    const has = p => out.some(x => x.pid === p.id);
+    const add = (p, pos, fan, P) => { out.push({ pid: p.id, name: p.name, team: S.teams[p.teamId].short, pos, fan, P }); };
+    const bats = all.filter(p => canBat(p) && p.stats.pa >= gp * 1.5);
+    const pits = all.filter(p => p.isP && p.stats.pg >= 5);
+    [...AWARD_POS, '指'].forEach(pos => {
+      const p = bats.filter(x => !has(x) && seasonPos(x) === pos).sort(byFame)[0] || (pos === '指' && bats.filter(x => !has(x)).sort(byFame)[0]);
+      if (p) add(p, pos, true, false);
+    });
+    [['先', ['先発']], ['中', ['中継', 'セットアッパー']], ['抑', ['抑え']]].forEach(([pos, roles]) => {
+      const p = pits.filter(x => !has(x) && roles.includes(x.role)).sort(byFame)[0];
+      if (p) add(p, pos, true, true);
+    });
+    const nBat = () => out.filter(x => !x.P).length, nPit = () => out.filter(x => x.P).length;
+    const pitPos = p => (p.role === '先発' ? '先' : p.role === '抑え' ? '抑' : '中');
+    if (out.filter(x => x.pos === '捕').length < 2) {
+      const c = bats.filter(x => !has(x) && seasonPos(x) === '捕').sort((a, b) => batScore(b) - batScore(a))[0];
+      if (c) add(c, '捕', false, false);
+    }
+    bats.filter(x => !has(x)).sort((a, b) => batScore(b) - batScore(a)).forEach(p => { if (nBat() < AS_BAT) add(p, seasonPos(p), false, false); });
+    pits.filter(x => !has(x)).sort((a, b) => pitScore(b) - pitScore(a)).forEach(p => { if (nPit() < AS_PIT) add(p, pitPos(p), false, true); });
+    teams.forEach(t => {
+      if (out.some(x => S.players[x.pid].teamId === t.id)) return;
+      const p = teamPlayers(t).filter(x => !x.inj && (bats.includes(x) || pits.includes(x))).sort((a, b) => ovr(b) - ovr(a))[0];
+      if (p) add(p, p.isP ? pitPos(p) : seasonPos(p), false, p.isP);
+    });
+    out.forEach(x => { const p = S.players[x.pid]; p.as = (p.as || 0) + 1; addFame(p, x.fan ? AS_FAME.fan : AS_FAME.pick); });
+    sel[lg] = out;
+  });
+  S.allStar = { year: S.year, sel, games: [], pts: {} };
+  const list = LEAGUES.flatMap(lg => sel[lg]);
+  const mine = list.filter(x => S.players[x.pid].teamId === S.myTeamId);
+  const top = list.filter(x => x.fan).map(x => S.players[x.pid]).sort((a, b) => b.fame - a.fame)[0];
+  addNews(`オールスターの出場選手が決まりました。${top ? `ファン投票の最多得票は${top.name}（${S.teams[top.teamId].short}）。` : ''}`, 'big');
+  if (mine.length) addNews(`わがチームからは${mine.map(x => `${x.name}${x.fan ? '（ファン投票）' : ''}`).join('・')}がオールスターに選ばれました！`, 'good');
+}
+
+// オールスター用の選抜チーム（その場かぎり。保存しない）
+function asTeam(lg, n) {
+  const ent = S.allStar.sel[lg].filter(x => S.players[x.pid] && !S.players[x.pid].inj);
+  const ps = ent.map(x => S.players[x.pid]);
+  const pit = ent.filter(x => x.P).map(x => S.players[x.pid]);
+  const rot = pit.filter(p => p.role === '先発').sort((a, b) => starterVal(b) - starterVal(a)).slice(0, 3);
+  const pen = pit.filter(p => !rot.includes(p)).sort((a, b) => relVal(b) - relVal(a));
+  return {
+    id: lg === 'セ' ? -1 : -2, lg, name: `全${LEAGUE_NAME[lg]}`, short: `全${lg}`, color: '#555', fac: {},
+    players: ps.map(p => p.id), active: ps.map(p => p.id), lineup: [], rotation: rot.map(p => p.id), rotIdx: n - 1,
+    closer: pen[0] ? pen[0].id : null, setup: pen[1] ? pen[1].id : null,
+  };
+}
+
+function allStarDay(n) {
+  if (n === 1) selectAllStars();
+  const A = S.allStar;
+  if (!A || A.year !== S.year || A.games.length >= n) return;
+  const [hl, al] = (S.year + n) % 2 ? ['セ', 'パ'] : ['パ', 'セ'];
+  const home = asTeam(hl, n), away = asTeam(al, n);
+  // 成績・疲れ・役割はシーズンのものに入れない（試合のあとで元に戻す）
+  const ps = [...home.players, ...away.players].map(id => S.players[id]);
+  const saved = ps.map(p => ({ stats: p.stats, rest: p.rest, fatigue: p.fatigue, role: p.role }));
+  ps.forEach(p => { p.stats = newStats(); p.rest = 7; p.fatigue = 0; });
+  const res = playGame(S, home, away, false);
+  // 活躍した選手に点を付けて、2 試合の合計で MVP を決める（勝ったほうに少し足す）
+  const won = res.score[1] > res.score[0] ? 1 : res.score[0] > res.score[1] ? 0 : -1;
+  let best = null, bv = 0;
+  const score = (p, v, bonus) => {
+    if (v <= 0) return;
+    A.pts[p.id] = (A.pts[p.id] || 0) + v + bonus;
+    if (v + bonus > bv) { bv = v + bonus; best = p; }
+  };
+  res.sides.forEach((s, i) => {
+    const bonus = i === won ? 3 : 0;
+    s.lineup.forEach(sl => { const b = sl.box; score(sl.p, b.hr * 4 + b.h * 2 + b.rbi * 1.5 + b.sb, bonus); });
+    s.used.forEach(r => score(r.p, r.outs * 0.4 + r.k * 0.6 - r.r * 2, bonus));
+  });
+  ps.forEach((p, i) => Object.assign(p, saved[i]));
+  A.games.push({ home: hl, score: res.score, star: best ? best.name : null });
+  addNews(`オールスター第${n}戦：全${al} ${res.score[0]} - ${res.score[1]} 全${hl}${best ? `（殊勲：${best.name}）` : ''}`, 'big');
+  if (n === 2) {
+    const id = Object.keys(A.pts).sort((a, b) => A.pts[b] - A.pts[a])[0];
+    const p = id && S.players[id];
+    if (p) {
+      addFame(p, AS_FAME.mvp);
+      p.asMvp = (p.asMvp || 0) + 1;
+      A.mvp = { pid: p.id, name: p.name, team: S.teams[p.teamId].short };
+      addNews(`オールスターの MVP は${p.name}（${S.teams[p.teamId].short}）！`, p.teamId === S.myTeamId ? 'good' : '');
+    }
+    delete A.pts;
+    if (!S.asHist) S.asHist = [];
+    S.asHist.unshift({ y: S.year, g: A.games.map(g => [g.home, ...g.score]), mvp: A.mvp ? [A.mvp.name, A.mvp.team] : null });
+  }
 }
 
 function newSeries(stage, lg, top, low) {
@@ -952,7 +1105,7 @@ function meritPts(c, titles) {
     + mvp * 0.15 + (titles.length - mvp) * 0.05;
 }
 // 功績（0〜1。1 で殿堂入りくらい）
-function meritOf(p) { return U.clamp(meritPts(careerTotal(p), titlesOf(p.id)) + (p.b9 || 0) * 0.04 + (p.gg || 0) * 0.02, 0, 1); }
+function meritOf(p) { return U.clamp(meritPts(careerTotal(p), titlesOf(p.id)) + (p.b9 || 0) * 0.04 + (p.gg || 0) * 0.02 + (p.as || 0) * 0.01, 0, 1); }
 
 function retireRecord(p) {
   if (!S.retired) S.retired = [];
@@ -1288,6 +1441,17 @@ function offFAResolve() {
 
 // ---------- オフ ----------
 // 引退する確率。年齢と、今季どれだけ一軍に出たかで決める
+// 永久欠番の候補：その球団で長く活躍した名選手。自分の球団は候補に出し、ほかの球団は大選手なら自分で決める
+function honorCheck(t, p, honor) {
+  if (p.no == null || (t.retiredNos || []).some(r => r.no === p.no)) return;
+  const years = (p.career || []).filter(c => c.t === t.short).length;
+  if (years < RETIRE_NO_YEARS) return;
+  const m = meritOf(p);
+  if (m < RETIRE_NO_MERIT) return;
+  if (t.id === S.myTeamId) honor.push({ name: p.name, no: p.no, years, merit: Math.round(m * 100) });
+  else if (m >= RETIRE_NO_AUTO && years >= RETIRE_NO_AUTO_YEARS && U.chance(RETIRE_NO_AUTO_CHANCE)) retireNumber(t, p.no, p.name);
+}
+
 function retireChance(p, ca, o) {
   const st = p.stats, scale = Math.max(1, S.games || 143) / 143;
   const low = (st.injd || 0) < RETIRE_INJ_DAYS // 長くケガをしていた年は数えない
@@ -1301,7 +1465,7 @@ function retireChance(p, ca, o) {
 
 function offContract() {
   const my = myTeam();
-  const retired = [], raises = [];
+  const retired = [], raises = [], honor = [];
   S.teams.forEach(t => {
     teamPlayers(t).forEach(p => {
       const o = ovr(p);
@@ -1312,6 +1476,7 @@ function offContract() {
       if (p.foreign && o < 55) leave = true;
       if (leave) {
         if (t.id === my.id) retired.push({ name: p.name, age: p.age, why: p.foreign && p.age < 35 ? '退団' : '引退' });
+        honorCheck(t, p, honor);
         retireRecord(p);
         removeFromTeam(p);
         delete S.players[p.id];
@@ -1335,7 +1500,7 @@ function offContract() {
     });
   });
   raises.sort((a, b) => (b.now - b.old) - (a.now - a.old));
-  S.off.contract = { retired, raises };
+  S.off.contract = { retired, raises, honor };
   S.off.step = 'contract';
 }
 
@@ -2126,6 +2291,10 @@ function migrate() {
   Object.values(S.players).forEach(p => { if (canBat(p) && !p.steal) p.steal = rollSteal(); });
   Object.values(S.players).forEach(p => { if (canBat(p) && p.eye == null) p.eye = U.pickW(EYE_W); });
   S.teams.forEach(t => { if (!t.active) { t.active = []; autoActive(t); ensureLineup(S, t); } });
+  S.teams.forEach(t => {
+    if (!t.retiredNos) t.retiredNos = [];
+    teamPlayers(t).filter(p => p.no == null).sort((a, b) => ovr(b) - ovr(a)).forEach(p => { p.no = pickNumber(t, p); });
+  });
   Object.values(S.players).forEach(p => {
     if (p.visual == null) p.visual = rollVisual();
     if (p.fame == null) p.fame = initialFame(p);

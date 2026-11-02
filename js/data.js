@@ -153,6 +153,22 @@ const FAME_DECAY = 0.05, FAME_FLOOR_MERIT = 55;
 // FA と出場機会：今季あまり出られなかった選手は、宣言しやすく（FA_PLAY_DECLARE）、レギュラーになれる球団を選びやすい
 // 移籍先で何番手になるか：野手は 9 番手、投手は 10 番手までならレギュラー。外れると評価が FA_PLAY_PICK（出られなかった選手は 2 倍まで）下がる
 const FA_PLAY_DECLARE = 0.35, FA_PLAY_PICK = 0.12, FA_PLAY_MIN_OVR = 48;
+// オールスター：シーズンの AS_AT（割合）あたりに 2 試合。各リーグ 野手 AS_BAT 人・投手 AS_PIT 人
+// ファン投票（人気度）で野手 9 人と投手 3 人、残りは監督推薦（成績）。選ばれると人気が上がる
+const AS_AT = 0.55, AS_BAT = 16, AS_PIT = 12, AS_FAME = { fan: 5, pick: 3, mvp: 8 };
+// 起用への不満：チームで上位の力があるのに出番が GRUMBLE_SHARE より少ない選手は、毎週忠誠心が GRUMBLE_LOYALTY 下がる（GRUMBLE_FROM 試合目から）
+// 「上位の力」はチームで野手 GRUMBLE_RANK.B 番手・投手 GRUMBLE_RANK.P 番手まで（総合の順）
+const GRUMBLE_SHARE = 0.4, GRUMBLE_LOYALTY = 1.5, GRUMBLE_FROM = 18, GRUMBLE_RANK = { B: 7, P: 8 };
+// 背番号。投手・捕手・野手で好まれる番号から順に空いているものを付ける
+const NO_POOL = {
+  P: [18, 11, 14, 17, 15, 16, 19, 20, 21, 13, 12, 47, 41, 28, 29, 30, 26, 34, 43, 45, 46, 48, 49, 57, 58, 59, 61, 62, 63, 64, 65, 66, 67, 68, 69, 90, 91, 92, 93],
+  C: [27, 22, 2, 10, 32, 37, 39, 40, 44, 52, 54, 60],
+  B: [1, 3, 5, 6, 7, 8, 9, 10, 2, 4, 0, 51, 55, 23, 24, 25, 31, 33, 35, 36, 38, 42, 50, 53, 56, 70, 94, 95, 96, 97, 98, 99],
+};
+// 永久欠番：功績が RETIRE_NO_MERIT 以上で、その球団に RETIRE_NO_YEARS 年以上いた選手が引退したら選べる（3 年に 1 人くらい）
+// ほかの球団は、功績が RETIRE_NO_AUTO 以上で RETIRE_NO_AUTO_YEARS 年以上いた選手を、RETIRE_NO_AUTO_CHANCE の確率で永久欠番にする（リーグ全体で年 1 人弱）
+// 永久欠番にすると球団の人気が RETIRE_NO_POP 上がる
+const RETIRE_NO_MERIT = 0.75, RETIRE_NO_YEARS = 8, RETIRE_NO_AUTO = 1, RETIRE_NO_AUTO_YEARS = 10, RETIRE_NO_AUTO_CHANCE = 0.3, RETIRE_NO_POP = 3;
 // 宣伝：お金を払って人気を上げる。どれも 1 シーズンに 1 回まで。人気が高いほど上がりにくい
 const PROMOS = {
   web:   { name: 'ネット広告',         cost: 8000,  pop: 1, desc: '手軽に名前を広める' },

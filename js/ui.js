@@ -128,7 +128,8 @@ function nameCell(p) {
   const farm = t && t.active && !t.active.includes(p.id) ? '<span class="tag farm">二軍</span>' : '';
   const tw = p.twoWay ? '<span class="tag twoway">二刀流</span>' : '';
   const gn = p.geniusKnown ? '<span class="tag genius">天才</span>' : '';
-  return `<a href="#" data-act="player" data-pid="${p.id}">${h(p.name)}</a>${tw}${gn}${fr}${farm}${inj}`;
+  const gr = t && t.id === S.myTeamId && grumbling(t, p) ? '<span class="tag bad" title="力はあるのに出番が少なく、忠誠心が下がっています">不満</span>' : '';
+  return `<a href="#" data-act="player" data-pid="${p.id}">${h(p.name)}</a>${tw}${gn}${fr}${farm}${inj}${gr}`;
 }
 function teamChip(t) { return `<span class="chip" style="background:${t.color}">${h(t.short)}</span>`; }
 
@@ -292,7 +293,7 @@ function renderHome() {
     const opp = S.teams[m.home === t.id ? m.away : m.home];
     const sp = S.players[t.rotation[t.rotIdx % t.rotation.length]];
     const today = S.schedule[S.day];
-    const off = today && !today.games.length ? '<p class="muted">今日は試合なし（月曜・移動日）</p>' : '';
+    const off = today && today.allstar ? `<p><b>⭐ 今日はオールスター第${today.allstar}戦</b></p>` : today && !today.games.length ? '<p class="muted">今日は試合なし（月曜・移動日）</p>' : '';
     next = `${off}<p class="muted">${dateLabel(nm.entry)}${m.inter ? ' <span class="tag">交流戦</span>' : ''}</p>
       <div class="vs">${teamChip(t)} vs ${teamChip(opp)} <span class="muted">（${m.home === t.id ? 'ホーム' : 'ビジター'}）</span></div>
       <p>予告先発：${sp ? nameCell(sp) : '未定'}　相手：${opp.w}勝${opp.l}敗 ${LEAGUE_NAME[opp.lg]}${rankOf(opp.id)}位</p>`;
@@ -490,10 +491,10 @@ function renderPlayerModal(p) {
   const focusOpts = focusOptions(p).map(f => `<option ${p.focus === f ? 'selected' : ''}>${f}</option>`).join('');
   const team = p.teamId != null ? S.teams[p.teamId] : null;
   return `
-  <h2>${h(p.name)} ${p.foreign ? '<span class="tag">外国人</span>' : ''}${rebornTag(p)}</h2>
+  <h2>${p.no != null && team ? `<span class="muted">#${p.no}</span> ` : ''}${h(p.name)} ${p.foreign ? '<span class="tag">外国人</span>' : ''}${rebornTag(p)}</h2>
   ${rebornOf(p) ? `<p class="muted">転生選手：${h(rebornOf(p).note)}</p>` : ''}
   <p>${team ? teamChip(team) : ''} ${p.twoWay ? `二刀流（投手：${p.role || '-'}・野手：${p.isP ? p.pos2 : p.pos}）` : p.isP ? `投手（${p.role}）` : `野手（${p.pos}）`} ${posBadge(p)}${canBat(p) ? ` ・ サブポジ ${subsOf(p).length ? subsOf(p).join('・') : 'なし'}` : ''} ・ ${p.age}歳 ・ ${p.type}型 ・ 才能 <span class="stars">${potStars(p.pot)}</span>
-   ・ 調子 ${condCell(p)} ${COND_LABEL[p.cond]} ・ 年俸 ${U.money(p.salary)} ${p.inj ? `<span class="tag bad">故障 残り${p.inj}日</span>` : ''}${p.awakened ? `<span class="tag awaken-tag">覚醒×${p.awakened}</span>` : ''}${p.bigAwakened ? `<span class="tag awaken-tag big">大覚醒×${p.bigAwakened}</span>` : ''}${p.limitBroken ? `<span class="tag awaken-tag">上限解放×${p.limitBroken}</span>` : ''}${p.b9 ? `<span class="tag">ベストナイン×${p.b9}</span>` : ''}${p.gg ? `<span class="tag">GG×${p.gg}</span>` : ''}</p>
+   ・ 調子 ${condCell(p)} ${COND_LABEL[p.cond]} ・ 年俸 ${U.money(p.salary)} ${p.inj ? `<span class="tag bad">故障 残り${p.inj}日</span>` : ''}${p.awakened ? `<span class="tag awaken-tag">覚醒×${p.awakened}</span>` : ''}${p.bigAwakened ? `<span class="tag awaken-tag big">大覚醒×${p.bigAwakened}</span>` : ''}${p.limitBroken ? `<span class="tag awaken-tag">上限解放×${p.limitBroken}</span>` : ''}${p.b9 ? `<span class="tag">ベストナイン×${p.b9}</span>` : ''}${p.gg ? `<span class="tag">GG×${p.gg}</span>` : ''}${p.as ? `<span class="tag">オールスター×${p.as}</span>` : ''}${p.asMvp ? `<span class="tag">球宴MVP×${p.asMvp}</span>` : ''}${team && grumbling(team, p) ? '<span class="tag bad">起用に不満</span>' : ''}</p>
   ${growthBox(p)}
   <div class="bars">${bars}</div>
   <p>総合 <b>${Math.round(ovr(p))}</b>　トレード価値 ${tradeValue(p).toLocaleString()}</p>
@@ -766,7 +767,7 @@ function renderSched() {
     for (let d = S.day; d < Math.min(S.schedule.length, S.day + 14); d++) {
       const e = S.schedule[d];
       const m = e.games.find(x => x.home === t.id || x.away === t.id);
-      if (!m) { up.push(`<tr class="muted"><td>${dateLabel(e)}</td><td colspan="2">休み</td></tr>`); continue; }
+      if (!m) { up.push(`<tr class="muted"><td>${dateLabel(e)}</td><td colspan="2">${e.allstar ? `⭐ オールスター第${e.allstar}戦` : '休み'}</td></tr>`); continue; }
       up.push(`<tr><td>${dateLabel(e)}</td><td>${teamChip(S.teams[m.home === t.id ? m.away : m.home])}${m.inter ? '<span class="tag">交流戦</span>' : ''}</td><td>${m.home === t.id ? 'ホーム' : 'ビジター'}</td></tr>`);
     }
   }
@@ -840,8 +841,8 @@ const pName = (id, name) => (S.players[id] ? `<a href="#" data-act="player" data
 
 function renderRecords() {
   const v = UI.recView;
-  const seg = [['hist', '年表'], ['season', 'シーズン記録'], ['career', '通算記録'], ['hof', '殿堂入り'], ['team', '球団の記録']];
-  const body = v === 'season' ? recSeason() : v === 'career' ? recCareer() : v === 'hof' ? recHof() : v === 'team' ? recTeam() : recHist();
+  const seg = [['hist', '年表'], ['season', 'シーズン記録'], ['career', '通算記録'], ['hof', '殿堂入り'], ['team', '球団の記録'], ['as', 'オールスター']];
+  const body = v === 'season' ? recSeason() : v === 'career' ? recCareer() : v === 'hof' ? recHof() : v === 'team' ? recTeam() : v === 'as' ? recAllStar() : recHist();
   return `<section class="card"><h2>記録・歴史・殿堂</h2>
     <div class="seg">${seg.map(([k, n]) => `<button class="${v === k ? 'on' : ''}" data-act="recView" data-k="${k}">${n}</button>`).join('')}</div>
     ${body}</section>`;
@@ -955,6 +956,21 @@ function recHof() {
 }
 
 // 球団ごとの優勝回数・最多勝利のシーズン
+// オールスター：今年の出場選手と、歴代の結果・MVP（守る位置の順に並べる）
+const AS_POS_ORDER = ['捕', '一', '二', '三', '遊', '外', '指', '先', '中', '抑'];
+function recAllStar() {
+  const A = S.allStar, H = S.asHist || [];
+  if (!A && !H.length) return '<p class="muted">シーズンの半ばすぎにオールスターがあります。ファン投票（人気度）と監督推薦（成績）で選ばれます。</p>';
+  const roster = A ? `<h3>${A.year}年の出場選手</h3>
+    <p class="muted small">⭐ はファン投票で選ばれた選手。ほかは監督推薦です。</p>
+    <div class="grid2">${LEAGUES.map(lg => `<div><h4>全${LEAGUE_NAME[lg]}</h4><table class="tbl">${A.sel[lg].slice().sort((a, b) => AS_POS_ORDER.indexOf(a.pos) - AS_POS_ORDER.indexOf(b.pos) || b.fan - a.fan).map(x => `<tr class="${S.players[x.pid] && S.players[x.pid].teamId === S.myTeamId ? 'me' : ''}"><th>${x.pos === '指' ? 'DH' : h(x.pos)}</th>
+      <td class="l">${x.fan ? '⭐ ' : ''}${pName(x.pid, x.name)}<span class="muted">（${h(x.team)}）</span></td></tr>`).join('')}</table></div>`).join('')}</div>` : '';
+  const res = g => `全${g[0] === 'セ' ? 'パ' : 'セ'} ${g[1]} - ${g[2]} 全${g[0]}`;
+  const hist = H.length ? `<h3>歴代の結果</h3><div class="scroll"><table class="tbl"><tr><th>年</th><th>第1戦</th><th>第2戦</th><th>MVP</th></tr>
+    ${H.map(y => `<tr><td>${y.y}</td>${[0, 1].map(i => `<td>${y.g[i] ? res(y.g[i]) : '-'}</td>`).join('')}<td class="l">${y.mvp ? `${h(y.mvp[0])}<span class="muted">（${h(y.mvp[1])}）</span>` : '-'}</td></tr>`).join('')}</table></div>` : '';
+  return roster + hist;
+}
+
 function recTeam() {
   const H = S.standHist || [];
   if (!H.length) return '<p class="muted">シーズンが終わると、球団ごとの記録がここに残ります。</p>';
@@ -972,7 +988,16 @@ function recTeam() {
   return `<div class="scroll"><table class="tbl"><tr><th>球団</th><th>日本一</th><th>リーグ優勝</th><th>最下位</th><th>いちばん良かった年</th></tr>
     ${rows.map(x => `<tr class="${x.t.id === S.myTeamId ? 'me' : ''}"><td class="l">${teamChip(x.t)} ${h(x.t.name)}</td><td>${x.jp}</td><td>${x.lgWin}</td><td>${x.last}</td>
       <td class="l">${x.best ? `${x.best.year}年 ${x.best.w}勝${x.best.l}敗（${x.best.rank}位）` : '-'}</td></tr>`).join('')}</table></div>
-    <div class="grid2"><div><h3>歴代の最高勝率</h3><ol class="plain">${bestAll.map(sline).join('')}</ol></div><div><h3>歴代の最低勝率</h3><ol class="plain">${worstAll.map(sline).join('')}</ol></div></div>`;
+    <div class="grid2"><div><h3>歴代の最高勝率</h3><ol class="plain">${bestAll.map(sline).join('')}</ol></div><div><h3>歴代の最低勝率</h3><ol class="plain">${worstAll.map(sline).join('')}</ol></div></div>
+    ${retiredNoList()}`;
+}
+
+// 永久欠番の一覧（ある球団だけ）
+function retiredNoList() {
+  const ts = S.teams.filter(t => (t.retiredNos || []).length);
+  return `<h3>永久欠番</h3>${ts.length ? `<table class="tbl">${ts.map(t => `<tr class="${t.id === S.myTeamId ? 'me' : ''}"><td class="l">${teamChip(t)}</td>
+    <td class="l">${t.retiredNos.map(r => `<b>${r.no}</b> ${h(r.name)}<span class="muted">（${r.year}年）</span>`).join('　')}</td></tr>`).join('')}</table>`
+    : '<p class="muted">まだありません。長く活躍した名選手が引退すると、背番号を永久欠番にできます。</p>'}`;
 }
 
 // ---------- 経営 ----------
@@ -1168,6 +1193,11 @@ function renderOff() {
     const c = O.contract;
     body = `
     <section class="card"><h2>引退・退団</h2>${c.retired.length ? `<ul>${c.retired.map(r => `<li>${h(r.name)}（${r.age}歳）${r.why}</li>`).join('')}</ul>` : '<p>いません。</p>'}</section>
+    ${(c.honor || []).length ? `<section class="card"><h2>永久欠番</h2>
+      <p>長くチームを支えた名選手が引退しました。背番号を永久欠番にすると、これから先だれもその番号を付けられなくなり、球団の人気が少し上がります。</p>
+      <p class="muted small">ドラフトへ進むと、選べなくなります。</p>
+      <table class="tbl">${c.honor.map((x, i) => `<tr><td class="l"><b>#${x.no}</b> ${h(x.name)}</td><td>${x.years}年在籍</td><td>功績 ${x.merit}</td>
+        <td>${x.done ? '<b>永久欠番にしました</b>' : `<button data-act="retireNo" data-i="${i}">永久欠番にする</button>`}</td></tr>`).join('')}</table></section>` : ''}
     <section class="card"><h2>契約更改</h2><p class="muted">成績と能力で来季の年俸が決まりました。選手は 1 つ歳を取りました。</p>
       <div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年齢</th><th>総合</th><th>今季</th><th>来季</th><th>増減</th></tr>
       ${c.raises.filter(r => S.players[r.pid] && S.players[r.pid].teamId === S.myTeamId).map(r => { const p = S.players[r.pid]; return `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${Math.round(ovr(p))}</td><td>${U.money(r.old)}</td><td>${U.money(r.now)}</td><td class="${r.now >= r.old ? 'win' : 'lose'}">${r.locked ? '<span class="muted">複数年契約</span>' : `${r.now >= r.old ? '+' : ''}${U.money(r.now - r.old)}`}</td></tr>`; }).join('')}

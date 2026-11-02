@@ -234,6 +234,14 @@ const ACTIONS = {
     slimHistory(UI.slimUntil, lgs);
     UI.toast = '古い年の記録を整理しました。';
   },
+  retireNo(el) {
+    const x = S.off && S.off.contract && S.off.contract.honor[+el.dataset.i];
+    if (!x || x.done) return 'keep';
+    if (!confirm(`${x.name}の背番号 ${x.no} を永久欠番にしますか？\nこれから先、${myTeam().short}ではだれもこの番号を付けられなくなります。元に戻せません。`)) return 'keep';
+    retireNumber(myTeam(), x.no, x.name);
+    x.done = true;
+    UI.toast = `背番号 ${x.no} を永久欠番にしました。`;
+  },
   retStar(el) {
     const r = S.retired.find(x => x.id === +el.dataset.id);
     if (r && r.hof && r.star && !confirm(`殿堂入りの${r.name}の★を外しますか？
