@@ -48,11 +48,16 @@
     <fieldset>
       <legend>保存</legend>
       <p class="muted">全員分を _private/reborn.json に書き、家族の合言葉で暗号化し直します（1 つ前の版は _private/reborn.bak.json に残ります）。
-        合言葉が今の暗号化ファイルと合わないときは保存しません。ゲームに出すには、そのあと push します。</p>
+        合言葉が今の暗号化ファイルと合わないときは保存しません。</p>
       <div class="bar">
         <input type="password" id="pass" placeholder="家族の合言葉" autocomplete="off">
         <button class="primary" id="save">保存して暗号化</button>
       </div>
+    </fieldset>
+    <fieldset>
+      <legend>ゲームに出す</legend>
+      <p class="muted">保存した暗号化ファイル（js/reborn.enc.json）だけを GitHub に送ります（commit と push）。ほかのファイルは送りません。1 分ほどで公開版に入ります。</p>
+      <div class="bar"><button class="primary" id="publish">ゲームに出す</button></div>
     </fieldset>
   </section>
 </main>
@@ -215,6 +220,17 @@ $('save').onclick = async () => {
     if (r.ok) { dirty = false; $('pass').value = ''; }
   } catch (e) { say('保存できませんでした。黒い画面（道具）が動いているか確かめてください', 'bad'); }
   $('save').disabled = false; renderList(); renderForm();
+};
+$('publish').onclick = async () => {
+  if (dirty) { say('まだ保存していない変更があります。先に「保存して暗号化」を押してください', 'bad'); return; }
+  if (!confirm('保存した転生選手のリストを、ゲーム（公開版）に出しますか？')) return;
+  $('publish').disabled = true; say('GitHub に送っています…', 'warn');
+  try {
+    const r = await fetch('/api/publish', { method: 'POST' });
+    const j = await r.json();
+    say(j.msg, r.ok ? 'ok' : 'bad');
+  } catch (e) { say('送れませんでした。黒い画面（道具）が動いているか確かめてください', 'bad'); }
+  $('publish').disabled = false;
 };
 window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
 
