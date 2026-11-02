@@ -185,7 +185,8 @@ const ACTIONS = {
   },
   offNext() {
     const step = S.off.step;
-    if (step === 'awards') offFAStart();
+    if (step === 'awards') { if (intlYear() && !S.off.intl) offIntl(); else offFAStart(); }
+    else if (step === 'intl') offFAStart();
     else if (step === 'fa') offContract();
     else if (step === 'contract') offDraftStart();
     else if (step === 'draft') offCampStart();

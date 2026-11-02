@@ -494,7 +494,7 @@ function renderPlayerModal(p) {
   <h2>${p.no != null && team ? `<span class="muted">#${p.no}</span> ` : ''}${h(p.name)} ${p.foreign ? '<span class="tag">外国人</span>' : ''}${rebornTag(p)}</h2>
   ${rebornOf(p) ? `<p class="muted">転生選手：${h(rebornOf(p).note)}</p>` : ''}
   <p>${team ? teamChip(team) : ''} ${p.twoWay ? `二刀流（投手：${p.role || '-'}・野手：${p.isP ? p.pos2 : p.pos}）` : p.isP ? `投手（${p.role}）` : `野手（${p.pos}）`} ${posBadge(p)}${canBat(p) ? ` ・ サブポジ ${subsOf(p).length ? subsOf(p).join('・') : 'なし'}` : ''} ・ ${p.age}歳 ・ ${p.type}型 ・ 才能 <span class="stars">${potStars(p.pot)}</span>
-   ・ 調子 ${condCell(p)} ${COND_LABEL[p.cond]} ・ 年俸 ${U.money(p.salary)} ${p.inj ? `<span class="tag bad">故障 残り${p.inj}日</span>` : ''}${p.awakened ? `<span class="tag awaken-tag">覚醒×${p.awakened}</span>` : ''}${p.bigAwakened ? `<span class="tag awaken-tag big">大覚醒×${p.bigAwakened}</span>` : ''}${p.limitBroken ? `<span class="tag awaken-tag">上限解放×${p.limitBroken}</span>` : ''}${p.b9 ? `<span class="tag">ベストナイン×${p.b9}</span>` : ''}${p.gg ? `<span class="tag">GG×${p.gg}</span>` : ''}${p.as ? `<span class="tag">オールスター×${p.as}</span>` : ''}${p.asMvp ? `<span class="tag">球宴MVP×${p.asMvp}</span>` : ''}${team && grumbling(team, p) ? '<span class="tag bad">起用に不満</span>' : ''}</p>
+   ・ 調子 ${condCell(p)} ${COND_LABEL[p.cond]} ・ 年俸 ${U.money(p.salary)} ${p.inj ? `<span class="tag bad">故障 残り${p.inj}日</span>` : ''}${p.awakened ? `<span class="tag awaken-tag">覚醒×${p.awakened}</span>` : ''}${p.bigAwakened ? `<span class="tag awaken-tag big">大覚醒×${p.bigAwakened}</span>` : ''}${p.limitBroken ? `<span class="tag awaken-tag">上限解放×${p.limitBroken}</span>` : ''}${p.b9 ? `<span class="tag">ベストナイン×${p.b9}</span>` : ''}${p.gg ? `<span class="tag">GG×${p.gg}</span>` : ''}${p.as ? `<span class="tag">オールスター×${p.as}</span>` : ''}${p.asMvp ? `<span class="tag">球宴MVP×${p.asMvp}</span>` : ''}${p.jp ? `<span class="tag">日本代表×${p.jp}</span>` : ''}${p.intlMvp ? `<span class="tag awaken-tag">国際大会MVP×${p.intlMvp}</span>` : ''}${team && grumbling(team, p) ? '<span class="tag bad">起用に不満</span>' : ''}</p>
   ${growthBox(p)}
   <div class="bars">${bars}</div>
   <p>総合 <b>${Math.round(ovr(p))}</b>　トレード価値 ${tradeValue(p).toLocaleString()}</p>
@@ -841,8 +841,8 @@ const pName = (id, name) => (S.players[id] ? `<a href="#" data-act="player" data
 
 function renderRecords() {
   const v = UI.recView;
-  const seg = [['hist', '年表'], ['season', 'シーズン記録'], ['career', '通算記録'], ['hof', '殿堂入り'], ['team', '球団の記録'], ['as', 'オールスター']];
-  const body = v === 'season' ? recSeason() : v === 'career' ? recCareer() : v === 'hof' ? recHof() : v === 'team' ? recTeam() : v === 'as' ? recAllStar() : recHist();
+  const seg = [['hist', '年表'], ['season', 'シーズン記録'], ['career', '通算記録'], ['hof', '殿堂入り'], ['team', '球団の記録'], ['as', 'オールスター'], ['intl', '国際大会']];
+  const body = v === 'season' ? recSeason() : v === 'career' ? recCareer() : v === 'hof' ? recHof() : v === 'team' ? recTeam() : v === 'as' ? recAllStar() : v === 'intl' ? recIntl() : recHist();
   return `<section class="card"><h2>記録・歴史・殿堂</h2>
     <div class="seg">${seg.map(([k, n]) => `<button class="${v === k ? 'on' : ''}" data-act="recView" data-k="${k}">${n}</button>`).join('')}</div>
     ${body}</section>`;
@@ -956,6 +956,33 @@ function recHof() {
 }
 
 // 球団ごとの優勝回数・最多勝利のシーズン
+// 国際大会：オフの画面（大会の結果と日本代表）
+function renderIntl(I) {
+  const jpRow = x => `<tr class="${S.players[x.pid] && S.players[x.pid].teamId === S.myTeamId ? 'me' : ''}"><th>${h(x.pos)}</th><td class="l">${pName(x.pid, x.name)}<span class="muted">（${h(x.team)}）</span></td></tr>`;
+  const groupTbl = (g, i) => `<div><h4>${'AB'[i]}組</h4><table class="tbl"><tr><th>国</th><th>勝</th><th>敗</th><th>分</th><th>得失点</th></tr>${g.map(c => `<tr class="${c.name === '日本' ? 'me' : ''}"><td class="l">${h(c.name)}</td><td>${c.w}</td><td>${c.l}</td><td>${c.d}</td><td>${c.rs - c.ra >= 0 ? '+' : ''}${c.rs - c.ra}</td></tr>`).join('')}</table></div>`;
+  const gHead = '<tr><th></th><th>試合</th><th>殊勲</th></tr>';
+  const gRow = g => `<tr class="${g.away === '日本' || g.home === '日本' ? 'me' : ''}"><td>${h(g.stage)}</td><td class="l">${h(g.away)} <b>${g.score[0]} - ${g.score[1]}</b> ${h(g.home)}${g.tb ? ' <span class="muted">（タイブレーク）</span>' : ''}</td><td class="l muted">${g.star ? h(g.star) : ''}</td></tr>`;
+  return `<section class="card"><h2>🌏 ${I.year}年 国際大会</h2>
+    <p class="big-text">優勝：${h(I.champ)}</p>
+    <p>日本は <b>${h(I.jp)}</b>${I.mvp ? ` ・ 大会MVP ${h(I.mvp.name)}（${h(I.mvp.team)}）` : ''}</p>
+    <h3>決勝トーナメント</h3><div class="scroll"><table class="tbl">${gHead}${I.games.filter(g => g.stage !== '1次リーグ').map(gRow).join('')}</table></div>
+    <h3>1次リーグ</h3><div class="grid2">${I.table.map(groupTbl).join('')}</div>
+    <details><summary>1次リーグの全試合</summary><div class="scroll"><table class="tbl">${gHead}${I.games.filter(g => g.stage === '1次リーグ').map(gRow).join('')}</table></div></details>
+    <h3>日本代表（${I.japan.length}人）</h3><p class="muted small">12 球団の日本人選手から、能力で自動で選ばれました。出た選手は人気が上がります（優勝するとさらに）。</p>
+    <div class="grid2"><div><h4>野手</h4><table class="tbl">${I.japan.filter(x => !x.P).map(jpRow).join('')}</table></div><div><h4>投手</h4><table class="tbl">${I.japan.filter(x => x.P).map(jpRow).join('')}</table></div></div>
+    <button class="primary big" data-act="offNext">FAへ ▶</button></section>`;
+}
+
+// 国際大会：歴代の結果
+function recIntl() {
+  const H = S.intlHist || [];
+  const next = S.year + ((INTL_EVERY - (S.year % INTL_EVERY)) % INTL_EVERY);
+  const note = `<p class="muted">${INTL_EVERY} 年に 1 回、日本シリーズのあとに 8 か国で行います。${H.length && H[0].y === S.year ? '' : `次は ${next}年のオフです。`}</p>`;
+  if (!H.length) return note;
+  return `${note}<div class="scroll"><table class="tbl"><tr><th>年</th><th>優勝</th><th>日本</th><th>大会MVP</th></tr>
+    ${H.map(y => `<tr><td>${y.y}</td><td class="l">${y.champ === '日本' ? '🏆 ' : ''}${h(y.champ)}</td><td class="l">${h(y.jp)}<span class="muted">（${y.w}勝${y.l}敗）</span></td><td class="l">${y.mvp ? `${h(y.mvp[0])}<span class="muted">（${h(y.mvp[1])}）</span>` : '-'}</td></tr>`).join('')}</table></div>`;
+}
+
 // オールスター：今年の出場選手と、歴代の結果・MVP（守る位置の順に並べる）
 const AS_POS_ORDER = ['捕', '一', '二', '三', '遊', '外', '指', '先', '中', '抑'];
 function recAllStar() {
@@ -1174,7 +1201,7 @@ function renderFA() {
 // ---------- オフシーズン ----------
 function renderOff() {
   const O = S.off;
-  const steps = [['awards', '表彰'], ['fa', 'FA'], ['contract', '契約更改'], ['draft', 'ドラフト'], ['camp', 'キャンプ']];
+  const steps = [['awards', '表彰'], ...(O.intl || intlYear() ? [['intl', '国際大会']] : []), ['fa', 'FA'], ['contract', '契約更改'], ['draft', 'ドラフト'], ['camp', 'キャンプ']];
   const bar = `<div class="steps">${steps.map(([k, n]) => `<span class="${O.step === k ? 'on' : ''}">${n}</span>`).join('→')}</div>`;
   let body = '';
   if (O.step === 'awards') {
@@ -1186,7 +1213,9 @@ function renderOff() {
     </section>
     <section class="card"><h2>表彰</h2><div class="grid2">${LEAGUES.map(lg => `<div><h3>${LEAGUE_NAME[lg]}</h3><table class="tbl">${O.awards.filter(a => (a.lg || lg) === lg).map(a => `<tr class="${S.players[a.pid] && S.players[a.pid].teamId === S.myTeamId ? 'me' : ''}"><th class="l">${a.title}</th><td class="l">${h(a.name)}（${h(a.team)}）</td><td>${a.val}</td></tr>`).join('')}</table></div>`).join('')}</div>
       ${posAwards('ベストナイン', O.b9)}${posAwards('ゴールデングラブ', O.gg)}
-      <button class="primary big" data-act="offNext">FAへ ▶</button></section>`;
+      <button class="primary big" data-act="offNext">${intlYear() && !O.intl ? '国際大会へ ▶' : 'FAへ ▶'}</button></section>`;
+  } else if (O.step === 'intl') {
+    body = renderIntl(O.intl);
   } else if (O.step === 'fa') {
     body = renderFAStep();
   } else if (O.step === 'contract') {
@@ -1356,7 +1385,7 @@ function draftReview(ids) {
 }
 
 function renderProspects() {
-  if (S.phase === 'off' && S.off.step !== 'awards' && S.off.step !== 'contract') {
+  if (S.phase === 'off' && !['awards', 'intl', 'contract'].includes(S.off.step)) {
     return `<section class="card"><h2>ドラフト候補</h2><p>${S.off.step === 'draft' ? 'ドラフト会議中です。「オフシーズン」の画面で指名してください。' : '今年のドラフトは終わりました。次の候補は開幕のときに発表されます。'}</p></section>`;
   }
   const ids = S.draftClass || [];

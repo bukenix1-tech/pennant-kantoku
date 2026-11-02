@@ -774,6 +774,119 @@ function goldenGlove(lg) {
   return out;
 }
 
+// ---------- 国際大会 ----------
+function intlYear() { return S.year % INTL_EVERY === 0; }
+
+function intlName(c) {
+  const pick = k => U.pick(INTL_NAMES[k].split(' '));
+  if (c.names === 'kr') return `${pick('krS')}・${pick('krG')}`;
+  if (c.names === 'tw') return `${pick('twS')}・${pick('twG')}`;
+  return pick(c.names);
+}
+
+// 日本代表：日本人の選手から、捕手 2 人・内野の各位置・外野 3 人を守れる人から先に選び、残りは総合の順。投手は先発 6 人と中継ぎ・抑え
+function selectJapan() {
+  const pool = Object.values(S.players).filter(p => p.teamId != null && !p.foreign && !p.inj);
+  const out = [];
+  const has = p => out.some(x => x.pid === p.id);
+  const take = (p, pos, P) => { if (p && !has(p)) out.push({ pid: p.id, name: p.name, team: S.teams[p.teamId].short, pos, P }); };
+  const bats = pool.filter(p => !p.isP && canBat(p)).sort((a, b) => ovr(b) - ovr(a));
+  bats.filter(p => p.pos === '捕').slice(0, 2).forEach(p => take(p, '捕', false));
+  ['一', '二', '三', '遊'].forEach(pos => take(bats.find(p => !has(p) && p.pos === pos), pos, false));
+  bats.filter(p => p.pos === '外').slice(0, 3).forEach(p => take(p, '外', false));
+  bats.forEach(p => { if (out.length < INTL_BAT) take(p, p.pos, false); });
+  const pits = pool.filter(p => p.isP);
+  const nP = () => out.filter(x => x.P).length;
+  pits.slice().sort((a, b) => (starterVal(b) + aptOf(b).sp * 6) - (starterVal(a) + aptOf(a).sp * 6)).forEach(p => { if (nP() < 6) take(p, '先', true); });
+  pits.slice().sort((a, b) => (relVal(b) + aptOf(b).rp * 4) - (relVal(a) + aptOf(a).rp * 4)).forEach(p => { if (nP() < INTL_PIT) take(p, '中', true); });
+  return out;
+}
+
+// 相手の国の選手（大会のあいだだけ S.players に入れて、終わったら消す）
+function intlRoster(c, base) {
+  const ids = [];
+  const fpos = ['捕', '一', '二', '三', '遊', '外', '外', '外', '一', '捕', '三', '遊', '外', '二', '外'];
+  fpos.forEach((pos, j) => {
+    const p = newPlayer(S, { pos, q: base + c.q + (j < 9 ? 2 : -5) + U.gauss() * 4, age: U.rint(23, 34), foreign: true });
+    p.name = intlName(c);
+    ids.push(p.id);
+  });
+  for (let j = 0; j < INTL_PIT; j++) {
+    const p = newPlayer(S, { isP: true, role: j < 6 ? '先発' : '中継', q: base + c.q + (j < 6 ? 1 : -2) + U.gauss() * 4, age: U.rint(23, 34), foreign: true });
+    p.name = intlName(c);
+    ids.push(p.id);
+  }
+  return ids;
+}
+
+// 大会の 1 試合用のチーム（その場かぎり）
+function intlTeam(name, ids, i, gi) {
+  const ps = ids.map(id => S.players[id]).filter(Boolean);
+  const pit = ps.filter(p => p.isP);
+  const rot = pit.slice().sort((a, b) => starterVal(b) - starterVal(a)).slice(0, 5);
+  const pen = pit.filter(p => !rot.includes(p)).sort((a, b) => relVal(b) - relVal(a));
+  return {
+    id: -10 - i, name, short: name, color: '#555', fac: {},
+    players: ps.map(p => p.id), active: ps.map(p => p.id), lineup: [], rotation: rot.map(p => p.id), rotIdx: gi % Math.max(1, rot.length),
+    closer: pen[0] ? pen[0].id : null, setup: pen[1] ? pen[1].id : null,
+  };
+}
+
+// 国際大会をまるごと行う（オフの表彰のあと）
+function offIntl() {
+  const japan = selectJapan();
+  const base = U.sum(japan, x => ovr(S.players[x.pid])) / japan.length;
+  const countries = [{ name: '日本', ids: japan.map(x => x.pid), jp: true }, ...INTL_COUNTRIES.map(c => ({ name: c.name, ids: intlRoster(c, base) }))];
+  countries.forEach((c, i) => { c.i = i; c.w = 0; c.l = 0; c.d = 0; c.rs = 0; c.ra = 0; c.gi = 0; });
+  const rest = U.shuffle(countries.slice(1));
+  const groups = [[countries[0], ...rest.slice(0, 3)], rest.slice(3)];
+  const jpPs = japan.map(x => S.players[x.pid]);
+  const saved = jpPs.map(p => ({ stats: p.stats, rest: p.rest, fatigue: p.fatigue, role: p.role, cond: p.cond }));
+  const pts = {}, games = [];
+  const play = (stage, a, b) => {
+    const home = intlTeam(b.name, b.ids, b.i, b.gi++), away = intlTeam(a.name, a.ids, a.i, a.gi++);
+    [...home.players, ...away.players].forEach(id => { const p = S.players[id]; p.stats = newStats(); p.rest = 7; p.fatigue = 0; p.cond = 3; });
+    const res = playGame(S, home, away, false);
+    let best = null, bv = 0;
+    res.sides.forEach(s => {
+      const add = (p, v) => { if (v <= 0) return; pts[p.id] = (pts[p.id] || 0) + v; if (v > bv) { bv = v; best = p; } };
+      s.lineup.forEach(sl => { const x = sl.box; add(sl.p, x.hr * 4 + x.h * 2 + x.rbi * 1.5 + x.sb); });
+      s.used.forEach(r => add(r.p, r.outs * 0.4 + r.k * 0.6 - r.r * 2));
+    });
+    let [sa, sh] = res.score, tb = false;
+    if (stage !== '1次リーグ' && sa === sh) { tb = true; if (U.chance(0.5)) sa++; else sh++; } // 決まらなければタイブレーク
+    a.rs += sa; a.ra += sh; b.rs += sh; b.ra += sa;
+    if (sa > sh) { a.w++; b.l++; } else if (sh > sa) { b.w++; a.l++; } else { a.d++; b.d++; }
+    const who = best ? (countries.find(c => c.ids.includes(best.id)) || {}).name : null;
+    games.push({ stage, away: a.name, home: b.name, score: [sa, sh], tb, star: best ? `${best.name}（${who}）` : null });
+    return sa > sh ? a : b;
+  };
+  groups.forEach(g => { for (let i = 0; i < g.length; i++) for (let j = i + 1; j < g.length; j++) play('1次リーグ', g[i], g[j]); });
+  const order = g => g.slice().sort((a, b) => b.w - a.w || (b.rs - b.ra) - (a.rs - a.ra) || b.rs - a.rs);
+  const table = groups.map(g => order(g).map(c => ({ name: c.name, w: c.w, l: c.l, d: c.d, rs: c.rs, ra: c.ra })));
+  const [A, B] = groups.map(order);
+  const f1 = play('準決勝', B[1], A[0]), f2 = play('準決勝', A[1], B[0]);
+  const champ = play('決勝', f2, f1);
+  // MVP：優勝した国の選手で、大会を通していちばん活躍した選手
+  const mvpId = Object.keys(pts).filter(id => champ.ids.includes(+id)).sort((a, b) => pts[b] - pts[a])[0];
+  const mvpP = mvpId && S.players[mvpId];
+  const jpName = '日本';
+  const reached = games.filter(g => g.away === jpName || g.home === jpName);
+  const jpResult = champ.jp ? '優勝' : reached.some(g => g.stage === '決勝') ? '準優勝' : reached.some(g => g.stage === '準決勝') ? 'ベスト4' : '1次リーグ敗退';
+  jpPs.forEach((p, i) => Object.assign(p, saved[i]));
+  jpPs.forEach(p => { p.jp = (p.jp || 0) + 1; addFame(p, INTL_FAME.pick + (champ.jp ? INTL_FAME.champ : 0)); });
+  const mvp = mvpP ? { name: mvpP.name, team: champ.jp ? `日本・${S.teams[mvpP.teamId].short}` : champ.name, pid: champ.jp ? mvpP.id : null } : null;
+  if (mvpP && champ.jp) { addFame(mvpP, INTL_FAME.mvp); mvpP.intlMvp = (mvpP.intlMvp || 0) + 1; }
+  countries.slice(1).forEach(c => c.ids.forEach(id => { delete S.players[id]; }));
+  S.off.intl = { year: S.year, japan, table, games, champ: champ.name, jp: jpResult, mvp };
+  if (!S.intlHist) S.intlHist = [];
+  S.intlHist.unshift({ y: S.year, champ: champ.name, jp: jpResult, w: U.sum(reached, g => (g.away === jpName ? g.score[0] > g.score[1] : g.score[1] > g.score[0]) ? 1 : 0), l: U.sum(reached, g => (g.away === jpName ? g.score[0] < g.score[1] : g.score[1] < g.score[0]) ? 1 : 0), mvp: mvp ? [mvp.name, mvp.team] : null });
+  const mine = japan.filter(x => S.players[x.pid].teamId === S.myTeamId).map(x => x.name);
+  addNews(`国際大会：${champ.name}が優勝！ 日本は${jpResult}。${mvp ? `MVP は${mvp.name}（${mvp.team}）。` : ''}`, champ.jp ? 'big' : '');
+  if (mine.length) addNews(`日本代表に${mine.join('・')}が選ばれていました。`, 'good');
+  S.off.step = 'intl';
+}
+
 // ---------- オールスター ----------
 // ファン投票（人気度）で守る位置ごとの野手 9 人と、先発・中継ぎ・抑えを 1 人ずつ。残りは監督推薦（成績）。どの球団からも 1 人は選ぶ
 function selectAllStars() {
@@ -1105,7 +1218,7 @@ function meritPts(c, titles) {
     + mvp * 0.15 + (titles.length - mvp) * 0.05;
 }
 // 功績（0〜1。1 で殿堂入りくらい）
-function meritOf(p) { return U.clamp(meritPts(careerTotal(p), titlesOf(p.id)) + (p.b9 || 0) * 0.04 + (p.gg || 0) * 0.02 + (p.as || 0) * 0.01, 0, 1); }
+function meritOf(p) { return U.clamp(meritPts(careerTotal(p), titlesOf(p.id)) + (p.b9 || 0) * 0.04 + (p.gg || 0) * 0.02 + (p.as || 0) * 0.01 + (p.jp || 0) * 0.01, 0, 1); }
 
 function retireRecord(p) {
   if (!S.retired) S.retired = [];
