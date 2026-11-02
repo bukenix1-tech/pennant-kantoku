@@ -1145,9 +1145,22 @@ function declareChance(p, retain) {
   if (ovr(p) < 50) c -= 0.25;
   if (ovr(p) >= 62) c += 0.15; // 主力ほど大きな契約を求めて宣言しやすい
   if (isHomeTeam(p, t)) c -= 0.12; // 地元の球団には少し残りやすい
+  if (ovr(p) >= FA_PLAY_MIN_OVR) c += (1 - playShare(p)) * FA_PLAY_DECLARE; // 出られなかった選手は、出場機会を求めて出ていきやすい
   c -= retain === 1.5 ? 0.3 : retain === 1.2 ? 0.15 : 0;
   return U.clamp(c, 0.02, 0.9);
 }
+
+// 今季どれだけ出られたか（0〜1）。野手は規定打席、投手は 1 試合 1 アウトで 1
+function playShare(p) {
+  const s = p.stats || {};
+  return U.clamp(canPitch(p) && !(canBat(p) && s.pa > s.outs) ? s.outs / S.games : s.pa / (S.games * 3.1), 0, 1);
+}
+// その球団に入ったら何番手か（同じ投手・野手の中で、総合が上の選手の数 ＋1）
+function depthAt(t, p) {
+  const o = ovr(p);
+  return teamPlayers(t).filter(x => x.id !== p.id && x.isP === p.isP && ovr(x) > o).length + 1;
+}
+function regularAt(t, p) { return depthAt(t, p) <= (p.isP ? 10 : 9); }
 
 function isHomeTeam(p, t) { return !!p.home && TEAM_PREF[t.short] === p.home; }
 
@@ -1183,10 +1196,11 @@ function offFADeclare() {
     const rank = faRank(t, p);
     p.faUsed = true;
     p.svcUsed = p.svc || 0;
+    const why = ovr(p) >= FA_PLAY_MIN_OVR && playShare(p) < 0.4 ? '出場機会を求めて' : '';
     F.declared.push({ pid: id, from: t.id, rank, oldSalary: p.salary, mv: faMarket(p), bids: aiBids(p, t) });
     removeFromTeam(p);
     p.lastTeam = t.short;
-    addNews(`${p.name}（${t.short}・${p.isP ? '投手' : p.pos}）がFA宣言しました。`, mine ? 'bad' : '');
+    addNews(`${p.name}（${t.short}・${p.isP ? '投手' : p.pos}）が${why}FA宣言しました。`, mine ? 'bad' : '');
   });
   F.stage = 'market';
 }
@@ -1231,6 +1245,7 @@ function bidScore(p, d, b) {
   let f = 1 + (pct(t) - 0.5) * 0.4 + (t.pop - 50) / 500 + U.rnd(-0.06, 0.06);
   if (b.team === d.from) f += (p.loyalty / 100) * 0.5;
   if (isHomeTeam(p, t)) f += 0.12; // 地元の球団には少し行きやすい
+  if (!regularAt(t, p)) f -= FA_PLAY_PICK * (2 - playShare(p)); // 出られそうにない球団は避ける
   return b.salary * (1 + yearW * (b.years - 1)) * f;
 }
 

@@ -649,14 +649,15 @@ function renderFAStep() {
       const r = F.retain[p.id] || 0;
       const c = declareChance(p, r);
       return `<tr><td class="l">${nameCell(p)}${isHomeTeam(p, t) ? '<span class="tag">地元</span>' : ''}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${Math.round(ovr(p))}</td>
-        <td>${U.money(p.salary)}</td><td>${U.money(faMarket(p))}</td><td>${Math.round(p.loyalty)}</td><td><b>${faMood(c)}</b></td>
+        <td>${U.money(p.salary)}</td><td>${U.money(faMarket(p))}</td><td>${Math.round(p.loyalty)}</td><td>${Math.round(playShare(p) * 100)}%</td><td><b>${faMood(c)}</b></td>
         <td><select data-chg="retain" data-pid="${p.id}">${[[0, 'しない'], [1.2, '年俸1.2倍を約束'], [1.5, '年俸1.5倍を約束']].map(([v, n]) => `<option value="${v}" ${r === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td></tr>`;
     }).join('');
     return `<section class="card"><h2>FA権を持つ選手</h2>
       <p>一軍に登録された年数が、高校出身は 8 年・大学や社会人出身は 7 年になると FA 権が取れます（一度使ったら次は 4 年）。
-        FA 権を持つ選手は、ここで FA 宣言するかどうかを決めます。<b>忠誠心が高い選手ほど残りやすく</b>、地元の球団にも少し残りやすくなります。</p>
+        FA 権を持つ選手は、ここで FA 宣言するかどうかを決めます。<b>忠誠心が高い選手ほど残りやすく</b>、地元の球団にも少し残りやすくなります。
+        <b>今季あまり出られなかった選手（出場が少ない）は、出場機会を求めて出ていきやすく</b>、移籍先もレギュラーになれる球団を選びやすくなります。</p>
       <p class="muted">引き留め（年俸アップの約束）をすると残りやすくなります。残ってくれたら約束どおり年俸が上がります。他球団では ${others} 人が FA 権を持っています。</p>
-      ${rows ? `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>総合</th><th>年俸</th><th>FA相場</th><th>忠誠心</th><th>意向</th><th>引き留め</th></tr>${rows}</table></div>` : '<p>あなたのチームには FA 権を持つ選手がいません。</p>'}
+      ${rows ? `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>総合</th><th>年俸</th><th>FA相場</th><th>忠誠心</th><th>出場</th><th>意向</th><th>引き留め</th></tr>${rows}</table></div>` : '<p>あなたのチームには FA 権を持つ選手がいません。</p>'}
       <button class="primary big" data-act="faDeclare">FA宣言の発表へ ▶</button></section>`;
   }
   if (F.stage === 'market') {
