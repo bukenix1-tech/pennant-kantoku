@@ -55,6 +55,8 @@ const ACTIONS = {
   lg(el) { UI.lg = el.dataset.lg; },
   closeModal() { closeModal(); },
   player(el) { openModal(renderPlayerModal(S.players[+el.dataset.pid])); return 'keep'; },
+  pbp(el) { UI.pbpView = { i: +el.dataset.i, step: 0 }; openModal(renderPbp()); return 'keep'; },
+  pbpGo(el) { pbpGo(el.dataset.to); openModal(renderPbp()); return 'keep'; },
   release(el) {
     const p = S.players[+el.dataset.pid];
     if (!confirm(`${p.name}を自由契約にしますか？（元に戻せません）`)) return 'keep';

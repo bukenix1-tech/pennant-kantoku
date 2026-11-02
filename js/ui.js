@@ -956,6 +956,86 @@ function recHof() {
 }
 
 // 球団ごとの優勝回数・最多勝利のシーズン
+// ---------- 試合を順を追って見る（日本シリーズ・国際大会の決勝。その年の分だけ） ----------
+const PBP_WORD = { BB: '四球', K: '三振', HR: 'ホームラン', '1B': 'ヒット', '2B': 'ツーベースヒット', '3B': 'スリーベースヒット', GO: '内野ゴロ', FO: '外野フライ', DP: '併殺打', SF: '犠牲フライ' };
+// 結果が分からないように、ボタンには点を出さない
+function pbpButtons(kind) {
+  const list = (S.pbp || []).map((g, i) => [g, i]).filter(([g]) => g.kind === kind);
+  if (!list.length) return '';
+  return `<p class="pbp-btns">${list.map(([g, i], k) => `<button data-act="pbp" data-i="${i}">▶ ${kind === 'js' ? `第${k + 1}戦` : '決勝'}を見る</button>`).join(' ')}</p>`;
+}
+function pbpHalf(e) { return typeof e[0] === 'number' ? [e[0], e[1]] : [e[1], e[2]]; }
+// いまの場面（回・アウト・塁・点）を、見せたところまでの記録から作る
+function pbpState(ev) {
+  let st = { inn: 1, half: 0, outs: 0, bases: 0, sc: [0, 0] };
+  ev.forEach(e => {
+    const [inn, half] = pbpHalf(e);
+    if (inn !== st.inn || half !== st.half) st = { ...st, inn, half, outs: 0, bases: 0 };
+    if (e[0] === 'S') { st.outs = e[5]; st.bases = e[4] ? (st.bases & ~1) | 2 : st.bases & ~1; }
+    else if (typeof e[0] === 'number') { st.outs = e[5]; st.bases = e[6]; st.sc = [e[7], e[8]]; }
+    if (st.outs >= 3) st.bases = 0;
+  });
+  return st;
+}
+function renderPbp() {
+  const v = UI.pbpView, G = (S.pbp || [])[v.i];
+  if (!G) return '<p>この試合の記録はもうありません（次のシーズンが始まると消えます）。</p>';
+  const ev = G.ev, shown = ev.slice(0, v.step), done = v.step >= ev.length;
+  const st = pbpState(shown);
+  const team = half => (half ? G.home : G.away);
+  // スコアボード（見たところまで）
+  const n = Math.max(9, G.line[0].length);
+  const runs = [[], []];
+  shown.forEach(e => { if (typeof e[0] === 'number') runs[e[1]][e[0] - 1] = (runs[e[1]][e[0] - 1] || 0) + e[4]; });
+  const reached = (half, i) => i + 1 < st.inn || (i + 1 === st.inn && half <= st.half) || (shown.length && done);
+  const cell = (half, i) => (done ? (G.line[half][i] != null ? G.line[half][i] : '') : reached(half, i) && shown.length ? runs[half][i] || 0 : '');
+  const sc = done ? G.score : st.sc;
+  const board = `<div class="scroll"><table class="line"><tr><th></th>${Array.from({ length: n }, (_, i) => `<th>${i + 1}</th>`).join('')}<th>計</th></tr>
+    ${[0, 1].map(half => `<tr><th>${h(team(half))}</th>${Array.from({ length: n }, (_, i) => `<td>${cell(half, i)}</td>`).join('')}<td class="r">${sc[half]}</td></tr>`).join('')}</table></div>`;
+  // 塁とアウト
+  const b = k => (st.bases & k ? '◆' : '◇');
+  const situ = done ? `<p class="big-text">試合終了　${h(G.away)} ${G.score[0]} - ${G.score[1]} ${h(G.home)}</p>
+      ${G.tb ? `<p>同点のため、タイブレークで <b>${h(G.tb)}</b> の勝ち</p>` : ''}
+      <p>勝：${h(G.wp || '-')}　負：${h(G.lp || '-')}${G.sv ? `　S：${h(G.sv)}` : ''}</p>`
+    : shown.length ? `<div class="pbp-situ"><div>${st.inn}回${st.half ? '裏' : '表'}　${h(team(st.half))}の攻撃</div>
+      <div class="pbp-bases"><span>${b(2)}</span><span>${b(4)}　　${b(1)}</span></div>
+      <div>${st.outs >= 3 ? 'スリーアウト チェンジ' : `${'●'.repeat(st.outs)}${'○'.repeat(2 - st.outs)} ${st.outs}アウト`}</div></div>`
+      : `<p>先発：${h(G.away)} ${h(G.sp[0])}　／　${h(G.home)} ${h(G.sp[1])}</p>`;
+  // 起きたこと（新しい回が上。回の中も新しい順）
+  const groups = [];
+  shown.forEach(e => {
+    const [inn, half] = pbpHalf(e), key = `${inn}-${half}`;
+    if (!groups.length || groups[groups.length - 1].key !== key) groups.push({ key, head: `<li class="pbp-inn">${inn}回${half ? '裏' : '表'}（${h(team(half))}）</li>`, items: [] });
+    const items = groups[groups.length - 1].items;
+    if (e[0] === 'P') items.push(`<li class="muted">${h(e[3])} 投手交代 → ${h(e[4])}</li>`);
+    else if (e[0] === 'S') items.push(`<li>${h(e[3])} 盗塁${e[4] ? '成功' : '失敗'}</li>`);
+    else items.push(`<li class="${e[4] ? 'pbp-run' : ''}">${h(e[2])}　${PBP_WORD[e[3]] || e[3]}${e[4] ? `　<b>${e[4]}点</b>（${e[7]}-${e[8]}）` : ''}</li>`);
+  });
+  const lines = groups.reverse().map(g => g.head + g.items.reverse().join(''));
+  const btn = (to, label, dis) => `<button data-act="pbpGo" data-to="${to}" ${dis ? 'disabled' : ''}>${label}</button>`;
+  return `<h2>${h(G.label)}</h2>
+    <p>${h(G.away)}（先攻） vs ${h(G.home)}（後攻）</p>
+    ${board}${situ}
+    <p class="pbp-btns">${btn('pa', '次の打席 ▶', done)} ${btn('inn', '次の回 ▶▶', done)} ${btn('end', '結果まで ⏭', done)} ${btn('start', '最初から', !v.step)}</p>
+    <ol class="pbp-log">${lines.join('')}</ol>
+    <details><summary>スタメン</summary><div class="grid2">${[0, 1].map(s => `<div><h4>${h(team(s))}</h4><ol>${G.order[s].map(([nm, pos]) => `<li>${pos === '指' ? 'DH' : h(pos)} ${h(nm)}</li>`).join('')}</ol></div>`).join('')}</div></details>`;
+}
+function pbpGo(to) {
+  const v = UI.pbpView, G = S.pbp[v.i], ev = G.ev;
+  if (to === 'start') v.step = 0;
+  else if (to === 'end') v.step = ev.length;
+  else if (to === 'pa') {
+    // 投手交代や盗塁は、次の打席と一緒に見せる
+    while (v.step < ev.length && typeof ev[v.step][0] !== 'number') v.step++;
+    v.step = Math.min(ev.length, v.step + 1);
+  } else if (v.step < ev.length) {
+    // いまの回（表・裏）の終わりまで
+    const key = i => pbpHalf(ev[i]).join();
+    const k0 = key(v.step);
+    while (v.step < ev.length && key(v.step) === k0) v.step++;
+  }
+}
+
 // 国際大会：オフの画面（大会の結果と日本代表）
 function renderIntl(I) {
   const jpRow = x => `<tr class="${S.players[x.pid] && S.players[x.pid].teamId === S.myTeamId ? 'me' : ''}"><th>${h(x.pos)}</th><td class="l">${pName(x.pid, x.name)}<span class="muted">（${h(x.team)}）</span></td></tr>`;
@@ -965,6 +1045,7 @@ function renderIntl(I) {
   return `<section class="card"><h2>🌏 ${I.year}年 国際大会</h2>
     <p class="big-text">優勝：${h(I.champ)}</p>
     <p>日本は <b>${h(I.jp)}</b>${I.mvp ? ` ・ 大会MVP ${h(I.mvp.name)}（${h(I.mvp.team)}）` : ''}</p>
+    ${pbpButtons('intl')}
     <h3>決勝トーナメント</h3><div class="scroll"><table class="tbl">${gHead}${I.games.filter(g => g.stage !== '1次リーグ').map(gRow).join('')}</table></div>
     <h3>1次リーグ</h3><div class="grid2">${I.table.map(groupTbl).join('')}</div>
     <details><summary>1次リーグの全試合</summary><div class="scroll"><table class="tbl">${gHead}${I.games.filter(g => g.stage === '1次リーグ').map(gRow).join('')}</table></div></details>
@@ -1210,6 +1291,7 @@ function renderOff() {
       <p class="big-text">日本一：${h(O.champ)}</p>
       <p>${h(myTeam().name)}は ${LEAGUE_NAME[myTeam().lg]} <b>${O.rank}位</b>（${myTeam().w}勝${myTeam().l}敗${myTeam().d}分）${O.post ? ` ・ <b>${h(O.post)}</b>` : ''}${O.prize ? `　賞金 ${U.money(O.prize)}` : ''}</p>
       <div class="grid2">${LEAGUES.map(lg => `<div><h3>${LEAGUE_NAME[lg]}</h3>${standTable(standings(lg), true)}</div>`).join('')}</div>
+      ${pbpButtons('js') ? `<h3>日本シリーズを振り返る</h3>${pbpButtons('js')}` : ''}
     </section>
     <section class="card"><h2>表彰</h2><div class="grid2">${LEAGUES.map(lg => `<div><h3>${LEAGUE_NAME[lg]}</h3><table class="tbl">${O.awards.filter(a => (a.lg || lg) === lg).map(a => `<tr class="${S.players[a.pid] && S.players[a.pid].teamId === S.myTeamId ? 'me' : ''}"><th class="l">${a.title}</th><td class="l">${h(a.name)}（${h(a.team)}）</td><td>${a.val}</td></tr>`).join('')}</table></div>`).join('')}</div>
       ${posAwards('ベストナイン', O.b9)}${posAwards('ゴールデングラブ', O.gg)}
@@ -1533,6 +1615,7 @@ function renderPost() {
       <p class="muted">${rule.need}勝で勝ち抜け${rule.adv ? '（リーグ1位に1勝のアドバンテージ・全試合1位の本拠地）' : s.stage === 'cs1' ? '（全試合2位の本拠地）' : '（2-3-2 の本拠地）'}
         ${s.done ? ` → <b>${h(S.teams[s.winner].name)}</b> ${s.stage === 'js' ? '日本一！' : '勝ち抜け'}` : ''}</p>
       ${s.games.length ? `<div class="scroll"><table class="tbl"><tr>${s.games.map((_, i) => `<th>第${i + 1}戦</th>`).join('')}</tr><tr>${cells}</tr></table></div>` : '<p class="muted">これから</p>'}
+      ${s.stage === 'js' ? pbpButtons('js') : ''}
     </div>`;
   };
   const stages = ['js', 'cs2', 'cs1'].filter(st => P.series.some(s => s.stage === st));

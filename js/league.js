@@ -402,6 +402,7 @@ function startSeason() {
   S.lastGame = null;
   S.off = null;
   S.post = null;
+  S.pbp = []; // 日本シリーズ・国際大会の決勝の流れは、その年の分だけ残す（人の言葉 2026-11-02「毎回消して大丈夫」）
   Object.values(S.players).forEach(p => { p.stats = newStats(); p.rest = 7; p.fatigue = 0; p.downDay = null; });
   S.draftClass = makeDraftClass();
   announceDraftClass();
@@ -477,11 +478,12 @@ function injure(p, days) {
 }
 
 // 1 試合をして、入場料・ケガ・グッズ・自分の試合の記録までまとめる
-function playOne(m, label, post) {
+function playOne(m, label, post, pbp) {
   const home = S.teams[m.home], away = S.teams[m.away];
   const myId = S.myTeamId;
   const mine = m.home === myId || m.away === myId;
-  const res = post ? playPostGame(home, away, mine) : playGame(S, home, away, mine);
+  const res = post ? playPostGame(home, away, mine, pbp) : playGame(S, home, away, mine);
+  if (res.pbp) { if (!S.pbp) S.pbp = []; S.pbp.push({ label, kind: 'js', ...res.pbp }); }
   m.score = res.score;
   const att = homeGate(home);
   if (!post) {
@@ -846,7 +848,9 @@ function offIntl() {
   const play = (stage, a, b) => {
     const home = intlTeam(b.name, b.ids, b.i, b.gi++), away = intlTeam(a.name, a.ids, a.i, a.gi++);
     [...home.players, ...away.players].forEach(id => { const p = S.players[id]; p.stats = newStats(); p.rest = 7; p.fatigue = 0; p.cond = 3; });
-    const res = playGame(S, home, away, false);
+    const fin = stage === '決勝';
+    const res = playGame(S, home, away, false, fin);
+    if (fin) { if (!S.pbp) S.pbp = []; S.pbp.push({ label: `${S.year}年 国際大会 決勝`, kind: 'intl', ...res.pbp }); }
     let best = null, bv = 0;
     res.sides.forEach(s => {
       const add = (p, v) => { if (v <= 0) return; pts[p.id] = (pts[p.id] || 0) + v; if (v > bv) { bv = v; best = p; } };
@@ -855,6 +859,7 @@ function offIntl() {
     });
     let [sa, sh] = res.score, tb = false;
     if (stage !== '1次リーグ' && sa === sh) { tb = true; if (U.chance(0.5)) sa++; else sh++; } // 決まらなければタイブレーク
+    if (fin && tb) S.pbp[S.pbp.length - 1].tb = sa > sh ? a.name : b.name;
     a.rs += sa; a.ra += sh; b.rs += sh; b.ra += sa;
     if (sa > sh) { a.w++; b.l++; } else if (sh > sa) { b.w++; a.l++; } else { a.d++; b.d++; }
     const who = best ? (countries.find(c => c.ids.includes(best.id)) || {}).name : null;
@@ -1000,11 +1005,11 @@ function seriesLabel(s) {
 }
 
 // ポストシーズンの成績はレギュラーシーズンの成績に入れない
-function playPostGame(home, away, wantLog) {
+function playPostGame(home, away, wantLog, wantPbp) {
   const ps = [...home.players, ...away.players].map(id => S.players[id]);
   const saved = ps.map(p => p.stats);
   ps.forEach(p => { p.stats = newStats(); });
-  const res = playGame(S, home, away, wantLog);
+  const res = playGame(S, home, away, wantLog, wantPbp);
   ps.forEach((p, i) => { p.stats = saved[i]; });
   return res;
 }
@@ -1019,7 +1024,7 @@ function advancePost() {
     // CS は上位チームの本拠地。日本シリーズは 2-3-2（1・2・6・7 戦が上側の本拠地）
     const topHome = s.stage !== 'js' || [0, 1, 5, 6, 7].includes(gi) || gi > 7;
     const m = topHome ? { home: s.top, away: s.low } : { home: s.low, away: s.top };
-    const res = playOne(m, `${seriesLabel(s)} 第${gi + 1}戦`, true);
+    const res = playOne(m, `${seriesLabel(s)} 第${gi + 1}戦`, true, s.stage === 'js');
     const topScore = m.home === s.top ? res.score[1] : res.score[0];
     const lowScore = m.home === s.top ? res.score[0] : res.score[1];
     if (topScore > lowScore) s.wTop++; else if (lowScore > topScore) s.wLow++;

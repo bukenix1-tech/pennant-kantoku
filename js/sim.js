@@ -118,6 +118,7 @@ function changePitcher(g, fld, bat, inning, atStart) {
   fld.cur = newRec(next, false, lead);
   fld.used.push(fld.cur);
   if (g.log) g.log.push({ t: 'chg', s: `${inning}回 ${fld.team.short} 投手交代 ${p.name} → ${next.name}` });
+  if (g.pbp) g.pbp.push(['P', inning, fld.idx ? 0 : 1, fld.team.short, next.name]);
 }
 
 function halfInning(g, bat, fld, inning) {
@@ -147,9 +148,11 @@ function halfInning(g, bat, fld, inning) {
         bases[0] = null;
         if (ok) {
           bases[1] = rn; rn.p.stats.sb++; rn.slot.box.sb++;
+          if (g.pbp) g.pbp.push(['S', inning, top ? 0 : 1, rn.p.name, 1, outs]);
         } else {
           outs++; rec.outs++;
           if (g.log) g.log.push({ t: 'ev', s: `${tag} ${rn.p.name} 盗塁失敗` });
+          if (g.pbp) g.pbp.push(['S', inning, top ? 0 : 1, rn.p.name, 0, outs]);
           if (outs >= 3) break;
         }
       }
@@ -164,7 +167,7 @@ function halfInning(g, bat, fld, inning) {
     rec.pc += res.pc;
     b.stats.pa++;
     const runner = { p: b, rec, slot };
-    let desc = '';
+    let desc = '', code = res.t;
     const hit = () => { b.stats.ab++; b.stats.h++; slot.box.ab++; slot.box.h++; rec.h++; };
     switch (res.t) {
       case 'BB':
@@ -224,7 +227,7 @@ function halfInning(g, bat, fld, inning) {
         b.stats.ab++; slot.box.ab++;
         outs++; rec.outs++;
         if (bases[0] && outs <= 2 && Math.random() < 0.13 + (50 - b.a.speed) * 0.002) {
-          outs++; rec.outs++; bases[0] = null;
+          outs++; rec.outs++; bases[0] = null; code = 'DP';
           if (g.log) g.log.push({ t: 'ev', s: `${tag} ${b.name} 併殺打` });
         } else if (outs < 3) {
           if (bases[2] && Math.random() < 0.45) { score(bases[2], slot); bases[2] = null; }
@@ -240,13 +243,15 @@ function halfInning(g, bat, fld, inning) {
         outs++; rec.outs++;
         if (outs < 3 && bases[2] && Math.random() < 0.5 + (bases[2].p.a.speed - 50) * 0.005) {
           score(bases[2], slot); bases[2] = null;
-          desc = '犠牲フライ';
+          desc = '犠牲フライ'; code = 'SF';
         } else { b.stats.ab++; slot.box.ab++; }
         break;
     }
     const after = g.score[bat.idx] - g.score[fld.idx];
     if (before <= 0 && after > 0) { bat.winCand = bat.cur; fld.loseCand = fld.cur; }
     const got = g.score[bat.idx] - runsBefore;
+    // 1 打席ずつの記録：[回, 表0/裏1, 打者, 結果, 入った点, アウト, 塁（1・2・4 の和）, 先攻の点, 後攻の点]
+    if (g.pbp) g.pbp.push([inning, top ? 0 : 1, b.name, code, got, outs, (bases[0] ? 1 : 0) + (bases[1] ? 2 : 0) + (bases[2] ? 4 : 0), g.score[0], g.score[1]]);
     if (g.log && got > 0) {
       g.log.push({ t: 'run', side: bat.idx, s: `${tag} ${b.name} ${desc}${got > 1 && res.t !== 'HR' ? `（${got}点）` : ''}　${g.score[0]}-${g.score[1]}` });
     }
@@ -258,9 +263,9 @@ function halfInning(g, bat, fld, inning) {
   return runs;
 }
 
-function playGame(S, home, away, wantLog) {
+function playGame(S, home, away, wantLog, wantPbp) {
   const A = prepareSide(S, away, 0), H = prepareSide(S, home, 1);
-  const g = { score: [0, 0], line: [[], []], log: wantLog ? [] : null, innings: 0 };
+  const g = { score: [0, 0], line: [[], []], log: wantLog ? [] : null, innings: 0, pbp: wantPbp ? [] : null };
   for (let inn = 1; inn <= 12; inn++) {
     g.line[0].push(halfInning(g, A, H, inn));
     if (inn >= 9 && g.score[1] > g.score[0]) { g.line[1].push('X'); g.innings = inn; break; }
@@ -306,6 +311,15 @@ function playGame(S, home, away, wantLog) {
   const res = {
     home: home.id, away: away.id, score: g.score.slice(), wp, lp, sp, sides: [A, H],
   };
+  // 順を追って見るための記録（日本シリーズと国際大会の決勝だけ）
+  if (wantPbp) {
+    res.pbp = {
+      away: away.short, home: home.short, score: g.score.slice(), line: g.line, ev: g.pbp,
+      sp: [A.used[0].p.name, H.used[0].p.name],
+      order: [A, H].map(s => s.lineup.map(sl => [sl.p.name, sl.pos])),
+      wp: wp && wp.name, lp: lp && lp.name, sv: sp && sp.name,
+    };
+  }
   if (wantLog) {
     res.detail = {
       line: g.line, log: g.log, innings: g.innings,

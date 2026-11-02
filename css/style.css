@@ -440,3 +440,12 @@ details.slim summary { cursor: pointer; font-weight: bold; }
 .tag.eye.e2 { background: #fef3c7; color: #92400e; border-color: #fcd34d; font-weight: bold; }
 .tag.eye.e1 { background: #ecfeff; color: #155e75; border-color: #a5f3fc; }
 .tag.eye.ex { background: #f1f5f9; color: #64748b; }
+
+/* 試合を順を追って見る */
+.pbp-btns button { margin: 2px 0; }
+.pbp-situ { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin: 6px 0; font-weight: bold; }
+.pbp-bases { display: flex; flex-direction: column; align-items: center; line-height: 1.1; font-size: 18px; }
+.pbp-log { list-style: none; padding: 0; margin: 6px 0; max-height: 45vh; overflow-y: auto; }
+.pbp-log li { padding: 3px 4px; border-bottom: 1px solid var(--line); }
+.pbp-log li.pbp-inn { font-weight: bold; background: var(--line); }
+.pbp-log li.pbp-run { font-weight: bold; }
