@@ -441,10 +441,31 @@ details.slim summary { cursor: pointer; font-weight: bold; }
 .tag.eye.e1 { background: #ecfeff; color: #155e75; border-color: #a5f3fc; }
 .tag.eye.ex { background: #f1f5f9; color: #64748b; }
 
-/* 試合を順を追って見る */
+/* 試合を順を追って見る（野球速報のアプリふう） */
+.pbp-title { font-size: 16px; margin: 0 0 6px; }
+.pbp-line td.pbp-now-cell { background: #fef3c7; font-weight: bold; }
+.pbp-line th, .pbp-line td { padding: 2px 5px; min-width: 18px; white-space: nowrap; }
 .pbp-btns button { margin: 2px 0; }
-.pbp-situ { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin: 6px 0; font-weight: bold; }
-.pbp-bases { display: flex; flex-direction: column; align-items: center; line-height: 1.1; font-size: 18px; }
+.pbp-live { background: #0f172a; color: #f8fafc; border-radius: 10px; padding: 10px 12px; margin: 8px 0; }
+.pbp-live .muted { color: #94a3b8; }
+.pbp-score { display: flex; align-items: center; justify-content: center; gap: 12px; font-size: 15px; }
+.pbp-score b { font-size: 28px; min-width: 28px; text-align: center; }
+.pbp-team { font-weight: bold; max-width: 7em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pbp-inning { font-size: 13px; background: #334155; border-radius: 6px; padding: 2px 8px; white-space: nowrap; }
+.pbp-mid { display: flex; align-items: center; gap: 14px; margin-top: 8px; flex-wrap: wrap; }
+.pbp-field { position: relative; width: 60px; height: 50px; flex: none; }
+.pbp-field .base { position: absolute; width: 15px; height: 15px; transform: rotate(45deg); border: 2px solid #64748b; background: transparent; }
+.pbp-field .base.on { background: #f59e0b; border-color: #f59e0b; }
+.pbp-field .b2 { left: 21px; top: 2px; } .pbp-field .b4 { left: 4px; top: 20px; } .pbp-field .b1 { left: 38px; top: 20px; }
+.pbp-out { font-weight: bold; white-space: nowrap; }
+.pbp-out .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 2px solid #64748b; margin-left: 3px; vertical-align: middle; }
+.pbp-out .dot.on { background: #ef4444; border-color: #ef4444; }
+.pbp-match { flex: 1; min-width: 200px; line-height: 1.6; font-size: 14px; }
+.pbp-now { margin-top: 8px; padding: 6px 8px; border-radius: 6px; background: #1e293b; font-size: 15px; }
+.pbp-now.run { background: #7c2d12; } .pbp-now.hr { background: #b91c1c; }
+.pbp-pts { color: #fde047; }
+.pbp-final { text-align: center; margin-top: 6px; }
+.pbp-final p { margin: 4px 0; }
 .pbp-log { list-style: none; padding: 0; margin: 6px 0; max-height: 45vh; overflow-y: auto; }
 .pbp-log li { padding: 3px 4px; border-bottom: 1px solid var(--line); }
 .pbp-log li.pbp-inn { font-weight: bold; background: var(--line); }

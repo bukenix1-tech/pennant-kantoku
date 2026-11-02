@@ -983,48 +983,114 @@ function pbpState(ev) {
   });
   return st;
 }
+// 見たところまでの、打者・投手の今日の成績（打順は試合中に変わらない）
+const PBP_HIT = { '1B': 1, '2B': 1, '3B': 1, HR: 1 };
+function pbpBox(G, shown) {
+  const newPit = name => ({ name, outs: 0, bf: 0, h: 0, hr: 0, r: 0, bb: 0, k: 0 });
+  const bat = [0, 1].map(s => G.order[s].map(([name, pos]) => ({ name, pos, ab: 0, h: 0, hr: 0, rbi: 0, bb: 0, k: 0, sb: 0 })));
+  const pit = [[newPit(G.sp[0])], [newPit(G.sp[1])]];
+  const pa = [0, 0];
+  let key = null, lastOuts = 0;
+  shown.forEach(e => {
+    const [inn, half] = pbpHalf(e), k = `${inn}-${half}`;
+    if (k !== key) { key = k; lastOuts = 0; }
+    if (e[0] === 'P') { pit[1 - e[2]].push(newPit(e[4])); return; }
+    const cur = pit[1 - half][pit[1 - half].length - 1];
+    if (e[0] === 'S') {
+      const r = bat[half].find(x => x.name === e[3]);
+      if (r && e[4]) r.sb++;
+      cur.outs += e[5] - lastOuts; lastOuts = e[5];
+      return;
+    }
+    const r = bat[half][pa[half] % 9];
+    pa[half]++;
+    const code = e[3];
+    if (code !== 'BB' && code !== 'SF') r.ab++;
+    if (PBP_HIT[code]) { r.h++; cur.h++; }
+    if (code === 'HR') { r.hr++; cur.hr++; }
+    if (code === 'BB') { r.bb++; cur.bb++; }
+    if (code === 'K') { r.k++; cur.k++; }
+    if (code !== 'DP') r.rbi += e[4];
+    cur.r += e[4]; cur.bf++;
+    cur.outs += e[5] - lastOuts; lastOuts = e[5];
+  });
+  return { bat, pit, pa };
+}
+
+// 野球速報のアプリのように：スコア・いまの場面（塁・アウト・投手と打者）・直前のプレー、下に経過と成績のタブ
 function renderPbp() {
   const v = UI.pbpView, G = (S.pbp || [])[v.i];
   if (!G) return '<p>この試合の記録はもうありません（次のシーズンが始まると消えます）。</p>';
   const ev = G.ev, shown = ev.slice(0, v.step), done = v.step >= ev.length;
   const st = pbpState(shown);
   const team = half => (half ? G.home : G.away);
+  const box = pbpBox(G, shown);
+  const sc = done ? G.score : st.sc;
+  const hits = [0, 1].map(s => U.sum(box.bat[s], r => r.h));
   // スコアボード（見たところまで）
   const n = Math.max(9, G.line[0].length);
   const runs = [[], []];
   shown.forEach(e => { if (typeof e[0] === 'number') runs[e[1]][e[0] - 1] = (runs[e[1]][e[0] - 1] || 0) + e[4]; });
-  const reached = (half, i) => i + 1 < st.inn || (i + 1 === st.inn && half <= st.half) || (shown.length && done);
-  const cell = (half, i) => (done ? (G.line[half][i] != null ? G.line[half][i] : '') : reached(half, i) && shown.length ? runs[half][i] || 0 : '');
-  const sc = done ? G.score : st.sc;
-  const board = `<div class="scroll"><table class="line"><tr><th></th>${Array.from({ length: n }, (_, i) => `<th>${i + 1}</th>`).join('')}<th>計</th></tr>
-    ${[0, 1].map(half => `<tr><th>${h(team(half))}</th>${Array.from({ length: n }, (_, i) => `<td>${cell(half, i)}</td>`).join('')}<td class="r">${sc[half]}</td></tr>`).join('')}</table></div>`;
-  // 塁とアウト
-  const b = k => (st.bases & k ? '◆' : '◇');
-  const situ = done ? `<p class="big-text">試合終了　${h(G.away)} ${G.score[0]} - ${G.score[1]} ${h(G.home)}</p>
-      ${G.tb ? `<p>同点のため、タイブレークで <b>${h(G.tb)}</b> の勝ち</p>` : ''}
-      <p>勝：${h(G.wp || '-')}　負：${h(G.lp || '-')}${G.sv ? `　S：${h(G.sv)}` : ''}</p>`
-    : shown.length ? `<div class="pbp-situ"><div>${st.inn}回${st.half ? '裏' : '表'}　${h(team(st.half))}の攻撃</div>
-      <div class="pbp-bases"><span>${b(2)}</span><span>${b(4)}　　${b(1)}</span></div>
-      <div>${st.outs >= 3 ? 'スリーアウト チェンジ' : `${'●'.repeat(st.outs)}${'○'.repeat(2 - st.outs)} ${st.outs}アウト`}</div></div>`
-      : `<p>先発：${h(G.away)} ${h(G.sp[0])}　／　${h(G.home)} ${h(G.sp[1])}</p>`;
-  // 起きたこと（新しい回が上。回の中も新しい順）
-  const groups = [];
-  shown.forEach(e => {
-    const [inn, half] = pbpHalf(e), key = `${inn}-${half}`;
-    if (!groups.length || groups[groups.length - 1].key !== key) groups.push({ key, head: `<li class="pbp-inn">${inn}回${half ? '裏' : '表'}（${h(team(half))}）</li>`, items: [] });
-    const items = groups[groups.length - 1].items;
-    if (e[0] === 'P') items.push(`<li class="muted">${h(e[3])} 投手交代 → ${h(e[4])}</li>`);
-    else if (e[0] === 'S') items.push(`<li>${h(e[3])} 盗塁${e[4] ? '成功' : '失敗'}</li>`);
-    else items.push(`<li class="${e[4] ? 'pbp-run' : ''}">${h(e[2])}　${PBP_WORD[e[3]] || e[3]}${e[4] ? `　<b>${e[4]}点</b>（${e[7]}-${e[8]}）` : ''}</li>`);
-  });
-  const lines = groups.reverse().map(g => g.head + g.items.reverse().join(''));
-  const btn = (to, label, dis) => `<button data-act="pbpGo" data-to="${to}" ${dis ? 'disabled' : ''}>${label}</button>`;
-  return `<h2>${h(G.label)}</h2>
-    <p>${h(G.away)}（先攻） vs ${h(G.home)}（後攻）</p>
-    ${board}${situ}
-    <p class="pbp-btns">${btn('pa', '次の打席 ▶', done)} ${btn('inn', '次の回 ▶▶', done)} ${btn('end', '結果まで ⏭', done)} ${btn('start', '最初から', !v.step)}</p>
-    <ol class="pbp-log">${lines.join('')}</ol>
-    <details><summary>スタメン</summary><div class="grid2">${[0, 1].map(s => `<div><h4>${h(team(s))}</h4><ol>${G.order[s].map(([nm, pos]) => `<li>${pos === '指' ? 'DH' : h(pos)} ${h(nm)}</li>`).join('')}</ol></div>`).join('')}</div></details>`;
+  const reached = (half, i) => shown.length && (i + 1 < st.inn || (i + 1 === st.inn && half <= st.half));
+  const cell = (half, i) => (done ? (G.line[half][i] != null ? G.line[half][i] : '') : reached(half, i) ? runs[half][i] || 0 : '');
+  const nowCol = !done && shown.length ? st.inn - 1 : -1;
+  const board = `<div class="scroll"><table class="line pbp-line"><tr><th></th>${Array.from({ length: n }, (_, i) => `<th>${i + 1}</th>`).join('')}<th>計</th><th>安</th></tr>
+    ${[0, 1].map(half => `<tr><th>${h(team(half))}</th>${Array.from({ length: n }, (_, i) => `<td class="${i === nowCol && half === st.half ? 'pbp-now-cell' : ''}">${cell(half, i)}</td>`).join('')}<td class="r">${sc[half]}</td><td>${hits[half]}</td></tr>`).join('')}</table></div>`;
+  // 次に打つ側（3 アウトなら攻守交代のあと）
+  const nextHalf = !shown.length ? 0 : st.outs >= 3 ? 1 - st.half : st.half;
+  const batter = box.bat[nextHalf][box.pa[nextHalf] % 9];
+  const pitcher = box.pit[1 - nextHalf][box.pit[1 - nextHalf].length - 1];
+  const nextInn = !shown.length ? 1 : st.outs >= 3 && st.half ? st.inn + 1 : st.inn;
+  const inningLabel = done ? '試合終了' : !shown.length ? 'プレイボール前' : st.outs >= 3 ? `${st.inn}回${st.half ? '裏' : '表'} 終了` : `${st.inn}回${st.half ? '裏' : '表'}`;
+  const base = k => `<span class="base b${k} ${st.bases & k ? 'on' : ''}"></span>`;
+  const outsShown = st.outs >= 3 ? 0 : st.outs;
+  // 直前のプレー
+  const last = shown[shown.length - 1];
+  let now = '';
+  if (last && last[0] === 'P') now = `<div class="pbp-now">${h(last[3])} 投手交代　<b>${h(last[4])}</b></div>`;
+  else if (last && last[0] === 'S') now = `<div class="pbp-now">${h(last[3])}　<b>盗塁${last[4] ? '成功' : '失敗'}</b></div>`;
+  else if (last) now = `<div class="pbp-now ${last[3] === 'HR' ? 'hr' : last[4] ? 'run' : ''}"><span class="muted">${last[0]}回${last[1] ? '裏' : '表'}</span> ${h(last[2])}　<b>${PBP_WORD[last[3]] || last[3]}</b>${last[4] ? `　<b class="pbp-pts">${last[4]}点</b>` : ''}</div>`;
+  const live = `<div class="pbp-live">
+    <div class="pbp-score"><span class="pbp-team">${h(G.away)}</span><b>${sc[0]}</b><span class="pbp-inning">${inningLabel}</span><b>${sc[1]}</b><span class="pbp-team">${h(G.home)}</span></div>
+    ${done ? `<div class="pbp-final">${G.tb ? `<p>同点のため、タイブレークで <b>${h(G.tb)}</b> の勝ち</p>` : ''}<p>勝：${h(G.wp || '-')}　負：${h(G.lp || '-')}${G.sv ? `　S：${h(G.sv)}` : ''}</p></div>`
+      : `<div class="pbp-mid">
+      <div class="pbp-field">${base(2)}${base(4)}${base(1)}</div>
+      <div class="pbp-out">O ${[0, 1].map(i => `<span class="dot ${i < outsShown ? 'on' : ''}"></span>`).join('')}</div>
+      <div class="pbp-match">
+        <div><span class="muted">${nextInn}回${nextHalf ? '裏' : '表'}・投手</span> <b>${h(pitcher.name)}</b> <small class="muted">${U.ip(pitcher.outs)}回 ${pitcher.k}奪三振 ${pitcher.r}失点</small></div>
+        <div><span class="muted">${h(team(nextHalf))}・${box.pa[nextHalf] % 9 + 1}番</span> <b>${h(batter.name)}</b> <small class="muted">${batter.ab}打数${batter.h}安打${batter.hr ? ` ${batter.hr}本` : ''}${batter.rbi ? ` ${batter.rbi}打点` : ''}</small></div>
+      </div></div>`}
+    ${now}</div>`;
+  const btn = (to, label, dis, cls) => `<button class="${cls || ''}" data-act="pbpGo" data-to="${to}" ${dis ? 'disabled' : ''}>${label}</button>`;
+  const ctrl = `<p class="pbp-btns">${btn('pa', '次の打席 ▶', done, 'primary')} ${btn('inn', '次の回 ▶▶', done)} ${btn('end', '結果まで ⏭', done)} ${btn('start', '最初から', !v.step)}</p>`;
+  // 下のタブ：経過・打撃成績・投手成績・スタメン
+  const tab = v.tab || 'log';
+  const tabs = [['log', '経過'], ['bat', '打撃成績'], ['pit', '投手成績'], ['order', 'スタメン']];
+  const tabBar = `<div class="seg">${tabs.map(([k, nm]) => `<button class="${tab === k ? 'on' : ''}" data-act="pbpTab" data-k="${k}">${nm}</button>`).join('')}</div>`;
+  let body = '';
+  if (tab === 'log') {
+    const groups = [];
+    shown.forEach(e => {
+      const [inn, half] = pbpHalf(e), key = `${inn}-${half}`;
+      if (!groups.length || groups[groups.length - 1].key !== key) groups.push({ key, head: `<li class="pbp-inn">${inn}回${half ? '裏' : '表'}（${h(team(half))}）</li>`, items: [] });
+      const items = groups[groups.length - 1].items;
+      if (e[0] === 'P') items.push(`<li class="muted">${h(e[3])} 投手交代 → ${h(e[4])}</li>`);
+      else if (e[0] === 'S') items.push(`<li>${h(e[3])} 盗塁${e[4] ? '成功' : '失敗'}</li>`);
+      else items.push(`<li class="${e[4] ? 'pbp-run' : ''}">${h(e[2])}　${PBP_WORD[e[3]] || e[3]}${e[4] ? `　<b>${e[4]}点</b>（${e[7]}-${e[8]}）` : ''}</li>`);
+    });
+    body = groups.length ? `<ol class="pbp-log">${groups.reverse().map(g => g.head + g.items.reverse().join('')).join('')}</ol>` : `<p class="muted">プレイボール前です。「次の打席 ▶」で始まります。</p>`;
+  } else if (tab === 'bat') {
+    body = `<div class="grid2">${[0, 1].map(s => `<div><h4>${h(team(s))}</h4><div class="scroll"><table class="tbl"><tr><th></th><th>守</th><th>選手</th><th>打数</th><th>安</th><th>本</th><th>点</th><th>四</th><th>三振</th></tr>
+      ${box.bat[s].map((r, i) => `<tr><td>${i + 1}</td><td>${r.pos === '指' ? 'DH' : h(r.pos)}</td><td class="l">${h(r.name)}</td><td>${r.ab}</td><td>${r.h}</td><td>${r.hr}</td><td>${r.rbi}</td><td>${r.bb}</td><td>${r.k}</td></tr>`).join('')}</table></div></div>`).join('')}</div>`;
+  } else if (tab === 'pit') {
+    body = `<div class="grid2">${[0, 1].map(s => `<div><h4>${h(team(s))}</h4><div class="scroll"><table class="tbl"><tr><th>投手</th><th>回</th><th>打者</th><th>安</th><th>本</th><th>四</th><th>三振</th><th>失</th></tr>
+      ${box.pit[s].map(r => `<tr><td class="l">${h(r.name)}</td><td>${U.ip(r.outs)}</td><td>${r.bf}</td><td>${r.h}</td><td>${r.hr}</td><td>${r.bb}</td><td>${r.k}</td><td>${r.r}</td></tr>`).join('')}</table></div></div>`).join('')}</div>`;
+  } else {
+    body = `<div class="grid2">${[0, 1].map(s => `<div><h4>${h(team(s))}（${s ? '後攻' : '先攻'}）</h4><table class="tbl">
+      ${G.order[s].map(([nm, pos], i) => `<tr><td>${i + 1}</td><td>${pos === '指' ? 'DH' : h(pos)}</td><td class="l">${h(nm)}</td></tr>`).join('')}
+      <tr><td></td><td>投</td><td class="l"><b>${h(G.sp[s])}</b>（先発）</td></tr></table></div>`).join('')}</div>`;
+  }
+  return `<h2 class="pbp-title">${h(G.label)}</h2>${board}${live}${ctrl}${tabBar}${body}`;
 }
 function pbpGo(to) {
   const v = UI.pbpView, G = S.pbp[v.i], ev = G.ev;

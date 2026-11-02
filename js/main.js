@@ -59,8 +59,9 @@ const ACTIONS = {
   lg(el) { UI.lg = el.dataset.lg; },
   closeModal() { closeModal(); },
   player(el) { openModal(renderPlayerModal(S.players[+el.dataset.pid])); return 'keep'; },
-  pbp(el) { UI.pbpView = { i: +el.dataset.i, step: 0 }; openModal(renderPbp()); return 'keep'; },
+  pbp(el) { UI.pbpView = { i: +el.dataset.i, step: 0, tab: 'log' }; openModal(renderPbp()); return 'keep'; },
   pbpGo(el) { pbpGo(el.dataset.to); openModal(renderPbp()); return 'keep'; },
+  pbpTab(el) { UI.pbpView.tab = el.dataset.k; openModal(renderPbp()); return 'keep'; },
   pbpSkip(el) {
     if (!confirm('試合を見ずに、結果を出しますか？')) return 'keep';
     (S.pbp || []).forEach(g => { if (g.kind === el.dataset.kind) g.seen = true; });
