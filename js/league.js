@@ -1411,12 +1411,21 @@ function faMarket(p) {
 }
 
 // 年俸のチーム内順位で A（上位 3 人）・B（4〜10 位）・C（それ以外）
-function faRank(t, p) {
-  const order = teamPlayers(t).sort((a, b) => b.salary - a.salary).map(x => x.id);
-  const i = order.indexOf(p.id);
-  return i < 3 ? 'A' : i < 10 ? 'B' : 'C';
+// FA の補償は NPB の新しい制度に合わせる（人の言葉 2026-11-04「日本の来年からの制度と同じにして」）
+// 元の球団の中の年俸の順位：1〜3 位が A、4〜8 位が B、9 位から C
+function faRankNo(t, p) { return teamPlayers(t).sort((a, b) => b.salary - a.salary).map(x => x.id).indexOf(p.id) + 1; }
+function faRank(t, p) { const n = faRankNo(t, p); return n <= 3 ? 'A' : n <= 8 ? 'B' : 'C'; }
+const FA_COMP = { A: 0.8, B: 0.6, C: 0 }; // 金銭で補償するとき、取った球団が元の球団に払う額（年俸の何倍か。実際の目安の下の端）
+const FA_COMP_ROUND = { A: 2, B: 3 }; // 指名権で補償するとき、取った球団から元の球団へ移る翌年のドラフトの巡目（B は 4〜7 位だけ）
+const FA_COMP_AGE = 35; // 翌年の開幕のころにこの歳以上なら、補償はいらない
+const FA_COMP_AI_PICK = 0.6; // ほかの球団が、金銭より指名権を選ぶ割合（仮・AI）
+// その FA 宣言の補償：{ money, round }（round が null なら金銭だけ。両方 0 なら補償なし）
+function faComp(d) {
+  const p = S.players[d.pid];
+  if (d.rank === 'C' || (p && p.age + 1 >= FA_COMP_AGE)) return { money: 0, round: null };
+  const round = d.rank === 'A' || (d.no || 4) <= 7 ? FA_COMP_ROUND[d.rank] : null;
+  return { money: Math.round(d.oldSalary * FA_COMP[d.rank]), round };
 }
-const FA_COMP = { A: 0.8, B: 0.6, C: 0 }; // 取った球団が元の球団に払う補償（年俸の何倍か）
 
 // FA 宣言する確率。忠誠心が高いほど残る。引き留め（年俸アップの約束）でも残りやすくなる
 function declareChance(p, retain) {
@@ -1476,11 +1485,11 @@ function offFADeclare() {
       }
       return;
     }
-    const rank = faRank(t, p);
+    const rank = faRank(t, p), no = faRankNo(t, p);
     p.faUsed = true;
     p.svcUsed = p.svc || 0;
     const why = ovr(p) >= FA_PLAY_MIN_OVR && playShare(p) < 0.4 ? '出場機会を求めて' : '';
-    F.declared.push({ pid: id, from: t.id, rank, oldSalary: p.salary, mv: faMarket(p), bids: aiBids(p, t) });
+    F.declared.push({ pid: id, from: t.id, rank, no, oldSalary: p.salary, mv: faMarket(p), bids: aiBids(p, t) });
     removeFromTeam(p);
     p.lastTeam = t.short;
     addNews(`${p.name}（${t.short}・${p.isP ? '投手' : p.pos}）が${why}FA宣言しました。`, mine ? 'bad' : '');
@@ -1515,7 +1524,7 @@ function setMyBid(pid, mul, years) {
   if (!d) return 'その選手はいません。';
   if (mul == null) { delete F.myBids[pid]; return null; }
   const salary = Math.round(d.mv * mul / 10) * 10;
-  const comp = d.from === t.id ? 0 : Math.round(d.oldSalary * FA_COMP[d.rank]);
+  const comp = d.from === t.id ? 0 : faComp(d).money; // 指名権を選ばれるかもしれないが、金銭のときも払えるように
   if (t.money < salary + comp) return 'お金が足りません（1 年目の年俸と補償金が払えません）。';
   F.myBids[pid] = { salary, years, mul };
   return null;
@@ -1552,21 +1561,64 @@ function offFAResolve() {
     signPlayer(to, p);
     p.salary = best.salary;
     p.contractYears = best.years - 1;
-    let comp = 0;
+    let comp = 0, cp = null;
     if (to.id !== from.id) {
-      comp = Math.round(d.oldSalary * FA_COMP[d.rank]);
-      to.money -= comp; from.money += comp;
-      if (to.id === S.myTeamId) to.fin.invest += comp;
-      if (from.id === S.myTeamId) from.fin.other += comp;
+      const c = faComp(d);
+      // 補償は元の球団が選ぶ：翌年のドラフトの指名権か、金銭か（自分の球団は、はじめは指名権。契約更改へ進むまで選び直せる）
+      const pick = c.round && (from.id === S.myTeamId || U.chance(FA_COMP_AI_PICK));
+      if (c.money || c.round) cp = { money: c.money, round: c.round, pick: !!pick, year: S.year + 1 };
+      if (cp && !cp.pick) comp = c.money;
+      payComp(to, from, comp);
       p.loyalty = 50;
     } else addLoyalty(p, 10);
     if (to.id !== S.myTeamId) autoActive(to);
-    F.results.push({ pid: d.pid, name: p.name, from: d.from, to: to.id, salary: best.salary, years: best.years, bids: bids.length, comp, note: to.id === from.id ? '残留' : '移籍' });
+    F.results.push({ pid: d.pid, name: p.name, from: d.from, to: to.id, salary: best.salary, years: best.years, bids: bids.length, comp, cp, note: to.id === from.id ? '残留' : '移籍' });
     const involved = to.id === S.myTeamId || from.id === S.myTeamId;
-    addNews(`FA：${p.name}が${to.id === from.id ? `${to.short}に残留` : `${from.short}から${to.short}へ移籍`}（${best.years}年・年俸${U.money(best.salary)}${comp ? `・補償金${U.money(comp)}` : ''}）`,
+    addNews(`FA：${p.name}が${to.id === from.id ? `${to.short}に残留` : `${from.short}から${to.short}へ移籍`}（${best.years}年・年俸${U.money(best.salary)}${comp ? `・補償金${U.money(comp)}` : ''}${cp && cp.pick ? `・補償に${cp.year}年ドラフト${cp.round}巡目の指名権` : ''}）`,
       involved ? (to.id === S.myTeamId ? 'good' : 'bad') : '');
   });
   F.stage = 'done';
+}
+function payComp(to, from, v) {
+  if (!v) return;
+  to.money -= v; from.money += v;
+  if (to.id === S.myTeamId) to.fin.invest += v;
+  if (from.id === S.myTeamId) from.fin.other += v;
+}
+// 自分の球団が受け取る補償を、指名権と金銭で選び直す（FA の結果の画面のあいだだけ）
+function faCompSwitch(i, pick) {
+  const r = S.off.fa.results[i];
+  if (!r || !r.cp || !r.cp.round || r.from !== S.myTeamId || r.cp.pick === pick) return;
+  r.cp.pick = pick;
+  const to = S.teams[r.to], from = S.teams[r.from];
+  if (pick) { payComp(from, to, r.comp); r.comp = 0; } // 受け取った金銭を返す
+  else { r.comp = r.cp.money; payComp(to, from, r.comp); }
+}
+// FA の結果を締めるとき、指名権の補償を翌年のドラフトに残す
+function faCompSettle() {
+  const F = S.off && S.off.fa;
+  if (!F || F.compDone) return;
+  F.compDone = true;
+  if (!S.pickTrades) S.pickTrades = [];
+  (F.results || []).forEach(r => {
+    if (r.cp && r.cp.pick) S.pickTrades.push({ year: r.cp.year, round: r.cp.round, giver: r.to, taker: r.from, name: r.name });
+  });
+}
+// その年のドラフトの 2 巡目からの順番に、補償で移った指名権を入れる。同じ巡目をもう渡していたら、次の巡目の分を渡す
+function applyPickTrades(picks) {
+  const n = S.teams.length, notes = {};
+  const mine = (S.pickTrades || []).filter(x => x.year === S.year);
+  mine.forEach(x => {
+    for (let r = x.round; r <= DRAFT_ROUNDS; r++) {
+      const at = picks.findIndex((tid, i) => tid === x.giver && notes[i] == null && Math.floor(i / n) + 2 === r);
+      if (at < 0) continue;
+      picks[at] = x.taker;
+      notes[at] = `補償（${S.teams[x.giver].short}から・${x.name}）`;
+      break;
+    }
+  });
+  S.pickTrades = (S.pickTrades || []).filter(x => x.year > S.year);
+  return notes;
 }
 
 // ---------- オフ ----------
@@ -1797,7 +1849,8 @@ function offDraftStart() {
   const w = waiverOrder();
   const picks = [];
   for (let r = 2; r <= DRAFT_ROUNDS; r++) (r % 2 === 0 ? w.order : w.order.slice().reverse()).forEach(id => picks.push(id));
-  S.off.draft = { pool, stage: 'r1', r1: { sub: 0, log: [] }, order: picks, idx: 0, result: [], first: w.first, myDone: false };
+  const notes = applyPickTrades(picks);
+  S.off.draft = { pool, stage: 'r1', r1: { sub: 0, log: [] }, order: picks, notes, idx: 0, result: [], first: w.first, myDone: false };
   S.off.step = 'draft';
 }
 
@@ -2030,7 +2083,8 @@ function draftMyBid(pid) {
 
 // ---------- 2 巡目から：ウェーバー ----------
 function draftPick(teamId, pid) {
-  assignPick(teamId, pid, draftRound());
+  const D = S.off.draft;
+  assignPick(teamId, pid, draftRound(), (D.notes || {})[D.idx]);
   S.off.draft.idx++;
 }
 

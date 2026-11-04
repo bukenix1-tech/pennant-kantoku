@@ -667,6 +667,12 @@ function orderBoard(t, bench) {
 }
 
 // ---------- オフの FA ----------
+// 補償で移ることになっている、これからのドラフトの指名権
+function pickTradeList() {
+  const list = (S.pickTrades || []).filter(x => x.giver === S.myTeamId || x.taker === S.myTeamId);
+  if (!list.length) return '';
+  return `<h3>補償で動く指名権</h3><ul>${list.map(x => `<li>${x.year}年ドラフト ${x.round}巡目：${teamChip(S.teams[x.giver])} → ${teamChip(S.teams[x.taker])}（${h(x.name)}の補償）</li>`).join('')}</ul>`;
+}
 function renderFAStep() {
   const F = S.off.fa;
   const t = myTeam();
@@ -694,9 +700,10 @@ function renderFAStep() {
       const from = S.teams[d.from];
       const my = F.myBids[d.pid];
       const dr = UI.faDraft[d.pid] || { mul: 1, years: p.age <= 30 ? 3 : 1 };
-      const comp = d.from === t.id ? 0 : Math.round(d.oldSalary * FA_COMP[d.rank]);
+      const c = faComp(d);
+      const comp = d.from === t.id || !(c.money || c.round) ? '-' : `${U.money(c.money)}${c.round ? `<br><span class="muted small">か${c.round}巡目</span>` : ''}`;
       return `<tr class="${my ? 'sel' : ''}"><td class="l">${nameCell(p)}${isHomeTeam(p, t) ? '<span class="tag">地元</span>' : ''}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${Math.round(ovr(p))}</td>
-        <td>${teamChip(from)}</td><td>${d.rank}</td><td>${U.money(d.mv)}</td><td>${comp ? U.money(comp) : '-'}</td><td>${d.bids.length ? `${d.bids.length}球団` : 'なし'}</td>
+        <td>${teamChip(from)}</td><td>${d.rank}${d.no ? `<span class="muted small">（${d.no}位）</span>` : ''}</td><td>${U.money(d.mv)}</td><td>${comp}</td><td>${d.bids.length ? `${d.bids.length}球団` : 'なし'}</td>
         <td class="l nowrap">${my ? `<b>年俸${U.money(my.salary)}・${my.years}年</b> <button class="sm" data-act="faBidCancel" data-pid="${d.pid}">取り消す</button>` : `
           <select data-chg="faMul" data-pid="${d.pid}">${[0.9, 1, 1.2, 1.5].map(v => `<option value="${v}" ${dr.mul === v ? 'selected' : ''}>相場×${v}（${U.money(Math.round(d.mv * v / 10) * 10)}）</option>`).join('')}</select>
           <select data-chg="faYears" data-pid="${d.pid}">${[1, 2, 3, 4].map(v => `<option value="${v}" ${dr.years === v ? 'selected' : ''}>${v}年</option>`).join('')}</select>
@@ -705,15 +712,25 @@ function renderFAStep() {
     return `<section class="card"><h2>FA市場（${F.declared.length}人が宣言）</h2>
       <p>宣言した選手に条件（年俸と年数）を出せます。選手は、年俸・年数・チームの強さと人気・元の球団への忠誠心・地元かどうかを比べて決めます。
         年を取った選手ほど長い契約を喜びます。</p>
-      <p class="muted">補償金：年俸がチームで上位 3 人（A ランク）なら年俸の 0.8 倍、4〜10 位（B ランク）なら 0.6 倍を、元の球団に払います。
+      <p class="muted">補償：ランクは元の球団の中の年俸の順位で、1〜3 位が A、4〜8 位が B。ほかの球団から取ると、元の球団が<b>翌年のドラフトの指名権</b>か<b>金銭</b>を選んで受け取ります。
+        A は 2 巡目の指名権か年俸の 0.8 倍、B（4〜7 位）は 3 巡目の指名権か 0.6 倍、B の 8 位は金銭だけ。翌年の開幕のころに ${FA_COMP_AGE} 歳以上になる選手は補償がいりません。
         「他球団の関心」は、手を挙げている球団の数です。資金 ${U.money(t.money)}</p>
-      ${rows ? `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>総合</th><th>前所属</th><th>ランク</th><th>相場</th><th>補償金</th><th>他球団の関心</th><th>あなたの条件</th></tr>${rows}</table></div>` : '<p>今年は FA 宣言した選手がいません。</p>'}
+      ${rows ? `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>総合</th><th>前所属</th><th>ランク</th><th>相場</th><th>補償</th><th>他球団の関心</th><th>あなたの条件</th></tr>${rows}</table></div>` : '<p>今年は FA 宣言した選手がいません。</p>'}
       <button class="primary big" data-act="faResolve">交渉を締め切る（結果発表） ▶</button></section>`;
   }
-  const rows = F.results.map(r => `<tr class="${r.to === t.id || r.from === t.id ? 'me' : ''}"><td class="l">${S.players[r.pid] ? nameCell(S.players[r.pid]) : h(r.name)}</td>
-    <td>${teamChip(S.teams[r.from])}</td><td>→</td><td>${teamChip(S.teams[r.to])}</td><td>${h(r.note)}</td><td>${U.money(r.salary)}</td><td>${r.years}年</td><td>${r.comp ? U.money(r.comp) : '-'}</td><td>${r.bids}球団</td></tr>`).join('');
+  const compCell = (r, i) => {
+    if (!r.cp) return r.comp ? U.money(r.comp) : '-';
+    const now = r.cp.pick ? `${r.cp.year}年 ${r.cp.round}巡目の指名権` : U.money(r.comp);
+    if (r.from !== t.id || !r.cp.round || F.compDone) return now;
+    return `<b>${now}</b><br><button class="sm" data-act="faComp" data-i="${i}" data-pick="${r.cp.pick ? 0 : 1}">${r.cp.pick ? `金銭（${U.money(r.cp.money)}）にする` : `${r.cp.round}巡目の指名権にする`}</button>`;
+  };
+  const rows = F.results.map((r, i) => `<tr class="${r.to === t.id || r.from === t.id ? 'me' : ''}"><td class="l">${S.players[r.pid] ? nameCell(S.players[r.pid]) : h(r.name)}</td>
+    <td>${teamChip(S.teams[r.from])}</td><td>→</td><td>${teamChip(S.teams[r.to])}</td><td>${h(r.note)}</td><td>${U.money(r.salary)}</td><td>${r.years}年</td><td class="nowrap">${compCell(r, i)}</td><td>${r.bids}球団</td></tr>`).join('');
+  const minePick = F.results.some(r => r.cp && r.cp.round && r.from === t.id);
   return `<section class="card"><h2>FAの結果</h2>
-    ${rows ? `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>元</th><th></th><th>先</th><th></th><th>年俸</th><th>年数</th><th>補償金</th><th>条件を出した</th></tr>${rows}</table></div>` : '<p>今年は FA の動きがありませんでした。</p>'}
+    ${minePick ? `<p>出ていった選手の補償を、<b>翌年のドラフトの指名権</b>か<b>金銭</b>から選べます。契約更改へ進むと決まります。</p>` : ''}
+    ${rows ? `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>元</th><th></th><th>先</th><th></th><th>年俸</th><th>年数</th><th>補償</th><th>条件を出した</th></tr>${rows}</table></div>` : '<p>今年は FA の動きがありませんでした。</p>'}
+    ${pickTradeList()}
     <button class="primary big" data-act="offNext">契約更改へ ▶</button></section>`;
 }
 
@@ -1642,7 +1659,9 @@ function renderDraft() {
   const t = myTeam();
   const lotteryHtml = renderLotteryLog(D.r1.log);
   const res = D.result.filter(r => r.round > 1).slice().reverse().map(r => `<li>${r.round}位 ${teamChip(S.teams[r.team])} ${h(r.name)}（${r.kind}・${r.pos}）</li>`).join('');
-  const orderNote = `2 巡目からはウェーバー：<b>${LEAGUE_NAME[D.first]}</b>（交流戦で勝ち越し）の最下位から、両リーグ交互に指名します。3 巡目は逆に上位から、そのあとは 1 巡ごとに入れ替わります。`;
+  const moved = Object.keys(D.notes || {}).map(i => [+i, D.notes[i]]).filter(([i]) => D.order[i] === t.id || (D.notes[i] || '').includes(`${t.short}から`));
+  const orderNote = `2 巡目からはウェーバー：<b>${LEAGUE_NAME[D.first]}</b>（交流戦で勝ち越し）の最下位から、両リーグ交互に指名します。3 巡目は逆に上位から、そのあとは 1 巡ごとに入れ替わります。`
+    + (moved.length ? `<br>FA の補償で動いた指名権：${moved.map(([i, n]) => `${Math.floor(i / S.teams.length) + 2}巡目 ${S.teams[D.order[i]].short}（${h(n)}）`).join('、')}` : '');
   let head;
   if (D.stage === 'r1') {
     head = `<h2>ドラフト 1 巡目（入札）${D.r1.sub ? ` ・ 外れ1位の入札（${D.r1.sub + 1}回目）` : ''}</h2>

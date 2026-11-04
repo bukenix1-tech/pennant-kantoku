@@ -198,7 +198,7 @@ const ACTIONS = {
     const step = S.off.step;
     if (step === 'awards') { if (intlYear() && !S.off.intl) offIntl(); else offFAStart(); }
     else if (step === 'intl') offFAStart();
-    else if (step === 'fa') offContract();
+    else if (step === 'fa') { faCompSettle(); offContract(); }
     else if (step === 'contract') offDraftStart();
     else if (step === 'draft') offCampStart();
     else if (step === 'camp') {
@@ -209,6 +209,7 @@ const ACTIONS = {
     window.scrollTo(0, 0);
   },
   draftPick(el) { draftMyPick(+el.dataset.pid); },
+  faComp(el) { faCompSwitch(+el.dataset.i, el.dataset.pick === '1'); },
   draftBid(el) {
     const p = S.players[+el.dataset.pid];
     if (!confirm(`${p.name}を1位で入札しますか？`)) return 'keep';
