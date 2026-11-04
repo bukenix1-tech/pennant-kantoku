@@ -1722,7 +1722,7 @@ function finishProspect(p, kind) {
 
 // 転生選手（reborn.js）を、毎年だいたい 1 人ドラフト候補にまぜる。いま球界にいる人（候補・選手・自由契約）は出ない。引退したら、また出られる
 function addReborn(pool) {
-  if (!REBORN.length || !U.chance(REBORN_YEAR_CHANCE)) return; // 合言葉が入っていない端末では出ない
+  if (!REBORN.length || S.noReborn || !U.chance(REBORN_YEAR_CHANCE)) return; // 合言葉が入っていない端末・転生選手を出さないデータでは出ない
   const alive = new Set(Object.values(S.players).map(p => p.reborn).filter(Boolean));
   const cands = REBORN.filter(R => !R.foreign && !alive.has(R.id)); // 外国人はドラフトには出ない（外国人スカウトの候補に混ざる）
   // ふつうは 1 人。たまに 2 人・3 人出る
@@ -2290,7 +2290,7 @@ function scoutForeign() {
   // ときどき転生外国人が候補に混ざる。いま球界にいる人・自由契約で残っている人は除く（入れ替わる前の候補だけは数えない）
   const old = new Set(S.foreignCands || []);
   const alive = new Set(Object.values(S.players).filter(p => p.reborn && !old.has(p.id)).map(p => p.reborn));
-  const fr = REBORN.filter(R => R.foreign && !alive.has(R.id));
+  const fr = S.noReborn ? [] : REBORN.filter(R => R.foreign && !alive.has(R.id));
   if (fr.length && U.chance(FOREIGN_REBORN_CHANCE)) {
     const p = makeRebornPlayer(U.pickW(fr.map(R => [R, R.weight || 1])));
     cands.push(p.id);

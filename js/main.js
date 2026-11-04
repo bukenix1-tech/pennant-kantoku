@@ -331,6 +331,11 @@ const ACTIONS = {
 };
 
 const CHANGES = {
+  toggleReborn(el) {
+    S.noReborn = !el.checked;
+    openModal(renderMenu());
+    return 'keep';
+  },
   games(el) { UI.newGames = +el.value; },
   watchOnly(el) { UI.watchOnly = el.checked; },
   noBackupAsk(el) { setBackupAskOff(el.checked); return 'keep'; },
