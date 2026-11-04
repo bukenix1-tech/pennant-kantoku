@@ -150,6 +150,11 @@ const DORM_GROW = 0.06, GYM_SLOW = 0.08, ANALYSIS_BONUS = 0.6;
 const MERIT_SOFT = 0.5, MERIT_FLOOR = 0.15;
 // 人気度は毎週、下限との差の FAME_DECAY ずつ下がる。下限は 5 ＋ 功績×FAME_FLOOR_MERIT（殿堂入りくらいで 60）
 const FAME_DECAY = 0.05, FAME_FLOOR_MERIT = 55;
+// 達成記録（ノーヒットノーラン・完全試合・サイクル安打・1 試合 4 本塁打・1 試合の奪三振）。FEAT_K 個以上の奪三振で記録に入る。値は仮（AI）
+const FEAT_K = 14;
+const NONO_EXTRA = 30; // ノーヒットノーランを続けている先発は、いつもの球数の限りをこれだけ超えても投げる（仮・AI）
+const FEAT_WORD = { pg: '完全試合', nh: 'ノーヒットノーラン', rnh: '継投ノーヒットノーラン', cyc: 'サイクル安打', hr4: '1試合4本塁打', k: '1試合の奪三振' };
+const FEAT_FAME = { pg: 10, nh: 6, rnh: 2, cyc: 4, hr4: 5, k: 3 };
 // 引退する選手の慰留（1 人 1 回）。残ってくれる見込み＝RETAIN_BASE＋忠誠心/100×RETAIN_LOYAL−（年齢−RETAIN_AGE）×RETAIN_AGE_DROP。
 // 残ったら年俸を RETAIN_RAISE だけ上乗せした 1 年契約。値は仮（AI）
 const RETAIN_BASE = 0.1, RETAIN_LOYAL = 0.6, RETAIN_AGE = 34, RETAIN_AGE_DROP = 0.07, RETAIN_MIN = 0.05, RETAIN_MAX = 0.9, RETAIN_RAISE = 0.1;

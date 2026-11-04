@@ -522,7 +522,7 @@ function renderPlayerModal(p) {
   <h2>${p.no != null && team ? `<span class="muted">#${p.no}</span> ` : ''}${h(p.name)} ${p.foreign ? '<span class="tag">外国人</span>' : ''}${rebornTag(p)}</h2>
   ${rebornOf(p) ? `<p class="muted">転生選手：${h(rebornOf(p).note)}</p>` : ''}
   <p>${team ? teamChip(team) : ''} ${p.twoWay ? `二刀流（投手：${p.role || '-'}・野手：${p.isP ? p.pos2 : p.pos}）` : p.isP ? `投手（${p.role}）` : `野手（${p.pos}）`} ${posBadge(p)}${canBat(p) ? ` ・ サブポジ ${subsOf(p).length ? subsOf(p).join('・') : 'なし'}` : ''} ・ ${p.age}歳 ・ ${p.type}型 ・ 才能 <span class="stars">${potStars(p.pot)}</span>
-   ・ 調子 ${condCell(p)} ${COND_LABEL[p.cond]} ・ 年俸 ${U.money(p.salary)} ${p.inj ? `<span class="tag bad">故障 残り${p.inj}日</span>` : ''}${p.awakened ? `<span class="tag awaken-tag">覚醒×${p.awakened}</span>` : ''}${p.bigAwakened ? `<span class="tag awaken-tag big">大覚醒×${p.bigAwakened}</span>` : ''}${p.limitBroken ? `<span class="tag awaken-tag">上限解放×${p.limitBroken}</span>` : ''}${p.b9 ? `<span class="tag">ベストナイン×${p.b9}</span>` : ''}${p.gg ? `<span class="tag">GG×${p.gg}</span>` : ''}${p.as ? `<span class="tag">オールスター×${p.as}</span>` : ''}${p.asMvp ? `<span class="tag">球宴MVP×${p.asMvp}</span>` : ''}${p.jp ? `<span class="tag">日本代表×${p.jp}</span>` : ''}${p.intlMvp ? `<span class="tag awaken-tag">国際大会MVP×${p.intlMvp}</span>` : ''}${team && grumbling(team, p) ? '<span class="tag bad">起用に不満</span>' : ''}</p>
+   ・ 調子 ${condCell(p)} ${COND_LABEL[p.cond]} ・ 年俸 ${U.money(p.salary)} ${p.inj ? `<span class="tag bad">故障 残り${p.inj}日</span>` : ''}${p.awakened ? `<span class="tag awaken-tag">覚醒×${p.awakened}</span>` : ''}${p.bigAwakened ? `<span class="tag awaken-tag big">大覚醒×${p.bigAwakened}</span>` : ''}${p.limitBroken ? `<span class="tag awaken-tag">上限解放×${p.limitBroken}</span>` : ''}${p.b9 ? `<span class="tag">ベストナイン×${p.b9}</span>` : ''}${p.gg ? `<span class="tag">GG×${p.gg}</span>` : ''}${p.as ? `<span class="tag">オールスター×${p.as}</span>` : ''}${p.asMvp ? `<span class="tag">球宴MVP×${p.asMvp}</span>` : ''}${p.jp ? `<span class="tag">日本代表×${p.jp}</span>` : ''}${p.intlMvp ? `<span class="tag awaken-tag">国際大会MVP×${p.intlMvp}</span>` : ''}${Object.keys(p.fx || {}).map(k => `<span class="tag awaken-tag">${k === 'k' ? `${FEAT_K}奪三振以上` : FEAT_WORD[k]}×${p.fx[k]}</span>`).join('')}${team && grumbling(team, p) ? '<span class="tag bad">起用に不満</span>' : ''}</p>
   ${growthBox(p)}
   <div class="bars">${bars}</div>
   <p>総合 <b>${Math.round(ovr(p))}</b>　トレード価値 ${tradeValue(p).toLocaleString()}</p>
@@ -885,8 +885,8 @@ const pName = (id, name) => (S.players[id] ? `<a href="#" data-act="player" data
 
 function renderRecords() {
   const v = UI.recView;
-  const seg = [['hist', '年表'], ['season', 'シーズン記録'], ['career', '通算記録'], ['hof', '殿堂入り'], ['team', '球団の記録'], ['as', 'オールスター'], ['intl', '国際大会']];
-  const body = v === 'season' ? recSeason() : v === 'career' ? recCareer() : v === 'hof' ? recHof() : v === 'team' ? recTeam() : v === 'as' ? recAllStar() : v === 'intl' ? recIntl() : recHist();
+  const seg = [['hist', '年表'], ['season', 'シーズン記録'], ['career', '通算記録'], ['hof', '殿堂入り'], ['team', '球団の記録'], ['as', 'オールスター'], ['intl', '国際大会'], ['feat', '達成記録']];
+  const body = v === 'season' ? recSeason() : v === 'career' ? recCareer() : v === 'hof' ? recHof() : v === 'team' ? recTeam() : v === 'as' ? recAllStar() : v === 'intl' ? recIntl() : v === 'feat' ? recFeat() : recHist();
   return `<section class="card"><h2>記録・歴史・殿堂</h2>
     <div class="seg">${seg.map(([k, n]) => `<button class="${v === k ? 'on' : ''}" data-act="recView" data-k="${k}">${n}</button>`).join('')}</div>
     ${body}</section>`;
@@ -1061,6 +1061,16 @@ function pbpBox(G, shown) {
 }
 
 // 野球速報のアプリのように：スコア・いまの場面（塁・アウト・投手と打者）・直前のプレー、下に経過と成績のタブ
+// 速報：5 回を過ぎてもヒットも点も出ていなければ「ノーヒットノーラン継続中」。終わって勝っていれば達成
+function pbpNoNo(box, hits, sc, done, team, G) {
+  return [0, 1].map(s => {
+    const b = 1 - s, pit = box.pit[s], outs = U.sum(pit, r => r.outs);
+    if (hits[b] || sc[b] || outs < 15) return '';
+    const word = pit.length > 1 ? '継投ノーヒットノーラン' : U.sum(box.bat[b], r => r.bb) ? 'ノーヒットノーラン' : '完全試合';
+    if (done) return G.score[s] > G.score[b] ? `<div class="pbp-nono">🎉 ${h(team(s))} ${word}達成！</div>` : '';
+    return `<div class="pbp-nono">${h(team(s))}${pit.length > 1 ? '' : `・${h(pit[0].name)}`} ${word}継続中（${U.ip(outs)}回）</div>`;
+  }).join('');
+}
 function renderPbp() {
   const v = UI.pbpView, G = (S.pbp || [])[v.i];
   if (!G) return '<p>この試合の記録はもうありません（次のシーズンが始まると消えます）。</p>';
@@ -1103,7 +1113,7 @@ function renderPbp() {
         <div><span class="muted">${nextInn}回${nextHalf ? '裏' : '表'}・投手</span> <b>${h(pitcher.name)}</b> <small class="muted">${U.ip(pitcher.outs)}回 ${pitcher.k}奪三振 ${pitcher.r}失点</small></div>
         <div><span class="muted">${h(team(nextHalf))}・${box.pa[nextHalf] % 9 + 1}番</span> <b>${h(batter.name)}</b> <small class="muted">${batter.ab}打数${batter.h}安打${batter.hr ? ` ${batter.hr}本` : ''}${batter.rbi ? ` ${batter.rbi}打点` : ''}</small></div>
       </div></div>`}
-    ${now}</div>`;
+    ${pbpNoNo(box, hits, sc, done, team, G)}${now}</div>`;
   const btn = (to, label, dis, cls) => `<button class="${cls || ''}" data-act="pbpGo" data-to="${to}" ${dis ? 'disabled' : ''}>${label}</button>`;
   const ctrl = `<p class="pbp-btns">${btn('pa', '次の打席 ▶', done, 'primary')} ${btn('inn', '次の回 ▶▶', done)} ${btn('end', '結果まで ⏭', done)} ${btn('start', '最初から', !v.step)}</p>`;
   // 下のタブ：経過・打撃成績・投手成績・スタメン
@@ -1179,6 +1189,18 @@ function renderIntl(I) {
 }
 
 // 国際大会：歴代の結果
+// 達成記録（日本シリーズでまだ見ていない試合の分は出さない）
+function recFeat() {
+  const list = (S.feats || []).filter(f => !(f.y === S.year && f.pbi != null && pbpUnseen(f.pbi)));
+  const count = k => list.filter(f => f.k === k).length;
+  const kinds = ['pg', 'nh', 'rnh', 'cyc', 'hr4', 'k'];
+  return `<p class="muted">ノーヒットノーラン・完全試合・継投ノーヒットノーラン・サイクル安打・1 試合 4 本塁打・1 試合 ${FEAT_K} 奪三振以上が出ると、ここに残ります。</p>
+    <p>${kinds.map(k => `${k === 'k' ? `${FEAT_K}奪三振以上` : FEAT_WORD[k]} <b>${count(k)}</b>`).join('　')}</p>
+    ${list.length ? `<div class="scroll"><table class="tbl"><tr><th>年</th><th>日</th><th>記録</th><th>選手</th><th>球団</th><th>相手</th></tr>
+      ${list.map(f => `<tr class="${f.team === myTeam().short ? 'me' : ''}"><td>${f.y}</td><td class="nowrap">${h(f.label || '')}</td><td class="l"><b>${h(featText(f))}</b></td>
+        <td class="l">${f.pids.length === 1 ? pName(f.pids[0], f.name) : h(f.name)}</td><td>${h(f.team)}</td><td>${h(f.opp)}</td></tr>`).join('')}</table></div>`
+      : '<p class="muted">まだありません。</p>'}`;
+}
 function recIntl() {
   const H = S.intlHist || [];
   const next = S.year + ((INTL_EVERY - (S.year % INTL_EVERY)) % INTL_EVERY);

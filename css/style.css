@@ -470,3 +470,5 @@ details.slim summary { cursor: pointer; font-weight: bold; }
 .pbp-log li { padding: 3px 4px; border-bottom: 1px solid var(--line); }
 .pbp-log li.pbp-inn { font-weight: bold; background: var(--line); }
 .pbp-log li.pbp-run { font-weight: bold; }
+
+.pbp-nono { margin-top: 6px; padding: 4px 8px; border-radius: 6px; background: #f5c542; color: #2b2100; font-weight: bold; text-align: center; }

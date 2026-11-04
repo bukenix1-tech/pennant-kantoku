@@ -10,7 +10,7 @@ function prepareSide(S, team, idx) {
   ensureLineup(S, team);
   const lineup = team.lineup.map(s => ({
     p: S.players[s.pid], pos: s.pos,
-    box: { ab: 0, h: 0, hr: 0, rbi: 0, bb: 0, k: 0, r: 0, sb: 0 },
+    box: { ab: 0, h: 0, d: 0, t: 0, hr: 0, rbi: 0, bb: 0, k: 0, r: 0, sb: 0 },
   }));
   const starter = pickStarter(S, team);
   const rot = new Set(team.rotation);
@@ -86,6 +86,9 @@ function changePitcher(g, fld, bat, inning, atStart) {
   const setupAvail = fld.setup && !fld.used.some(r => r.p === fld.setup);
   let change = false;
   const lim = pitchLimit(rec);
+  // ノーヒットノーランを続けている先発は、球数が多少かさんでも代えない（勝ちパターンにもつながない）
+  const nono = rec.start && inning >= 6 && !rec.h && !rec.r;
+  if (nono) { if (rec.pc >= lim + NONO_EXTRA) change = true; else return; }
   if (rec.start) {
     if (rec.pc >= lim) change = true;
     else if (rec.r >= 5 && rec.pc >= 40) change = true;
@@ -206,7 +209,7 @@ function halfInning(g, bat, fld, inning) {
         desc = 'タイムリーヒット';
         break;
       case '2B':
-        hit(); b.stats.d++;
+        hit(); b.stats.d++; slot.box.d++;
         if (bases[2]) { score(bases[2], slot); bases[2] = null; }
         if (bases[1]) { score(bases[1], slot); bases[1] = null; }
         if (bases[0]) {
@@ -218,7 +221,7 @@ function halfInning(g, bat, fld, inning) {
         desc = 'タイムリーツーベース';
         break;
       case '3B':
-        hit(); b.stats.t++;
+        hit(); b.stats.t++; slot.box.t++;
         for (let i = 2; i >= 0; i--) if (bases[i]) { score(bases[i], slot); bases[i] = null; }
         bases[2] = runner;
         desc = 'タイムリースリーベース';
@@ -309,8 +312,24 @@ function playGame(S, home, away, wantLog, wantPbp) {
   });
 
   const res = {
-    home: home.id, away: away.id, score: g.score.slice(), wp, lp, sp, sides: [A, H],
+    home: home.id, away: away.id, score: g.score.slice(), wp, lp, sp, sides: [A, H], feats: [],
   };
+  // 達成記録。ノーヒットノーランは、勝った側の投手が 9 回以上を安打も点も許さなかったとき（1 人で四球もなければ完全試合）
+  if (winner) {
+    const u = winner.used;
+    if (g.innings >= 9 && !U.sum(u, r => r.h) && !U.sum(u, r => r.r)) {
+      const k = u.length > 1 ? 'rnh' : U.sum(u, r => r.bb) ? 'nh' : 'pg';
+      res.feats.push({ k, side: winner.idx, ps: u.map(r => r.p) });
+    }
+  }
+  [A, H].forEach(s => {
+    s.lineup.forEach(sl => {
+      const b = sl.box;
+      if (b.hr >= 4) res.feats.push({ k: 'hr4', side: s.idx, ps: [sl.p], n: b.hr });
+      if (b.d && b.t && b.hr && b.h - b.d - b.t - b.hr > 0) res.feats.push({ k: 'cyc', side: s.idx, ps: [sl.p] });
+    });
+    s.used.forEach(r => { if (r.k >= FEAT_K) res.feats.push({ k: 'k', side: s.idx, ps: [r.p], n: r.k }); });
+  });
   // 順を追って見るための記録（日本シリーズと国際大会の決勝だけ）
   if (wantPbp) {
     res.pbp = {

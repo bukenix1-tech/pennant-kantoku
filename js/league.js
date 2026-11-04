@@ -490,6 +490,7 @@ function playOne(m, label, post, pbp) {
   const mine = m.home === myId || m.away === myId;
   const res = post ? playPostGame(home, away, mine, pbp) : playGame(S, home, away, mine);
   if (res.pbp) { if (!S.pbp) S.pbp = []; S.pbp.push({ label, kind: 'js', ...res.pbp }); }
+  if (res.feats.length) recordFeats(res, [away, home], label, res.pbp ? S.pbp.length - 1 : null);
   m.score = res.score;
   const att = homeGate(home);
   if (!post) {
@@ -515,6 +516,22 @@ function playOne(m, label, post, pbp) {
     S.lastGame = { label, home: m.home, away: m.away, score: res.score, att, ...res.detail };
   }
   return res;
+}
+
+// 達成記録をニュースと記録に残す（日本シリーズは、試合を見るまで隠す）
+function featText(f) { return f.k === 'k' ? `1試合${f.n}奪三振` : f.k === 'hr4' && f.n > 4 ? `1試合${f.n}本塁打` : FEAT_WORD[f.k]; }
+function recordFeats(res, sides, label, pbi) {
+  if (!S.feats) S.feats = [];
+  res.feats.forEach(f => {
+    const t = sides[f.side], o = sides[1 - f.side];
+    const rec = { y: S.year, k: f.k, n: f.n, pids: f.ps.map(p => p.id), name: f.ps.map(p => p.name).join('→'), team: t.short, opp: o.short, label, pbi };
+    S.feats.unshift(rec);
+    if (f.k !== 'rnh') f.ps.forEach(p => { p.fx = p.fx || {}; p.fx[f.k] = (p.fx[f.k] || 0) + 1; });
+    f.ps.forEach(p => addFame(p, FEAT_FAME[f.k] / f.ps.length));
+    const mine = t.id === S.myTeamId, theirs = o.id === S.myTeamId;
+    const n = addNews(`${label ? `${label} ` : ''}${t.short}の${rec.name}が${o.short}戦で${featText(f)}を達成！`, mine ? 'big' : theirs ? 'bad' : '');
+    if (pbi != null) n.hide = pbi;
+  });
 }
 
 function advanceDay() {
