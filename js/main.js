@@ -237,6 +237,7 @@ const ACTIONS = {
   faBidCancel(el) { setMyBid(+el.dataset.pid, null); },
   watch(el) { toggleWatch(+el.dataset.pid); },
   posf(el) { UI.posf[el.dataset.key] = el.dataset.g; },
+  pkind(el) { UI.pkind = el.dataset.k; },
   teamView(el) { UI.teamView = el.dataset.k; },
   recView(el) { UI.recView = el.dataset.k; },
   slimNow() {

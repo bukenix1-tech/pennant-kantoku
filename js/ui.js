@@ -1501,6 +1501,7 @@ function prospectTable(ids, mode) {
   let pool = ids.map(id => S.players[id]).filter(Boolean);
   if (UI.watchOnly) pool = pool.filter(p => watch.includes(p.id));
   pool = pool.filter(p => posMatch(p, UI.posf.draft));
+  if (UI.pkind) pool = pool.filter(p => p.kind === UI.pkind);
   if (UI.geniusOnly) pool = pool.filter(geniusHint);
   pool.sort((a, b) => (watch.includes(b.id) - watch.includes(a.id)) || draftScore(b) - draftScore(a));
   const rows = pool.map(p => {
@@ -1528,7 +1529,9 @@ function prospectTable(ids, mode) {
     });
   }) : '';
   const nGenius = ids.map(id => S.players[id]).filter(p => p && geniusHint(p)).length;
-  const filters = `${posCounts()}${posFilter('draft')}<div class="row" style="justify-content:flex-start">
+  const kindN = k => ids.filter(id => S.players[id] && (!k || S.players[id].kind === k)).length;
+  const kindSeg = `<div class="seg wrapseg">${[['', '出身すべて'], ...DRAFT_KINDS.map(([k]) => [k, k])].map(([k, n]) => `<button class="${UI.pkind === k ? 'on' : ''}" data-act="pkind" data-k="${k}">${n}（${kindN(k)}）</button>`).join('')}</div>`;
+  const filters = `${posCounts()}${posFilter('draft')}${kindSeg}<div class="row" style="justify-content:flex-start">
     <label><input type="checkbox" data-chg="watchOnly" ${UI.watchOnly ? 'checked' : ''}> ★ 気になる選手だけ（${watch.filter(id => ids.includes(id)).length}人）</label>
     <label><input type="checkbox" data-chg="geniusOnly" ${UI.geniusOnly ? 'checked' : ''}> ✨ 天才肌の気配だけ（${nGenius}人）</label></div>`;
   if (isMobile()) return filters + cards;
