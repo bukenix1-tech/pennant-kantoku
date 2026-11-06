@@ -168,6 +168,11 @@ const ACTIONS = {
     if (!confirm(`${FACILITIES[k].name}を ${U.money(cost)} で改修しますか？`)) return 'keep';
     upgradeFacility(k);
   },
+  downgrade(el) {
+    const k = el.dataset.k, lv = facLv(myTeam(), k);
+    if (!confirm(`${FACILITIES[k].name}をレベル${lv - 1}に下げますか？\n維持費は年 ${U.money(facilityUpkeep(lv, k))} から ${U.money(facilityUpkeep(lv - 1, k))} に減りますが、改修に使ったお金は戻りません。上げ直すには、また改修費がかかります。`)) return 'keep';
+    downgradeFacility(k);
+  },
   promo(el) {
     const pr = PROMOS[el.dataset.k];
     if (!confirm(`${pr.name}を ${U.money(pr.cost)} で行いますか？`)) return 'keep';

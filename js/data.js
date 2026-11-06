@@ -144,6 +144,13 @@ const FACILITIES = {
 const FAC_MAX = 5;
 // 次の段階に上げる費用（万円）。cost のある施設はその割合
 function facilityCost(level, k) { return Math.round(level * 120000 * ((FACILITIES[k] && FACILITIES[k].cost) || 1)); }
+// 施設の維持費：毎年、改修に使った総額のこの割合を払う（レベル 1 は 0）。値は仮（AI）
+const FAC_UPKEEP = 0.08;
+function facilityUpkeep(level, k) {
+  let total = 0;
+  for (let l = 1; l < level; l++) total += facilityCost(l, k);
+  return Math.round(total * FAC_UPKEEP);
+}
 // 施設の効き目（レベル 1 で効き目なし。1 つ上がるごと）
 const DORM_GROW = 0.06, GYM_SLOW = 0.08, ANALYSIS_BONUS = 0.6;
 // 功績のある選手の減俸をゆるめる：功績 1（殿堂入りくらい）で、下げ幅を MERIT_SOFT だけ減らし、減額制限を MERIT_FLOOR だけ上げる

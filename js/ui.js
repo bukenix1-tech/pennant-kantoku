@@ -1260,12 +1260,14 @@ function retiredNoList() {
 function renderMoney() {
   const t = myTeam();
   const f = t.fin;
-  const inc = f.gate + f.food + (f.tv || 0) + f.goods + f.sponsor + f.other, exp = f.salary + f.ops + f.invest;
+  const inc = f.gate + f.food + (f.tv || 0) + f.goods + f.sponsor + f.other, exp = f.salary + f.ops + (f.upkeep || 0) + f.invest;
   const facs = Object.keys(FACILITIES).map(k => {
     const lv = facLv(t, k);
     const cost = facilityCost(lv, k);
     return `<tr><td class="l" style="white-space:normal"><b>${FACILITIES[k].name}</b><br><span class="muted">${FACILITIES[k].desc}</span></td><td class="nowrap">${'■'.repeat(lv)}${'□'.repeat(FAC_MAX - lv)} Lv${lv}<br>
-      ${lv < FAC_MAX ? `<button class="sm" data-act="upgrade" data-k="${k}" ${t.money < cost ? 'disabled' : ''}>改修 ${U.money(cost)}</button>` : '最大'}</td></tr>`;
+      ${lv < FAC_MAX ? `<button class="sm" data-act="upgrade" data-k="${k}" ${t.money < cost ? 'disabled' : ''}>改修 ${U.money(cost)}</button>` : '最大'}
+      ${lv > 1 ? `<button class="sm" data-act="downgrade" data-k="${k}">下げる</button>` : ''}
+      <br><span class="muted small">維持費 ${facilityUpkeep(lv, k) ? `年 ${U.money(facilityUpkeep(lv, k))}` : 'なし'}${lv < FAC_MAX ? `（上げると年 ${U.money(facilityUpkeep(lv + 1, k))}）` : ''}</span></td></tr>`;
   }).join('');
   const fc = (S.foreignCands || []).map(id => S.players[id]).filter(Boolean);
   const fcHtml = fc.length ? `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>能力</th><th>年俸</th></tr>
@@ -1288,6 +1290,7 @@ function renderMoney() {
         <tr><th class="l">その他</th><td>${U.money(f.other)}</td></tr>
         <tr><th class="l">年俸</th><td class="neg">${U.money(-f.salary)}</td></tr>
         <tr><th class="l">球場運営費</th><td class="neg">${U.money(-f.ops)}</td></tr>
+        <tr><th class="l">施設の維持費</th><td class="neg">${U.money(-(f.upkeep || 0))}</td></tr>
         <tr><th class="l">投資（施設・補強）</th><td class="neg">${U.money(-f.invest)}</td></tr>
         <tr><th class="l">差し引き</th><td class="${inc - exp < 0 ? 'neg' : ''}"><b>${U.money(inc - exp)}</b></td></tr>
       </table>
@@ -1310,7 +1313,10 @@ function renderMoney() {
     ${S.phase !== 'season' ? '<p class="muted">宣伝はシーズン中にしかできません。</p>' : ''}
   </section>
   ${renderGoods(t)}
-  <section class="card"><h2>施設</h2><table class="tbl">${facs}</table></section>
+  <section class="card"><h2>施設</h2>
+    <p>施設の維持費 <b>年 ${U.money(upkeepTotal(t))}</b></p>
+    <p class="muted">毎年、改修に使った総額の ${Math.round(FAC_UPKEEP * 100)}% を、年俸と同じように試合ごとに分けて払います。「下げる」でレベルを下げると維持費は減りますが、改修に使ったお金は戻りません。</p>
+    <table class="tbl">${facs}</table></section>
   <section class="card"><h2>助っ人外国人</h2>
     <p>海外に調査を出すと、候補が 3 人見つかります（調査費 ${U.money(FOREIGN_SCOUT_COST)}）。</p>
     <button data-act="scoutForeign" ${faOpen() ? '' : 'disabled'}>調査に出す</button>

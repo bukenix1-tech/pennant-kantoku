@@ -546,6 +546,9 @@ function advanceDay() {
       const pay = payroll(t) / 143; // 短いシーズンは、試合数に合わせて年俸も少なく払う
       t.money -= pay; t.fin.salary += pay;
     });
+    // 施設の維持費も年俸と同じように払う（まずは自分の球団だけ）
+    const my = myTeam(), up = upkeepTotal(my) / 143;
+    my.money -= up; my.fin.upkeep = (my.fin.upkeep || 0) + up;
   }
   // 月曜（休み）に 1 週間分の練習の成果が出る
   if (entry.w === 1) {
@@ -2409,6 +2412,17 @@ function releasePlayer(pid) {
 }
 
 function facLv(t, k) { return t.fac[k] || 1; }
+
+function upkeepTotal(t) { return U.sum(Object.keys(FACILITIES), k => facilityUpkeep(facLv(t, k), k)); }
+
+// レベルを 1 つ下げる。維持費は減るが、改修に使ったお金は戻らない
+function downgradeFacility(k) {
+  const t = myTeam();
+  const lv = facLv(t, k);
+  if (lv <= 1) return;
+  t.fac[k] = lv - 1;
+  addNews(`${FACILITIES[k].name}をレベル${t.fac[k]}に縮小しました。`, 'bad');
+}
 
 function upgradeFacility(k) {
   const t = myTeam();
