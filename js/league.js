@@ -1346,6 +1346,12 @@ function awaken(p) {
   const parts = ups.map(([k, v]) => {
     const before = p.a[k];
     p.a[k] = Math.max(p.a[k], Math.min(abilMax(p, k), p.a[k] + v));
+    // 伸びた分だけ伸びしろの上限も広げる（広げないと、上限を超えた能力が「停滞」して練習で伸びなくなる）。
+    // 転生選手はピーク時の値が上限なので広げない
+    if (!(p.ceilA && p.ceilA[k] != null) && p.a[k] > before) {
+      p.awakeUp = p.awakeUp || {};
+      p.awakeUp[k] = (p.awakeUp[k] || 0) + (p.a[k] - before);
+    }
     if (k === 'velo') return `球速 +${veloKmh(p.a[k]) - veloKmh(before)}km/h`;
     return `${lbl[k]} +${Math.round(p.a[k]) - Math.round(before)}`;
   });
@@ -2555,6 +2561,16 @@ function migrate() {
   Object.values(S.players).forEach(p => { if (canBat(p) && !p.subs) p.subs = rollSubs(p.isP ? p.pos2 : p.pos, p.a.field); });
   Object.values(S.players).forEach(p => { if (canBat(p) && !p.steal) p.steal = rollSteal(); });
   Object.values(S.players).forEach(p => { if (canBat(p) && p.eye == null) p.eye = U.pickW(EYE_W); });
+  // 覚醒で上限を超えたまま「停滞」していた能力（前の版のデータ）は、停滞が外れるところまで上限を広げる
+  Object.values(S.players).forEach(p => {
+    if (!p.awakened || p.awakeUp) return;
+    p.awakeUp = {};
+    abilKeys(p).forEach(k => {
+      if (p.ceilA && p.ceilA[k] != null) return;
+      const need = p.a[k] + STALL_GAP + 1 - abilCeil(p, k);
+      if (need > 0) p.awakeUp[k] = Math.ceil(need);
+    });
+  });
   S.teams.forEach(t => { if (!t.active) { t.active = []; autoActive(t); ensureLineup(S, t); } });
   S.teams.forEach(t => {
     if (!t.retiredNos) t.retiredNos = [];
