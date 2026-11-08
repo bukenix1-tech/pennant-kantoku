@@ -1296,8 +1296,20 @@ function toggleRetiredStar(id) {
 }
 
 // ---------- 覚醒 ----------
-const AWAKEN_TEXTS = ['フォームを改造して', '先輩のアドバイスで', 'ビデオで自分を研究して', '毎晩の素振りを続けて', 'コーチとの特訓で', '悔しい負けをバネにして', '自主トレで体を作り直して'];
+const AWAKEN_TEXTS = ['フォームを改造して', '先輩のアドバイスで', 'ビデオで自分を研究して', '居残り練習を続けて', 'コーチとの特訓で', '悔しい負けをバネにして', '自主トレで体を作り直して'];
 const VETERAN_TEXTS = ['ベテランの意地で', '若手に負けまいと', 'フォームを一から見直して', '引退の二文字を振り払うように'];
+// いちばん伸びた能力に合わせたきっかけ（「〇〇が」のあとに続く）
+const AWAKEN_KEY_TEXTS = {
+  meet: ['バットを短く持つようにして', 'ティー打撃を毎日千本続けて', '逆方向へ打つコツをつかんで', '投手の配球を読めるようになって', 'ボールが止まって見えるようになり'],
+  power: ['体重を 10kg 増やして', '打球の角度を研究して', '下半身を使ったスイングを身につけて', 'ウエートトレーニングに打ち込んで', 'フルスイングを恐れなくなって'],
+  speed: ['陸上の短距離のコーチに走り方を習って', 'スタートの一歩目を磨いて', '体を絞って身軽になり', 'スパイクを替えて'],
+  arm: ['遠投を毎日続けて', '投げ方を一から見直して', '肩の筋力を鍛え直して', '外野から本塁まで届く送球を身につけて'],
+  field: ['ノックを毎日受け続けて', '打球への一歩目を磨いて', 'グラブを替えて', '名手の守備をビデオで研究して', '捕ってからの速さを身につけて'],
+  velo: ['フォームの体重移動を見直して', '下半身を徹底的に鍛えて', '腕の振りを速くするコツをつかんで', '体を大きくして'],
+  control: ['フォームのばらつきをなくして', '捕手と組んで投げ込みを続けて', 'リリースの位置をそろえて', '指先の感覚をつかんで'],
+  stamina: ['走り込みを続けて', '力を抜いて投げるコツをつかんで', '体を作り直して', '長い回を投げる配分を覚えて'],
+  breaking: ['新しい握りを試して', '先輩から決め球を教わって', '変化球の曲がりを研究して', '手首の使い方を身につけて'],
+};
 
 // 型（早熟・普通・晩成）のピークより若く、才能（★）のある選手ほど覚醒しやすい。衰え始めた選手もごくまれに覚醒する
 function awakenCheck(mult) {
@@ -1337,7 +1349,7 @@ function awaken(p) {
   const keys = abilKeys(p), lbl = ALL_LABEL;
   const big = U.chance(BIG_AWAKEN_CHANCE);
   const fk = focusToKey(p);
-  const main = fk && U.chance(0.6) ? fk : U.pick(keys);
+  const main = fk && U.chance(0.6) ? fk : U.pick(keys); // いちばん伸びる能力。きっかけの言葉もこれに合わせる
   const others = U.shuffle(keys.filter(k => k !== main));
   // ふつうは 2 つ、大覚醒は 3 つの能力が大きく伸びる
   const ups = big
@@ -1360,7 +1372,8 @@ function awaken(p) {
   if (big) p.bigAwakened = (p.bigAwakened || 0) + 1;
   addFame(p, big ? 20 : 6);
   if (p.teamId === S.myTeamId) {
-    const how = p.age >= p.peak + 2 ? `衰えたと言われていた${p.name}が${U.pick(VETERAN_TEXTS)}` : `${p.name}が${U.pick(AWAKEN_TEXTS)}`;
+    const keyText = AWAKEN_KEY_TEXTS[main] && U.chance(0.8) ? U.pick(AWAKEN_KEY_TEXTS[main]) : null; // ときどきは、どの能力にも合う言葉
+    const how = p.age >= p.peak + 2 ? `衰えたと言われていた${p.name}が${keyText || U.pick(VETERAN_TEXTS)}` : `${p.name}が${keyText || U.pick(AWAKEN_TEXTS)}`;
     const text = `${how}${big ? '大覚醒' : '覚醒'}した！ ${parts.join('、')}`;
     addNews((big ? '【大覚醒】' : '【覚醒】') + text, 'awaken');
     S.popups.push({ pid: p.id, text, big });
