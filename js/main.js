@@ -201,6 +201,16 @@ const ACTIONS = {
     UI.trade.give = []; UI.trade.get = [];
   },
   tcashNeed(el) { UI.trade.cash = +el.dataset.v; },
+  featDel(el) {
+    const f = S.feats[+el.dataset.i];
+    if (!f || !confirm(`${f.y}年 ${f.name} の「${featText(f)}」を記録から消しますか？（元に戻せません）`)) return 'keep';
+    S.feats.splice(+el.dataset.i, 1);
+  },
+  featDelKind(el) {
+    const k = el.dataset.k, del = featsVisible().filter(f => f.k === k);
+    if (!del.length || !confirm(`「${k === 'k' ? `${FEAT_K}奪三振以上` : FEAT_WORD[k]}」の記録 ${del.length} 件を全部消しますか？（元に戻せません）`)) return 'keep';
+    S.feats = S.feats.filter(f => !del.includes(f));
+  },
   extend(el) {
     const r = S.off && S.off.contract && S.off.contract.raises.find(x => x.pid === +el.dataset.pid);
     if (!r) return 'keep';

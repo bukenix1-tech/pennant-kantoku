@@ -1193,15 +1193,17 @@ function renderIntl(I) {
 
 // 国際大会：歴代の結果
 // 達成記録（日本シリーズでまだ見ていない試合の分は出さない）
+function featsVisible() { return (S.feats || []).filter(f => !(f.y === S.year && f.pbi != null && pbpUnseen(f.pbi))); }
 function recFeat() {
-  const list = (S.feats || []).filter(f => !(f.y === S.year && f.pbi != null && pbpUnseen(f.pbi)));
+  const list = featsVisible();
   const count = k => list.filter(f => f.k === k).length;
   const kinds = ['pg', 'nh', 'rnh', 'cyc', 'hr4', 'k'];
   return `<p class="muted">ノーヒットノーラン・完全試合・継投ノーヒットノーラン・サイクル安打・1 試合 4 本塁打・1 試合 ${FEAT_K} 奪三振以上が出ると、ここに残ります。</p>
-    <p>${kinds.map(k => `${k === 'k' ? `${FEAT_K}奪三振以上` : FEAT_WORD[k]} <b>${count(k)}</b>`).join('　')}</p>
-    ${list.length ? `<div class="scroll"><table class="tbl"><tr><th>年</th><th>日</th><th>記録</th><th>選手</th><th>球団</th><th>相手</th></tr>
+    <p>${kinds.map(k => `${k === 'k' ? `${FEAT_K}奪三振以上` : FEAT_WORD[k]} <b>${count(k)}</b>${count(k) ? ` <button class="sm" data-act="featDelKind" data-k="${k}">まとめて消す</button>` : ''}`).join('　')}</p>
+    <p class="muted small">消した記録は元に戻せません。選手の画面の札（完全試合×1 など）は残ります。</p>
+    ${list.length ? `<div class="scroll"><table class="tbl"><tr><th>年</th><th>日</th><th>記録</th><th>選手</th><th>球団</th><th>相手</th><th></th></tr>
       ${list.map(f => `<tr class="${f.team === myTeam().short ? 'me' : ''}"><td>${f.y}</td><td class="nowrap">${h(f.label || '')}</td><td class="l"><b>${h(featText(f))}</b></td>
-        <td class="l">${f.pids.length === 1 ? pName(f.pids[0], f.name) : h(f.name)}</td><td>${h(f.team)}</td><td>${h(f.opp)}</td></tr>`).join('')}</table></div>`
+        <td class="l">${f.pids.length === 1 ? pName(f.pids[0], f.name) : h(f.name)}</td><td>${h(f.team)}</td><td>${h(f.opp)}</td><td><button class="sm" data-act="featDel" data-i="${S.feats.indexOf(f)}">消す</button></td></tr>`).join('')}</table></div>`
       : '<p class="muted">まだありません。</p>'}`;
 }
 function recIntl() {
