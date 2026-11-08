@@ -22,6 +22,7 @@ const U = {
     }
     return a;
   },
+  range(a, b) { return Array.from({ length: b - a + 1 }, (_, i) => a + i); },
   sum(a, f) { return a.reduce((s, x) => s + (f ? f(x) : x), 0); },
   esc(s) {
     return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

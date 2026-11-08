@@ -47,6 +47,12 @@ const STARTER_REST = 6;   // 中 5 日以上あいていれば投げられる（
 const TRADE_DEADLINE_MONTH = 7; // 7 月末までトレードできる
 // 金銭トレード：お金 CASH_PER_VALUE 万円を、トレード価値 1 として数える。主力（総合で上から TRADE_CORE_N 人）はお金だけでは出してもらえない
 const CASH_PER_VALUE = 10, TRADE_CORE_N = 8;
+// 契約の選択肢。年俸は FA 相場や査定額に掛ける倍率。値は仮（AI）
+const CONTRACT_YEARS_MAX = 6;
+const CONTRACT_MULS = [0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.5, 2];
+// 契約更改で複数年を結ぶときの選択肢と、受けてもらえる見込み（基本＋忠誠心＋上乗せ。若手は長い契約を嫌い、ベテランは喜ぶ）。値は仮（AI）
+const EXTEND_MULS = [0.9, 1, 1.1, 1.2, 1.3, 1.5], EXTEND_YEARS_MAX = 5;
+const EXTEND_BASE = 0.35, EXTEND_LOYAL = 0.35, EXTEND_PAY = 1.5, EXTEND_YEAR = 0.05;
 // 無償で引き取ってもらえる年俸の上限（査定額に対する倍率）。値は仮（AI）
 const FREE_TRADE_SALARY = 1.3;
 // 相手からのトレードの話：1 週間ごとの確率・返事の期限（週）・同時に来る数・そのうち無償の話の割合。値は仮（AI）

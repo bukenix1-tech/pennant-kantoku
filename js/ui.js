@@ -3,7 +3,7 @@
 // 画面を描く（状態 S を読んで HTML を作るだけ）
 
 const UI = {
-  tab: 'home', viewTeam: null, trade: { team: null, give: [], get: [], cash: 0 }, toast: '',
+  tab: 'home', viewTeam: null, trade: { team: null, give: [], get: [], cash: 0 }, extDraft: {}, toast: '',
   sortKey: null, newTeam: 0, newGames: 143, lg: null, newSlot: null, watchOnly: false, pkind: '', faDraft: {}, histYear: null, posf: { team: '', draft: '', fa: '' }, geniusOnly: false, teamView: 'list', statSort: { bat: 'avg', pit: 'era' }, goodsType: 'towel', goodsPid: null, draftYearF: '', dhYear: null, recView: 'hist', recYear: null, slimUntil: null, slimScope: 'other',
 };
 
@@ -532,7 +532,7 @@ function renderPlayerModal(p) {
     : p.foreign ? '📝 入団：外国人選手として契約' : '<span class="muted">📝 入団：ゲームを始める前からいる選手（ドラフトの記録なし）</span>'}</p>
   <p>出身 ${p.home ? h(p.home) : '海外'}${team && isHomeTeam(p, team) ? ' <span class="tag">地元</span>' : ''}
     ・ ${p.foreign ? 'FA権なし（外国人）' : hasFA(p) ? '<b>FA権あり</b>' : `FA権まであと${Math.max(0, faNeed(p) - faYearsHave(p)).toFixed(1)}年`}（一軍登録 ${faYearsHave(p).toFixed(1)}年）
-    ${p.contractYears > 0 ? ` ・ 複数年契約 あと${p.contractYears}年（年俸固定）` : ''}</p>
+    ${underContract(p) ? ` ・ 複数年契約 あと${contractLeft(p)}年（年俸固定）` : ''}</p>
   <div class="bars">
     <div class="bar"><span class="bl">人気度</span><small class="num">${Math.round(p.fame)}</small><span class="bt"><span class="fame" style="width:${Math.round(p.fame)}%"></span></span></div>
     <div class="bar"><span class="bl">忠誠心</span><small class="num">${Math.round(p.loyalty)}</small><span class="bt"><span class="loyal" style="width:${Math.round(p.loyalty)}%"></span></span></div>
@@ -550,7 +550,7 @@ function renderPlayerModal(p) {
       ? `<button data-act="dropTwoWay" data-pid="${p.id}">二刀流をやめる</button> <span class="muted">${p.isP ? '打撃' : '投球'}の能力がなくなり、本業に専念します</span>`
       : p.age <= 27 && ovr(p) < TWO_WAY_MIN_OVR ? `<span class="muted">二刀流に挑戦できるのは総合${TWO_WAY_MIN_OVR}以上の選手です（いま${Math.round(ovr(p))}）</span>`
       : p.age <= 27 ? `<button data-act="tryTwoWay" data-pid="${p.id}">二刀流に挑戦させる</button> <span class="muted">${p.isP ? '打撃' : '投球'}の練習を始めます（最初は低い能力から。練習の伸びは両方に分かれます）</span>` : ''}</p>
-    ${faOpen()
+    ${underContract(p) ? '<p class="muted">複数年契約の途中なので、自由契約にできません。トレードには出せます。</p>' : faOpen()
       ? `<p><button class="danger" data-act="release" data-pid="${p.id}">自由契約にする</button> <span class="muted">チームから外します。他球団に拾われることもあります</span></p>`
       : '<p class="muted">自由契約にできるのは、オフの契約更改〜開幕前と、シーズン中の7月末までです。</p>'}` : ''}
   ${S.freeAgents.includes(p.id) ? `<p><span class="tag">自由契約</span> 前所属 ${h(p.lastTeam || '-')} ・ 希望年俸 ${U.money(p.salary)}</p>` : ''}`;
@@ -681,18 +681,20 @@ function renderFAStep() {
     const mine = F.eligible.map(id => S.players[id]).filter(p => p && p.teamId === t.id).sort((a, b) => ovr(b) - ovr(a));
     const others = F.eligible.length - mine.length;
     const rows = mine.map(p => {
-      const r = F.retain[p.id] || 0;
+      const r = retainOffer(F.retain[p.id]);
       const c = declareChance(p, r);
+      const mv = faMarket(p);
       return `<tr><td class="l">${nameCell(p)}${isHomeTeam(p, t) ? '<span class="tag">地元</span>' : ''}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${Math.round(ovr(p))}</td>
         <td>${U.money(p.salary)}</td><td>${U.money(faMarket(p))}</td><td>${Math.round(p.loyalty)}</td><td>${Math.round(playShare(p) * 100)}%</td><td><b>${faMood(c)}</b></td>
-        <td><select data-chg="retain" data-pid="${p.id}">${[[0, 'しない'], [1.2, '年俸1.2倍を約束'], [1.5, '年俸1.5倍を約束']].map(([v, n]) => `<option value="${v}" ${r === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td></tr>`;
+        <td class="l nowrap"><select data-chg="retain" data-k="mul" data-pid="${p.id}"><option value="0" ${r ? '' : 'selected'}>提示しない</option>${CONTRACT_MULS.map(v => `<option value="${v}" ${r && r.mul === v ? 'selected' : ''}>相場×${v}（${U.money(Math.round(mv * v / 10) * 10)}）</option>`).join('')}</select>
+          <select data-chg="retain" data-k="years" data-pid="${p.id}" ${r ? '' : 'disabled'}>${U.range(1, CONTRACT_YEARS_MAX).map(v => `<option value="${v}" ${r && r.years === v ? 'selected' : ''}>${v}年</option>`).join('')}</select></td></tr>`;
     }).join('');
     return `<section class="card"><h2>FA権を持つ選手</h2>
       <p>一軍に登録された年数が、高校出身は 8 年・大学や社会人出身は 7 年になると FA 権が取れます（一度使ったら次は 4 年）。
         FA 権を持つ選手は、ここで FA 宣言するかどうかを決めます。<b>忠誠心が高い選手ほど残りやすく</b>、地元の球団にも少し残りやすくなります。
         <b>今季あまり出られなかった選手（出場が少ない）は、出場機会を求めて出ていきやすく</b>、移籍先もレギュラーになれる球団を選びやすくなります。</p>
-      <p class="muted">引き留め（年俸アップの約束）をすると残りやすくなります。残ってくれたら約束どおり年俸が上がります。他球団では ${others} 人が FA 権を持っています。</p>
-      ${rows ? `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>総合</th><th>年俸</th><th>FA相場</th><th>忠誠心</th><th>出場</th><th>意向</th><th>引き留め</th></tr>${rows}</table></div>` : '<p>あなたのチームには FA 権を持つ選手がいません。</p>'}
+      <p class="muted">残留の条件（年俸と年数）を提示できます。高い年俸・長い年数ほど残りやすく、歳を取った選手ほど長い契約を喜びます。受けてくれたら、その年数のあいだ年俸は変わらず、FA 宣言もしません。他球団では ${others} 人が FA 権を持っています。</p>
+      ${rows ? `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>総合</th><th>年俸</th><th>FA相場</th><th>忠誠心</th><th>出場</th><th>意向</th><th>残留の提示</th></tr>${rows}</table></div>` : '<p>あなたのチームには FA 権を持つ選手がいません。</p>'}
       <button class="primary big" data-act="faDeclare">FA宣言の発表へ ▶</button></section>`;
   }
   if (F.stage === 'market') {
@@ -706,8 +708,8 @@ function renderFAStep() {
       return `<tr class="${my ? 'sel' : ''}"><td class="l">${nameCell(p)}${isHomeTeam(p, t) ? '<span class="tag">地元</span>' : ''}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${Math.round(ovr(p))}</td>
         <td>${teamChip(from)}</td><td>${d.rank}${d.no ? `<span class="muted small">（${d.no}位）</span>` : ''}</td><td>${U.money(d.mv)}</td><td>${comp}</td><td>${d.bids.length ? `${d.bids.length}球団` : 'なし'}</td>
         <td class="l nowrap">${my ? `<b>年俸${U.money(my.salary)}・${my.years}年</b> <button class="sm" data-act="faBidCancel" data-pid="${d.pid}">取り消す</button>` : `
-          <select data-chg="faMul" data-pid="${d.pid}">${[0.9, 1, 1.2, 1.5].map(v => `<option value="${v}" ${dr.mul === v ? 'selected' : ''}>相場×${v}（${U.money(Math.round(d.mv * v / 10) * 10)}）</option>`).join('')}</select>
-          <select data-chg="faYears" data-pid="${d.pid}">${[1, 2, 3, 4].map(v => `<option value="${v}" ${dr.years === v ? 'selected' : ''}>${v}年</option>`).join('')}</select>
+          <select data-chg="faMul" data-pid="${d.pid}">${CONTRACT_MULS.map(v => `<option value="${v}" ${dr.mul === v ? 'selected' : ''}>相場×${v}（${U.money(Math.round(d.mv * v / 10) * 10)}）</option>`).join('')}</select>
+          <select data-chg="faYears" data-pid="${d.pid}">${U.range(1, CONTRACT_YEARS_MAX).map(v => `<option value="${v}" ${dr.years === v ? 'selected' : ''}>${v}年</option>`).join('')}</select>
           <button class="sm primary" data-act="faBid" data-pid="${d.pid}">${d.from === t.id ? '残留を申し込む' : '申し込む'}</button>`}</td></tr>`;
     }).join('');
     return `<section class="card"><h2>FA市場（${F.declared.length}人が宣言）</h2>
@@ -1360,6 +1362,18 @@ function renderGoods(t) {
   </section>`;
 }
 
+// 契約更改の複数年の欄
+function extendCell(r, p) {
+  if (r.ext === 'yes') return `<b>${r.years}年契約を結びました</b>`;
+  if (r.ext === 'no') return '<span class="muted">断られました</span>';
+  if (r.locked) return '';
+  const d = UI.extDraft[r.pid] || { mul: 1, years: 2 };
+  const v = extendChance(p, d.mul, d.years);
+  return `<select data-chg="extMul" data-pid="${r.pid}">${EXTEND_MULS.map(m => `<option value="${m}" ${d.mul === m ? 'selected' : ''}>査定×${m}（${U.money(Math.round(r.now * m / 10) * 10)}）</option>`).join('')}</select>
+    <select data-chg="extYears" data-pid="${r.pid}">${U.range(2, EXTEND_YEARS_MAX).map(y => `<option value="${y}" ${d.years === y ? 'selected' : ''}>${y}年</option>`).join('')}</select>
+    <button class="sm" data-act="extend" data-pid="${r.pid}">申し込む</button> <span class="muted small">見込み：${v >= 0.6 ? '高い' : v >= 0.35 ? '五分' : '低い'}</span>`;
+}
+
 // ---------- トレード ----------
 // 相手から来たトレードの話
 function tradeOfferCard() {
@@ -1394,12 +1408,15 @@ function renderTrade() {
   const coreMark = (p, side) => side === 'get' && core.includes(p.id) ? ' <span class="tag">主力</span>' : '';
   const ratio = vGet ? vGive / vGet : (vGive ? 2 : 0);
   const giveP = T.give.map(id => S.players[id]).filter(Boolean), getP = T.get.map(id => S.players[id]).filter(Boolean);
-  const freeErr = giveP.length && !getP.length && !cash ? freeTradeError(other, giveP) : null;
+  const freeErr = giveP.length && !getP.length && cash <= 0 ? freeTradeError(other, giveP) : null;
   const mood = !T.give.length && !T.get.length ? '選手を選んでください' : freeErr ? `😠 ${freeErr}` : ratio >= 1.08 ? (giveP.length && !getP.length && !cash ? '😊 無償で引き取ってくれそうです' : '😊 相手は乗り気です') : ratio >= 0.9 ? '🤔 もう一声…' : '😠 話になりません';
   // お金だけで取るときに要る金額
   const buyOnly = getP.length && !giveP.length;
   const buyCore = buyOnly && getP.some(p => core.includes(p.id));
   const buyNeed = buyOnly ? Math.ceil(U.sum(getP, tradeValue) * 1.08 * CASH_PER_VALUE / 100) * 100 : 0;
+  // お金をもらって売るときの上限（相手の資金まで）
+  const sellOnly = giveP.length && !getP.length;
+  const sellMax = sellOnly ? Math.floor(Math.min(U.sum(giveP, tradeValue) / 1.08 * CASH_PER_VALUE, other.money) / 100) * 100 : 0;
   const head = '<tr><th></th><th>名前</th><th>守</th><th>年</th><th>総合</th><th>価値</th></tr>';
   return `${tradeOfferCard()}
   <section class="card">
@@ -1409,7 +1426,8 @@ function renderTrade() {
       <input type="number" data-chg="tcash" data-k="amt" min="0" step="1000" value="${Math.abs(cash)}" style="width:7em"> 万円
       <span class="muted">（資金 ${U.money(me.money)} ・ 相手 ${U.money(other.money)}。${CASH_PER_VALUE}万円で価値 1）</span></p>
     <p class="muted">選手をお金だけで買うこともできます（金銭トレード）。ただし相手の主力（総合で上から${TRADE_CORE_N}人）はお金だけでは出してくれません。</p>
-    <p class="muted">出す選手だけを選び、お金を 0 にすると無償トレードです。年俸が高すぎる選手や、相手のいちばん下の選手より力が劣る選手は断られます。</p>
+    <p class="muted">出す選手だけを選び、「こちらがもらう」で金額を入れると、選手をお金で売れます。お金を 0 にすると無償トレードです。どちらも、年俸が高すぎる選手や、相手のいちばん下の選手より力が劣る選手は断られます。</p>
+    ${sellOnly && sellMax > 0 && !freeErr ? `<p>お金で売るなら <b>${U.money(sellMax)}</b> まで。 <button class="sm" data-act="tcashNeed" data-v="${-sellMax}">この金額にする</button></p>` : ''}
     ${buyOnly ? (buyCore ? '<p>主力が入っているので、お金だけでは取れません。</p>' : `<p>お金だけで取るなら <b>${U.money(buyNeed)}</b> から。 <button class="sm" data-act="tcashNeed" data-v="${buyNeed}">この金額にする</button></p>`) : ''}
     <p>出す価値 <b>${vGive.toLocaleString()}</b> ⇔ もらう価値 <b>${vGet.toLocaleString()}</b>　${mood}</p>
     <button class="primary" data-act="propose">この条件で申し込む</button>
@@ -1494,9 +1512,9 @@ function renderOff() {
       <p class="muted small">名前を押すと、その選手の成績が見られます。ドラフトへ進むと、選べなくなります。</p>
       <table class="tbl">${c.honor.map((x, i) => `<tr><td class="l"><b>#${x.no}</b> <a href="#" data-act="honorView" data-i="${i}">${h(x.name)}</a></td><td>${x.years}年在籍</td><td>功績 ${x.merit}</td>
         <td>${x.done ? '<b>永久欠番にしました</b>' : `<button data-act="retireNo" data-i="${i}">永久欠番にする</button>`}</td></tr>`).join('')}</table></section>` : ''}
-    <section class="card"><h2>契約更改</h2><p class="muted">成績と能力で来季の年俸が決まりました。選手は 1 つ歳を取りました。</p>
-      <div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年齢</th><th>総合</th><th>今季</th><th>来季</th><th>増減</th></tr>
-      ${c.raises.filter(r => S.players[r.pid] && S.players[r.pid].teamId === S.myTeamId).map(r => { const p = S.players[r.pid]; return `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${Math.round(ovr(p))}</td><td>${U.money(r.old)}</td><td>${U.money(r.now)}</td><td class="${r.now >= r.old ? 'win' : 'lose'}">${r.locked ? '<span class="muted">複数年契約</span>' : `${r.now >= r.old ? '+' : ''}${U.money(r.now - r.old)}`}</td></tr>`; }).join('')}
+    <section class="card"><h2>契約更改</h2><p class="muted">成績と能力で来季の年俸が決まりました。選手は 1 つ歳を取りました。「複数年」から長い契約を申し込めます（1 人 1 回）。忠誠心が高く、上乗せが多いほど受けてくれやすく、若手は長い契約を嫌い、ベテランは喜びます。契約のあいだは年俸が変わらず、FA 宣言もしません。</p>
+      <div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年齢</th><th>総合</th><th>今季</th><th>来季</th><th>増減</th><th>複数年</th></tr>
+      ${c.raises.filter(r => S.players[r.pid] && S.players[r.pid].teamId === S.myTeamId).map(r => { const p = S.players[r.pid]; return `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${Math.round(ovr(p))}</td><td>${U.money(r.old)}</td><td>${U.money(r.now)}</td><td class="${r.now >= r.old ? 'win' : 'lose'}">${r.locked ? '<span class="muted">複数年契約</span>' : `${r.now >= r.old ? '+' : ''}${U.money(r.now - r.old)}`}</td><td class="l nowrap">${extendCell(r, p)}</td></tr>`; }).join('')}
       </table></div>
       <p>来季の年俸総額 <b>${U.money(payroll(myTeam()))}</b></p>
       <button class="primary big" data-act="offNext">ドラフトへ ▶</button></section>`;
@@ -1779,10 +1797,10 @@ function renderReleasePanel() {
   const over = t.players.length - ROSTER_MAX;
   const list = teamPlayers(t).sort((a, b) => tradeValue(a) - tradeValue(b));
   const rows = list.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${p.type}</td><td class="stars">${potStars(p.pot)}</td>
-    <td>${Math.round(ovr(p))}</td><td>${U.money(p.salary)}</td><td><button class="sm danger" data-act="release" data-pid="${p.id}">戦力外</button></td></tr>`).join('');
+    <td>${Math.round(ovr(p))}</td><td>${U.money(p.salary)}</td><td>${underContract(p) ? `<span class="muted small">契約中（あと${contractLeft(p)}年）</span>` : `<button class="sm danger" data-act="release" data-pid="${p.id}">戦力外</button>`}</td></tr>`).join('');
   return `<section class="card"><h2>戦力外通告</h2>
     <p>支配下 <b>${t.players.length}人</b>（上限${ROSTER_MAX}人）${over > 0 ? ` ・ <span class="neg">あと${over}人減らす必要があります</span>` : ' ・ 上限以内です'}</p>
-    <p class="muted">トレード価値の低い順に並んでいます。戦力外にした選手は自由契約選手になり、他球団に拾われることもあります。</p>
+    <p class="muted">トレード価値の低い順に並んでいます。戦力外にした選手は自由契約選手になり、他球団に拾われることもあります。複数年契約の途中の選手は戦力外にできません（トレードには出せます）。</p>
     <div class="scroll release-list"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>型</th><th>才能</th><th>総合</th><th>年俸</th><th></th></tr>${rows}</table></div>
   </section>`;
 }

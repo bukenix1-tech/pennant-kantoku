@@ -1476,9 +1476,17 @@ function declareChance(p, retain) {
   if (ovr(p) >= 62) c += 0.15; // 主力ほど大きな契約を求めて宣言しやすい
   if (isHomeTeam(p, t)) c -= 0.12; // 地元の球団には少し残りやすい
   if (ovr(p) >= FA_PLAY_MIN_OVR) c += (1 - playShare(p)) * FA_PLAY_DECLARE; // 出られなかった選手は、出場機会を求めて出ていきやすい
-  c -= retain === 1.5 ? 0.3 : retain === 1.2 ? 0.15 : 0;
+  const r = retainOffer(retain);
+  if (r) c -= U.clamp((r.mul - 0.7) * 0.5, 0, 0.5) + (r.years - 1) * (p.age >= 32 ? 0.08 : 0.04); // 年俸が高いほど、年数が長いほど残りやすい。歳を取った選手ほど長い契約を喜ぶ
   return U.clamp(c, 0.02, 0.9);
 }
+
+// 残留の提示 { mul（FA 相場に掛ける倍率）, years }。前の版のデータの数字（1.2 / 1.5）も読めるようにする
+function retainOffer(v) {
+  if (!v) return null;
+  return typeof v === 'number' ? { mul: v === 1.5 ? 1.2 : 1, years: 1 } : v;
+}
+function retainSalary(p, r) { return Math.round(faMarket(p) * r.mul / 10) * 10; }
 
 // 今季どれだけ出られたか（0〜1）。野手は規定打席、投手は 1 試合 1 アウトで 1
 function playShare(p) {
@@ -1498,12 +1506,15 @@ function faMood(c) { return c < 0.2 ? '残留濃厚' : c < 0.4 ? '残留寄り' 
 
 function offFAStart() {
   const eligible = [];
-  S.teams.forEach(t => teamPlayers(t).forEach(p => { if (hasFA(p)) eligible.push(p.id); }));
+  S.teams.forEach(t => teamPlayers(t).forEach(p => { if (hasFA(p) && !(p.contractYears > 0)) eligible.push(p.id); })); // 複数年契約の途中は宣言しない
   S.off.fa = { stage: 'pre', eligible, retain: {}, declared: [], myBids: {}, results: [] };
   S.off.step = 'fa';
 }
 
-function setRetain(pid, mul) { S.off.fa.retain[pid] = mul; }
+function setRetain(pid, mul, years) {
+  if (!mul) delete S.off.fa.retain[pid];
+  else S.off.fa.retain[pid] = { mul, years };
+}
 
 // FA 宣言の発表。宣言した選手は FA 市場に出て、他球団が条件を出す
 function offFADeclare() {
@@ -1514,15 +1525,18 @@ function offFADeclare() {
     const t = S.teams[p.teamId];
     const mine = t.id === S.myTeamId;
     // 他球団は、いい選手なら引き留める
-    const retain = mine ? (F.retain[id] || 0) : (ovr(p) >= 60 && U.chance(0.5) ? 1.2 : 0);
+    const retain = retainOffer(mine ? F.retain[id] : (ovr(p) >= 60 && U.chance(0.5) ? { mul: 1, years: p.age <= 30 ? U.rint(2, 3) : 1 } : null));
     if (!U.chance(declareChance(p, retain))) {
       if (retain) {
-        p.salary = Math.round(p.salary * retain / 10) * 10;
+        p.salary = retainSalary(p, retain);
+        delete p.contractNow;
+        p.contractYears = retain.years; // このオフの契約更改で 1 つ減り、来季から提示した年数だけ年俸が固定される
         addLoyalty(p, 5);
-        if (mine) addNews(`${p.name}は引き留めに応じ、残留を決めました（年俸${U.money(p.salary)}）。`, 'good');
+        if (mine) addNews(`${p.name}は提示を受け入れ、残留を決めました（${retain.years}年・年俸${U.money(p.salary)}）。`, 'good');
       }
       return;
     }
+    if (mine && retain) addNews(`${p.name}は残留の提示（${retain.years}年・年俸${U.money(retainSalary(p, retain))}）を断りました。`, 'bad');
     const rank = faRank(t, p), no = faRankNo(t, p);
     p.faUsed = true;
     p.svcUsed = p.svc || 0;
@@ -1598,7 +1612,8 @@ function offFAResolve() {
     const to = S.teams[best.team];
     signPlayer(to, p);
     p.salary = best.salary;
-    p.contractYears = best.years - 1;
+    delete p.contractNow;
+    p.contractYears = best.years; // このオフの契約更改で 1 つ減り、来季から best.years 年ぶん年俸が固定される
     let comp = 0, cp = null;
     if (to.id !== from.id) {
       const c = faComp(d);
@@ -1685,6 +1700,9 @@ function honorCard(p) {
   };
 }
 
+// 複数年契約の途中か（最終年は残りの年数が 0 なので contractNow で見分ける）。あと何年かは今の年も数える
+function underContract(p) { return p.contractYears > 0 || !!p.contractNow; }
+function contractLeft(p) { return (p.contractYears || 0) + (p.contractNow ? 1 : 0); }
 function retireLeave(p) {
   retireRecord(p);
   removeFromTeam(p);
@@ -1711,6 +1729,7 @@ function retainPlayer(r) {
   const old = p.salary;
   p.salary = Math.round(renewSalary(p) * (1 + RETAIN_RAISE));
   p.contractYears = 0;
+  delete p.contractNow;
   agePlayer(p);
   addLoyalty(p, 3);
   const c = S.off.contract;
@@ -1742,6 +1761,7 @@ function offContract() {
       if (p.retireAge) leave = p.age >= p.retireAge && U.chance(0.7); // 転生選手は、もとの選手が辞めた年ごろまで続ける
       else leave = U.chance(retireChance(p, ca, o));
       if (p.foreign && o < 55) leave = true;
+      if (p.contractYears > 0) leave = false; // 複数年契約が残っているあいだは引退しない
       if (leave) {
         const can = t.id === my.id && !(p.foreign && o < 55); // 力が足りずに出ていく外国人選手は引き止めない
         if (t.id === my.id) retired.push({ pid: p.id, name: p.name, age: p.age, why: p.foreign && p.age < 35 ? '退団' : '引退', can });
@@ -1757,8 +1777,8 @@ function offContract() {
       if (p.retiring) return;
       const old = p.salary;
       const locked = p.contractYears > 0;
-      if (locked) p.contractYears--; // 複数年契約のあいだは年俸がそのまま
-      else p.salary = renewSalary(p);
+      if (locked) { p.contractYears--; p.contractNow = true; } // 複数年契約のあいだは年俸がそのまま
+      else { p.salary = renewSalary(p); delete p.contractNow; }
       agePlayer(p);
       if (t.id === my.id) raises.push({ pid: p.id, name: p.name, old, now: p.salary, locked });
       addLoyalty(p, 3 + (t.goods.some(g => g.pid === p.id) ? 5 : 0));
@@ -1771,6 +1791,27 @@ function offContract() {
   raises.sort((a, b) => (b.now - b.old) - (a.now - a.old));
   S.off.contract = { retired, raises, honor };
   S.off.step = 'contract';
+}
+
+// 契約更改で複数年契約を申し込む（1 人 1 回）。mul は査定額に掛ける倍率
+function extendChance(p, mul, years) {
+  const age = p.age >= 32 ? 1 : p.age <= 25 ? -1 : 0;
+  return U.clamp(EXTEND_BASE + (p.loyalty || 0) / 100 * EXTEND_LOYAL + (mul - 1) * EXTEND_PAY + age * EXTEND_YEAR * (years - 1), 0.05, 0.95);
+}
+function extendPlayer(r, mul, years) {
+  const p = S.players[r.pid];
+  if (!p || p.teamId !== S.myTeamId || r.locked || r.ext) return null;
+  const ok = U.chance(extendChance(p, mul, years));
+  r.ext = ok ? 'yes' : 'no';
+  if (!ok) return false;
+  p.salary = Math.round(r.now * mul / 10) * 10;
+  p.contractYears = years - 1; // このオフの契約更改は済んでいるので、来季を含めて years 年
+  p.contractNow = true;
+  r.now = p.salary;
+  r.years = years;
+  addLoyalty(p, 3);
+  addNews(`${p.name}と${years}年契約を結びました（年俸${U.money(p.salary)}）。`, 'good');
+  return true;
 }
 
 // その年のドラフト候補。シーズン開幕のときに発表され、ドラフトまでリストアップできる
@@ -2219,7 +2260,8 @@ function offCampStart() {
       signFreeAgent(t, best);
     }
     while (t.players.length > ROSTER_MAX - 2) {
-      const worst = teamPlayers(t).sort((a, b) => tradeValue(a) - tradeValue(b))[0];
+      const worst = teamPlayers(t).filter(p => !underContract(p)).sort((a, b) => tradeValue(a) - tradeValue(b))[0];
+      if (!worst) break;
       toFreeAgent(worst);
     }
   });
@@ -2354,7 +2396,7 @@ function proposeTrade(otherId, giveIds, getIds, cash = 0) {
   }
   const rosterErr = tradeRosterError(other, give, get);
   if (rosterErr) return { ok: false, msg: rosterErr };
-  if (give.length && !get.length && !cash) {
+  if (give.length && !get.length && cash <= 0) {
     const err = freeTradeError(other, give);
     if (err) return { ok: false, msg: err };
   }
@@ -2511,6 +2553,7 @@ function releasePlayer(pid) {
   const p = S.players[pid];
   const t = myTeam();
   if (!faOpen()) return '自由契約にできるのは、オフの契約更改〜開幕前と、シーズン中の7月末までです。';
+  if (underContract(p)) return `${p.name}は複数年契約の途中なので、自由契約にできません。`;
   if (t.players.length <= 20) return 'これ以上は減らせません。';
   toFreeAgent(p);
   ensureLineup(S, t);

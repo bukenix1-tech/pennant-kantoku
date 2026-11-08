@@ -201,6 +201,15 @@ const ACTIONS = {
     UI.trade.give = []; UI.trade.get = [];
   },
   tcashNeed(el) { UI.trade.cash = +el.dataset.v; },
+  extend(el) {
+    const r = S.off && S.off.contract && S.off.contract.raises.find(x => x.pid === +el.dataset.pid);
+    if (!r) return 'keep';
+    const d = UI.extDraft[r.pid] || { mul: 1, years: 2 };
+    if (!confirm(`${r.name}に ${d.years} 年契約・年俸 ${U.money(Math.round(r.now * d.mul / 10) * 10)} を申し込みますか？\n断られたら、今年はもう申し込めません。`)) return 'keep';
+    const ok = extendPlayer(r, d.mul, d.years);
+    if (ok === null) return 'keep';
+    UI.toast = ok ? `${r.name}と${d.years}年契約を結びました！` : `${r.name}に断られました。`;
+  },
   propose() {
     const T = UI.trade;
     const r = proposeTrade(T.team, T.give, T.get, T.cash || 0);
@@ -377,7 +386,14 @@ const CHANGES = {
   },
   geniusOnly(el) { UI.geniusOnly = el.checked; },
   histYear(el) { UI.histYear = +el.value; },
-  retain(el) { setRetain(+el.dataset.pid, +el.value); },
+  // 残留の提示：年俸の倍率と年数
+  retain(el) {
+    const pid = +el.dataset.pid, now = retainOffer(S.off.fa.retain[pid]) || { mul: 0, years: 1 };
+    if (el.dataset.k === 'years') now.years = +el.value; else now.mul = +el.value;
+    setRetain(pid, now.mul, now.years);
+  },
+  extMul(el) { const pid = +el.dataset.pid; UI.extDraft[pid] = { years: 2, ...UI.extDraft[pid], mul: +el.value }; },
+  extYears(el) { const pid = +el.dataset.pid; UI.extDraft[pid] = { mul: 1, ...UI.extDraft[pid], years: +el.value }; },
   faMul(el) { const pid = +el.dataset.pid; UI.faDraft[pid] = { ...(UI.faDraft[pid] || { years: 3 }), mul: +el.value }; return 'keep'; },
   faYears(el) { const pid = +el.dataset.pid; UI.faDraft[pid] = { ...(UI.faDraft[pid] || { mul: 1 }), years: +el.value }; return 'keep'; },
   viewTeam(el) { UI.viewTeam = +el.value; },
