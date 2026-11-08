@@ -300,6 +300,7 @@ function renderHome() {
       <p>予告先発：${sp ? nameCell(sp) : '未定'}　相手：${opp.w}勝${opp.l}敗 ${LEAGUE_NAME[opp.lg]}${rankOf(opp.id)}位</p>`;
   }
   return `${backupBanner()}
+  ${tradeOffers().length ? `<section class="card"><p>📞 トレードの話が <b>${tradeOffers().length} 件</b>来ています。 <button class="sm primary" data-act="tab" data-tab="trade">トレードの画面へ</button></p></section>` : ''}
   <div class="grid2">
     <section class="card"><h2>次の試合（第${Math.min(gamesPlayed(t) + 1, S.games)}戦）</h2>${next}</section>
     <section class="card"><h2>${LEAGUE_NAME[t.lg]} 順位</h2>${standTable(standings(t.lg), true)}</section>
@@ -1304,11 +1305,11 @@ function renderMoney() {
     </section>
   </div>
   <section class="card"><h2>宣伝</h2>
-    <p class="muted">お金を払って人気を上げます。人気が上がると、入場料・スポンサー・グッズの収入が増えます。どれも 1 シーズンに 1 回まで。人気が高いほど上がりにくくなります。</p>
+    <p class="muted">お金を払って、今季のグッズの売上の割合を上げます（いま <b>+${Math.round((goodsPromoMul(t) - 1) * 100)}%</b>）。どれも 1 シーズンに 1 回までで、重ねられます。シーズンの早いうちに行うほど得で、効果は今季かぎりです。</p>
     <table class="tbl">${Object.keys(PROMOS).map(k => {
       const pr = PROMOS[k], used = (t.promoUsed || []).includes(k);
-      return `<tr><td class="l" style="white-space:normal"><b>${pr.name}</b><br><span class="muted">${pr.desc}・人気 +${promoGain(t, k).toFixed(1)}</span></td>
-        <td class="nowrap">${used ? '今季は済み' : `<button class="sm" data-act="promo" data-k="${k}" ${t.money < pr.cost || S.phase !== 'season' || t.pop >= 100 ? 'disabled' : ''}>${U.money(pr.cost)}</button>`}</td></tr>`;
+      return `<tr><td class="l" style="white-space:normal"><b>${pr.name}</b><br><span class="muted">${pr.desc}・グッズの売上 +${Math.round(pr.goods * 100)}%</span></td>
+        <td class="nowrap">${used ? '今季は済み' : `<button class="sm" data-act="promo" data-k="${k}" ${t.money < pr.cost || S.phase !== 'season' ? 'disabled' : ''}>${U.money(pr.cost)}</button>`}</td></tr>`;
     }).join('')}</table>
     ${S.phase !== 'season' ? '<p class="muted">宣伝はシーズン中にしかできません。</p>' : ''}
   </section>
@@ -1360,6 +1361,22 @@ function renderGoods(t) {
 }
 
 // ---------- トレード ----------
+// 相手から来たトレードの話
+function tradeOfferCard() {
+  const list = tradeOffers();
+  if (!list.length) return '';
+  const who = p => `${nameCell(p)} ${posBadge(p)} ${p.age}歳 総合${Math.round(ovr(p))} 年俸${U.money(p.salary)}`;
+  const rows = list.map((o, i) => {
+    const t = S.teams[o.team], give = o.give.map(id => S.players[id]), get = o.get.map(id => S.players[id]);
+    const head = o.kind === 'free' ? `${teamChip(t)} 「うちの選手を無償で譲ります。年俸はそちらでお願いします。」` : `${teamChip(t)} 「そちらの選手を譲ってもらえませんか。」`;
+    const outs = give.map(p => `<li>出す：${who(p)}</li>`).join('');
+    const ins = get.map(p => `<li>もらう：${who(p)}</li>`).join('') + (o.cash < 0 ? `<li>もらう：金銭 <b>${U.money(-o.cash)}</b></li>` : '');
+    return `<div style="margin:10px 0"><p>${head}</p><ul>${outs}${ins}</ul>
+      <p><button class="sm primary" data-act="tOffer" data-i="${i}" data-yes="1">受ける</button> <button class="sm" data-act="tOffer" data-i="${i}" data-yes="0">断る</button>
+      <span class="muted small">あと ${o.w} 週で話は消えます</span></p></div>`;
+  }).join('');
+  return `<section class="card"><h2>📞 相手からの話</h2>${rows}</section>`;
+}
 function renderTrade() {
   if (!tradeOpen()) {
     return `<section class="card"><h2>トレード</h2><p>${S.phase === 'off' ? 'オフのキャンプ前（ドラフトの後）に再開します。' : S.phase === 'post' ? 'ポストシーズン中はできません。' : 'トレード期限（7月末）を過ぎました。オフに再開します。'}</p></section>`;
@@ -1376,9 +1393,15 @@ function renderTrade() {
   const core = tradeCore(other);
   const coreMark = (p, side) => side === 'get' && core.includes(p.id) ? ' <span class="tag">主力</span>' : '';
   const ratio = vGet ? vGive / vGet : (vGive ? 2 : 0);
-  const mood = !T.give.length && !T.get.length ? '選手を選んでください' : ratio >= 1.08 ? '😊 相手は乗り気です' : ratio >= 0.9 ? '🤔 もう一声…' : '😠 話になりません';
+  const giveP = T.give.map(id => S.players[id]).filter(Boolean), getP = T.get.map(id => S.players[id]).filter(Boolean);
+  const freeErr = giveP.length && !getP.length && !cash ? freeTradeError(other, giveP) : null;
+  const mood = !T.give.length && !T.get.length ? '選手を選んでください' : freeErr ? `😠 ${freeErr}` : ratio >= 1.08 ? (giveP.length && !getP.length && !cash ? '😊 無償で引き取ってくれそうです' : '😊 相手は乗り気です') : ratio >= 0.9 ? '🤔 もう一声…' : '😠 話になりません';
+  // お金だけで取るときに要る金額
+  const buyOnly = getP.length && !giveP.length;
+  const buyCore = buyOnly && getP.some(p => core.includes(p.id));
+  const buyNeed = buyOnly ? Math.ceil(U.sum(getP, tradeValue) * 1.08 * CASH_PER_VALUE / 100) * 100 : 0;
   const head = '<tr><th></th><th>名前</th><th>守</th><th>年</th><th>総合</th><th>価値</th></tr>';
-  return `
+  return `${tradeOfferCard()}
   <section class="card">
     <div class="row"><h2>トレード</h2>
       <select data-chg="tteam">${LEAGUES.map(lg => `<optgroup label="${LEAGUE_NAME[lg]}">${S.teams.filter(t => t.lg === lg && t.id !== S.myTeamId).map(t => `<option value="${t.id}" ${t.id === T.team ? 'selected' : ''}>${h(t.name)}</option>`).join('')}</optgroup>`).join('')}</select></div>
@@ -1386,6 +1409,8 @@ function renderTrade() {
       <input type="number" data-chg="tcash" data-k="amt" min="0" step="1000" value="${Math.abs(cash)}" style="width:7em"> 万円
       <span class="muted">（資金 ${U.money(me.money)} ・ 相手 ${U.money(other.money)}。${CASH_PER_VALUE}万円で価値 1）</span></p>
     <p class="muted">選手をお金だけで買うこともできます（金銭トレード）。ただし相手の主力（総合で上から${TRADE_CORE_N}人）はお金だけでは出してくれません。</p>
+    <p class="muted">出す選手だけを選び、お金を 0 にすると無償トレードです。年俸が高すぎる選手や、相手のいちばん下の選手より力が劣る選手は断られます。</p>
+    ${buyOnly ? (buyCore ? '<p>主力が入っているので、お金だけでは取れません。</p>' : `<p>お金だけで取るなら <b>${U.money(buyNeed)}</b> から。 <button class="sm" data-act="tcashNeed" data-v="${buyNeed}">この金額にする</button></p>`) : ''}
     <p>出す価値 <b>${vGive.toLocaleString()}</b> ⇔ もらう価値 <b>${vGet.toLocaleString()}</b>　${mood}</p>
     <button class="primary" data-act="propose">この条件で申し込む</button>
     <div class="grid2">

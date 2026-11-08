@@ -552,7 +552,7 @@ function advanceDay() {
   }
   // 月曜（休み）に 1 週間分の練習の成果が出る
   if (entry.w === 1) {
-    weeklyTraining(); randomEvent(); awakenCheck(1);
+    weeklyTraining(); randomEvent(); awakenCheck(1); tradeOfferTick();
     S.teams.forEach(t => { if (t.id !== S.myTeamId) { autoActive(t); autoRotation(t); } });
   }
   S.day++;
@@ -2352,16 +2352,43 @@ function proposeTrade(otherId, giveIds, getIds, cash = 0) {
     const core = tradeCore(other);
     if (get.some(p => core.includes(p.id))) return { ok: false, msg: `${other.short}「主力をお金で手放すことはできません。」` };
   }
-  const meAfter = me.players.length - give.length + get.length;
-  const otAfter = other.players.length - get.length + give.length;
-  if (meAfter > ROSTER_MAX) return { ok: false, msg: `こちらの人数が${ROSTER_MAX}人を超えます。` };
-  if (otAfter > ROSTER_MAX) return { ok: false, msg: `相手の人数が${ROSTER_MAX}人を超えます。` };
-  const count = (t, out, inn, isP) => teamPlayers(t).filter(p => p.isP === isP).length
-    - out.filter(p => p.isP === isP).length + inn.filter(p => p.isP === isP).length;
-  if (count(other, get, give, false) < 12 || count(other, get, give, true) < 11) return { ok: false, msg: '相手の選手が足りなくなるので断られました。' };
-  if (count(me, give, get, false) < 10 || count(me, give, get, true) < 8) return { ok: false, msg: 'こちらの選手が足りなくなります。' };
+  const rosterErr = tradeRosterError(other, give, get);
+  if (rosterErr) return { ok: false, msg: rosterErr };
+  if (give.length && !get.length && !cash) {
+    const err = freeTradeError(other, give);
+    if (err) return { ok: false, msg: err };
+  }
   const vGive = U.sum(give, tradeValue) + (cash > 0 ? cashValue(cash) : 0), vGet = U.sum(get, tradeValue) + (cash < 0 ? cashValue(cash) : 0);
   if (vGive < vGet * 1.08) return { ok: false, msg: `${other.short}「その条件では受けられませんね。」` };
+  doTrade(other, give, get, cash);
+  return { ok: true, msg: 'トレード成立！' };
+}
+
+// 人数の決まりに合わないときは、その理由を返す
+function tradeRosterError(other, give, get) {
+  const me = myTeam();
+  if (me.players.length - give.length + get.length > ROSTER_MAX) return `こちらの人数が${ROSTER_MAX}人を超えます。`;
+  if (other.players.length - get.length + give.length > ROSTER_MAX) return `相手の人数が${ROSTER_MAX}人を超えます。`;
+  const count = (t, out, inn, isP) => teamPlayers(t).filter(p => p.isP === isP).length
+    - out.filter(p => p.isP === isP).length + inn.filter(p => p.isP === isP).length;
+  if (count(other, get, give, false) < 12 || count(other, get, give, true) < 11) return '相手の選手が足りなくなるので断られました。';
+  if (count(me, give, get, false) < 10 || count(me, give, get, true) < 8) return 'こちらの選手が足りなくなります。';
+  return null;
+}
+
+// 無償で譲るとき、相手が引き取らない理由。年俸が高すぎる選手と、相手のいちばん下の選手より力が劣る選手は断られる（お金を付ければ受ける）
+function freeTradeError(other, give) {
+  for (const p of give) {
+    if (p.salary > calcSalary(p) * FREE_TRADE_SALARY) return `${other.short}「${p.name}のその年俸では、無償でも引き取れません。」`;
+    const same = teamPlayers(other).filter(q => q.isP === p.isP);
+    if (same.length && ovr(p) < Math.min(...same.map(ovr))) return `${other.short}「${p.name}は、うちでは使いどころがありません。」`;
+  }
+  return null;
+}
+
+// トレードを成立させる。cash：こちらが払うお金（万円）。マイナスならこちらがもらう
+function doTrade(other, give, get, cash) {
+  const me = myTeam();
   if (cash > 0) { me.money -= cash; me.fin.invest += cash; other.money += cash; other.fin.other += cash; }
   if (cash < 0) { me.money -= cash; me.fin.other -= cash; other.money += cash; other.fin.invest -= cash; }
   give.forEach(p => { removeFromTeam(p); signPlayer(other, p); p.loyalty = 20; });
@@ -2369,8 +2396,70 @@ function proposeTrade(otherId, giveIds, getIds, cash = 0) {
   autoActive(other); autoLineup(other); autoRotation(other);
   ensureLineup(S, me);
   const side = (ps, c) => [ps.map(p => p.name).join('・'), c > 0 ? `金銭${U.money(c)}` : ''].filter(Boolean).join('＋') || 'なし';
-  addNews(`${cash ? '金銭' : ''}トレード成立！ ${side(give, cash)} ⇔ ${side(get, -cash)}（${other.short}）`, 'big');
-  return { ok: true, msg: 'トレード成立！' };
+  const word = cash ? '金銭' : !give.length || !get.length ? '無償' : '';
+  addNews(`${word}トレード成立！ ${side(give, cash)} ⇔ ${side(get, -cash)}（${other.short}）`, 'big');
+}
+
+// ---------- 相手からのトレードの話 ----------
+// S.tradeOffers：{ kind: 'want'（こちらの選手がほしい）/ 'free'（無償で譲りたい）, team, give, get, cash, w（返事の期限・週） }
+function tradeOfferValid(o) {
+  const other = S.teams[o.team];
+  const give = o.give.map(id => S.players[id]), get = o.get.map(id => S.players[id]);
+  if (give.some(p => !p || p.teamId !== S.myTeamId) || get.some(p => !p || p.teamId !== o.team)) return false;
+  if (o.cash < 0 && other.money < -o.cash) return false;
+  return !tradeRosterError(other, give, get);
+}
+
+function tradeOffers() {
+  S.tradeOffers = (S.tradeOffers || []).filter(tradeOfferValid);
+  return S.tradeOffers;
+}
+
+// 毎週：期限を進めて、ときどき新しい話が来る
+function tradeOfferTick() {
+  if (!tradeOpen()) { S.tradeOffers = []; return; }
+  S.tradeOffers = (S.tradeOffers || []).filter(o => --o.w > 0);
+  tradeOfferRoll();
+}
+
+function tradeOfferRoll() {
+  if (!tradeOpen() || tradeOffers().length >= TRADE_OFFER_MAX || !U.chance(TRADE_OFFER_CHANCE)) return;
+  const t = U.pick(S.teams.filter(x => x.id !== S.myTeamId));
+  const o = U.chance(TRADE_OFFER_FREE) ? makeFreeOffer(t) : makeWantOffer(t);
+  if (!o || !tradeOfferValid(o)) return;
+  S.tradeOffers.push(o);
+  addNews(`${t.short}からトレードの話が来ました。トレードの画面で返事ができます。`, 'good');
+}
+
+// 無償で譲りたい：主力ではない 29 歳以上の選手
+function makeFreeOffer(t) {
+  const core = tradeCore(t);
+  const cands = teamPlayers(t).filter(p => p.age >= 29 && ovr(p) >= 50 && !core.includes(p.id));
+  if (!cands.length) return null;
+  return { kind: 'free', team: t.id, give: [], get: [U.pick(cands).id], cash: 0, w: TRADE_OFFER_WEEKS };
+}
+
+// こちらの選手がほしい（看板の 3 人には声をかけない）：見合う選手か、少し多めのお金を出す
+function makeWantOffer(t) {
+  const mine = teamPlayers(myTeam()).sort((a, b) => tradeValue(b) - tradeValue(a)).slice(3, 25);
+  if (!mine.length) return null;
+  const p = U.pick(mine), v = tradeValue(p);
+  const core = tradeCore(t);
+  const swaps = teamPlayers(t).filter(q => q.isP === p.isP && !core.includes(q.id) && tradeValue(q) >= v * 1.05 && tradeValue(q) <= v * 1.4);
+  if (swaps.length && U.chance(0.5)) return { kind: 'want', team: t.id, give: [p.id], get: [U.pick(swaps).id], cash: 0, w: TRADE_OFFER_WEEKS };
+  const cash = Math.round(v * CASH_PER_VALUE * U.rnd(1.1, 1.4) / 100) * 100;
+  if (cash <= 0 || t.money < cash) return null;
+  return { kind: 'want', team: t.id, give: [p.id], get: [], cash: -cash, w: TRADE_OFFER_WEEKS };
+}
+
+// 返事をする。受けたら true、受けられなかったら理由の文字列
+function answerTradeOffer(i, yes) {
+  const list = tradeOffers(), o = list[i];
+  if (!o) return 'その話はもうありません。';
+  list.splice(i, 1);
+  if (!yes) { addNews(`${S.teams[o.team].short}からのトレードの話を断りました。`); return true; }
+  doTrade(S.teams[o.team], o.give.map(id => S.players[id]), o.get.map(id => S.players[id]), o.cash);
+  return true;
 }
 
 const FOREIGN_SCOUT_COST = 5000;
@@ -2454,21 +2543,18 @@ function upgradeFacility(k) {
 }
 
 // ---------- 宣伝 ----------
-// 人気が高いほど上がりにくい
-function promoGain(t, k) { return PROMOS[k].pop * U.clamp((100 - t.pop) / 50, 0.2, 1); }
+// 今季の宣伝で上がったグッズの売上の倍率
+function goodsPromoMul(t) { return 1 + U.sum(t.promoUsed || [], k => (PROMOS[k] && PROMOS[k].goods) || 0); }
 
 function runPromo(k) {
   const t = myTeam(), pr = PROMOS[k];
   if (!pr) return 'その宣伝はありません。';
   if (S.phase !== 'season') return '宣伝はシーズン中にしかできません。';
   if (t.promoUsed.includes(k)) return `${pr.name}は今季もう行いました。`;
-  if (t.pop >= 100) return '人気はもう最高です。';
   if (t.money < pr.cost) return 'お金が足りません。';
-  const g = promoGain(t, k);
   t.money -= pr.cost; t.fin.invest += pr.cost;
-  t.pop = U.clamp(t.pop + g, 0, 100);
   t.promoUsed.push(k);
-  addNews(`${pr.name}を行いました（${U.money(pr.cost)}）。人気が ${g.toFixed(1)} 上がった！`, 'good');
+  addNews(`${pr.name}を行いました（${U.money(pr.cost)}）。今季のグッズの売上が ${Math.round(pr.goods * 100)}% 上がります！`, 'good');
   return null;
 }
 
@@ -2491,7 +2577,7 @@ function goodsRate(t, g) {
     r *= 0.1 + p.fame / 45;
     r *= 1 + (p.visual * 0.2 - 0.4) * ty.visual;
   }
-  return r * goodsFresh(g);
+  return r * goodsFresh(g) * goodsPromoMul(t);
 }
 
 function sellGoods(t, isHome) {

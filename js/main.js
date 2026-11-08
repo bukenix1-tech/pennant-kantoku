@@ -193,6 +193,14 @@ const ACTIONS = {
     const p = S.players[+el.dataset.pid];
     if (p && !confirm(`${p.name}と契約しますか？（契約金${U.money(p.salary * 0.5)}・年俸${U.money(p.salary)}）`)) return 'keep';
     const err = signForeign(+el.dataset.pid); UI.toast = err || '契約しました！'; },
+  tOffer(el) {
+    const yes = el.dataset.yes === '1';
+    if (yes && !confirm('このトレードを受けますか？')) return 'keep';
+    const r = answerTradeOffer(+el.dataset.i, yes);
+    UI.toast = r === true ? (yes ? 'トレード成立！' : '断りました。') : r;
+    UI.trade.give = []; UI.trade.get = [];
+  },
+  tcashNeed(el) { UI.trade.cash = +el.dataset.v; },
   propose() {
     const T = UI.trade;
     const r = proposeTrade(T.team, T.give, T.get, T.cash || 0);
@@ -205,7 +213,7 @@ const ACTIONS = {
     else if (step === 'intl') offFAStart();
     else if (step === 'fa') { faCompSettle(); offContract(); }
     else if (step === 'contract') offDraftStart();
-    else if (step === 'draft') offCampStart();
+    else if (step === 'draft') { offCampStart(); tradeOfferRoll(); }
     else if (step === 'camp') {
       if (myTeam().players.length > ROSTER_MAX) return;
       offNewSeason();

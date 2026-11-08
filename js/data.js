@@ -47,6 +47,10 @@ const STARTER_REST = 6;   // 中 5 日以上あいていれば投げられる（
 const TRADE_DEADLINE_MONTH = 7; // 7 月末までトレードできる
 // 金銭トレード：お金 CASH_PER_VALUE 万円を、トレード価値 1 として数える。主力（総合で上から TRADE_CORE_N 人）はお金だけでは出してもらえない
 const CASH_PER_VALUE = 10, TRADE_CORE_N = 8;
+// 無償で引き取ってもらえる年俸の上限（査定額に対する倍率）。値は仮（AI）
+const FREE_TRADE_SALARY = 1.3;
+// 相手からのトレードの話：1 週間ごとの確率・返事の期限（週）・同時に来る数・そのうち無償の話の割合。値は仮（AI）
+const TRADE_OFFER_CHANCE = 0.15, TRADE_OFFER_WEEKS = 3, TRADE_OFFER_MAX = 2, TRADE_OFFER_FREE = 0.35;
 const WEEKDAYS = '日月火水木金土';
 
 
@@ -202,11 +206,11 @@ const NO_POOL = {
 // ほかの球団は、功績が RETIRE_NO_AUTO 以上で RETIRE_NO_AUTO_YEARS 年以上いた選手を、RETIRE_NO_AUTO_CHANCE の確率で永久欠番にする（リーグ全体で年 1 人弱）
 // 永久欠番にすると球団の人気が RETIRE_NO_POP 上がる
 const RETIRE_NO_MERIT = 0.75, RETIRE_NO_YEARS = 8, RETIRE_NO_AUTO = 1, RETIRE_NO_AUTO_YEARS = 10, RETIRE_NO_AUTO_CHANCE = 0.3, RETIRE_NO_POP = 3;
-// 宣伝：お金を払って人気を上げる。どれも 1 シーズンに 1 回まで。人気が高いほど上がりにくい
+// 宣伝：お金を払って、そのシーズンのグッズの売上の割合を上げる（goods = 上がる割合）。どれも 1 シーズンに 1 回まで。値は仮（AI）
 const PROMOS = {
-  web:   { name: 'ネット広告',         cost: 8000,  pop: 1, desc: '手軽に名前を広める' },
-  event: { name: 'ファン感謝イベント', cost: 20000, pop: 3, desc: '球場でファンと選手が交流する' },
-  cm:    { name: 'テレビCM',           cost: 50000, pop: 6, desc: '全国に流して一気に知ってもらう' },
+  web:   { name: 'ネット広告',         cost: 8000,  goods: 0.08, desc: '通販のページへ呼び込む' },
+  event: { name: 'ファン感謝イベント', cost: 20000, goods: 0.2, desc: '球場でファンと選手が交流し、グッズを売り込む' },
+  cm:    { name: 'テレビCM',           cost: 50000, goods: 0.4, desc: '全国に流して一気に知ってもらう' },
 };
 
 // チケット代は固定（円）。入場料はファンの数で少しだけ変わる
