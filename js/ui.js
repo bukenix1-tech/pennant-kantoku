@@ -485,6 +485,12 @@ function careerTables(rows, total, bat, pit, twoWay) {
   return `${bat ? `<h3>成績${twoWay ? '（打撃）' : ''}</h3><div class="scroll"><table class="tbl">${headB}${rows.map(c => crow(c, false)).join('')}${totalRow(false)}</table></div>` : ''}
   ${pit ? `<h3>成績${twoWay ? '（投球）' : ''}</h3><div class="scroll"><table class="tbl">${headP}${rows.map(c => crow(c, true)).join('')}${totalRow(true)}</table></div>` : ''}`;
 }
+// 引退・退団の欄に出す強さ（守備位置・総合・能力）
+function retireStrength(r) {
+  if (r.ovr == null) return '';
+  const abil = r.abil.map(([k, v]) => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(v) + 'km' : `<span class="g g${U.grade(v)}">${U.grade(v)}</span>`}`).join(' ');
+  return `　<span class="small">${h(r.pos)} 総合<b>${r.ovr}</b> ${abil}</span>`;
+}
 // 引退・退団の欄の慰留ボタン
 function retainCell(r, i, c) {
   if (!r.can) return '';
@@ -1507,7 +1513,7 @@ function renderOff() {
   } else if (O.step === 'contract') {
     const c = O.contract;
     body = `
-    <section class="card"><h2>引退・退団</h2>${c.retired.length ? `<ul>${c.retired.map((r, i) => `<li>${h(r.name)}（${r.age}歳）${r.why}${retainCell(r, i, c)}</li>`).join('')}</ul>
+    <section class="card"><h2>引退・退団</h2>${c.retired.length ? `<ul>${c.retired.map((r, i) => `<li>${S.players[r.pid] ? nameCell(S.players[r.pid]) : h(r.name)}（${r.age}歳）${r.why}${retireStrength(r)}${retainCell(r, i, c)}</li>`).join('')}</ul>
       ${c.retired.some(r => r.can) ? '<p class="muted small">「慰留する」で引き止められます（1 人 1 回）。忠誠心が高く若い選手ほど残ってくれやすく、残ったら、来季の査定額に 1 割上乗せした年俸の 1 年契約になります。ドラフトへ進むと引退します。</p>' : ''}` : '<p>いません。</p>'}</section>
     ${(c.honor || []).length ? `<section class="card"><h2>永久欠番</h2>
       <p>長くチームを支えた名選手が引退しました。背番号を永久欠番にすると、これから先だれもその番号を付けられなくなり、球団の人気が少し上がります。</p>

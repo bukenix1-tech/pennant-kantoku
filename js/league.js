@@ -1764,7 +1764,7 @@ function offContract() {
       if (p.contractYears > 0) leave = false; // 複数年契約が残っているあいだは引退しない
       if (leave) {
         const can = t.id === my.id && !(p.foreign && o < 55); // 力が足りずに出ていく外国人選手は引き止めない
-        if (t.id === my.id) retired.push({ pid: p.id, name: p.name, age: p.age, why: p.foreign && p.age < 35 ? '退団' : '引退', can });
+        if (t.id === my.id) retired.push({ pid: p.id, name: p.name, age: p.age, why: p.foreign && p.age < 35 ? '退団' : '引退', can, pos: p.isP ? '投' : p.pos, ovr: Math.round(o), abil: abilKeys(p).map(k => [k, Math.round(p.a[k])]) }); // 退団した選手はデータが消えるので、強さを写しておく
         honorCheck(t, p, honor);
         if (can) p.retiring = true; // ドラフトへ進むときに引退する（retireFinish）
         else retireLeave(p);
