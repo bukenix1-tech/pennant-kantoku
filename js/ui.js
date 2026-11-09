@@ -155,12 +155,32 @@ function render() {
   const first = S.phase === 'off' ? ['off', 'オフシーズン'] : S.phase === 'post' ? ['post', 'ポストシーズン'] : TABS[0];
   const tabs = [first, ...TABS.slice(1)];
   if (['home', 'off', 'post'].includes(UI.tab)) UI.tab = first[0];
+  const scrolled = keepScroll(app);
   app.innerHTML = `
     ${renderHeader()}
     <nav class="tabs">${tabs.map(([k, n]) => `<button class="${UI.tab === k ? 'on' : ''}" data-act="tab" data-tab="${k}">${n}</button>`).join('')}</nav>
     <main>${renderScreen()}</main>
     ${UI.toast ? `<div class="toast">${h(UI.toast)}</div>` : ''}`;
   UI.toast = '';
+  scrolled();
+}
+
+// 描き直しても、表の横スクロールの位置を保つ。同じ見出しの表を同じ順番で探して戻す（画面を切り替えたときは戻さない）
+let scrollTab = null;
+function keepScroll(app) {
+  const list = () => {
+    const seen = {};
+    return [...app.querySelectorAll('.scroll')].map(el => {
+      const head = el.querySelector('tr');
+      const name = head ? head.textContent : '';
+      seen[name] = (seen[name] || 0) + 1;
+      return { el, key: `${name}#${seen[name]}` };
+    });
+  };
+  const same = scrollTab === UI.tab;
+  scrollTab = UI.tab;
+  const old = same ? new Map(list().filter(x => x.el.scrollLeft).map(x => [x.key, x.el.scrollLeft])) : new Map();
+  return () => list().forEach(x => { if (old.has(x.key)) x.el.scrollLeft = old.get(x.key); });
 }
 
 function renderScreen() {
