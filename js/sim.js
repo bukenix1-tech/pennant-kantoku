@@ -52,7 +52,7 @@ function doPA(b, rec, fld, bat) {
   // データ分析室：打つ側は打者が、守る側は投手が少し有利になる
   const anB = bat ? (facLv(bat.team, 'analysis') - 1) * ANALYSIS_BONUS : 0, anP = (facLv(fld.team, 'analysis') - 1) * ANALYSIS_BONUS;
   const meet = b.a.meet * cb + anB, pow = b.a.power * cb + anB, spd = b.a.speed;
-  const stuff = (p.a.velo * 0.45 + p.a.breaking * 0.55) * cp + anP;
+  const stuff = (p.a.velo * 0.45 + p.a.breaking * 0.55 + pitchQual(p)) * cp + anP; // 変化量の高い球は球威も上げる
   const ctrl = p.a.control * cp + anP;
   const pr = pitchProfile(p), ps = pitchScale(p); // 球種で、三振・本塁打・打球の質が変わる
   const eye = eyeOf(b); // 選球眼：見極めのいい打者ほど四球が多く、三振が少ない

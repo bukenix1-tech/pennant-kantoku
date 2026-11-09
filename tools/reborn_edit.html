@@ -144,7 +144,7 @@ function renderForm() {
     <label>先発の向き${sel('apt_sp', APT, p.apt ? p.apt.sp : '')}</label>
     <label>中継ぎの向き${sel('apt_rp', APT, p.apt ? p.apt.rp : '')}</label>
   </div>
-  <p class="muted">持ち球（よく投げる順に。空なら自動で決まります。入れた選手は新しい球種を覚えません）</p><div class="grid">${[0, 1, 2, 3, 4].map(i => `<label>${i + 1} つ目<select data-pitch="${i}"><option value="">（なし）</option>${PITCH_NAMES.map(([v, n]) => `<option value="${v}" ${(p.pitches || [])[i] === v ? 'selected' : ''}>${n}</option>`).join('')}</select></label>`).join('')}</div>
+  <p class="muted">持ち球（よく投げる順に。空なら自動で決まります。入れた選手は新しい球種を覚えません）と、ピーク時の変化量（1〜7。空なら自動。若いうちは低めから伸びます）</p><div class="grid">${[0, 1, 2, 3, 4].map(i => `<label>${i + 1} つ目<select data-pitch="${i}"><option value="">（なし）</option>${PITCH_NAMES.map(([v, n]) => `<option value="${v}" ${(p.pitches || [])[i] === v ? 'selected' : ''}>${n}</option>`).join('')}</select> 変化量 <input type="number" data-pitchlv="${i}" min="1" max="7" step="1" value="${(p.pitchLv || [])[i] ?? ''}" style="width:4em"></label>`).join('')}</div>
   <p class="muted">ピーク時の能力（100 以下で。球速は km/h で 170 まで）</p><div class="grid">${PIT.map(peakIn).join('')}</div></fieldset>` : ''}
 
   <fieldset><legend>成長と出やすさ</legend><div class="grid">
@@ -162,8 +162,14 @@ function tidy(p) {
   const k = kindOf(p);
   const keep = [...(k !== 'P' ? BAT : []), ...(k !== 'B' ? PIT : [])].map(x => x[0]);
   p.peak = Object.fromEntries(keep.filter(x => p.peak && p.peak[x] !== '' && p.peak[x] != null).map(x => [x, p.peak[x]]));
-  if (p.pitches) p.pitches = [...new Set(p.pitches.filter(Boolean))];
-  if (k === 'B' || (p.pitches && !p.pitches.length)) delete p.pitches;
+  if (p.pitches) {
+    // 空けた欄を詰める。変化量も一緒に動かす
+    const list = [], lv = [];
+    p.pitches.forEach((t, i) => { if (t && !list.includes(t)) { list.push(t); const v = (p.pitchLv || [])[i]; lv.push(v === '' || v == null ? null : Math.min(7, Math.max(1, Math.round(+v)))); } });
+    p.pitches = list;
+    p.pitchLv = lv.some(v => v != null) ? lv : undefined;
+  }
+  if (k === 'B' || (p.pitches && !p.pitches.length)) { delete p.pitches; delete p.pitchLv; }
   if (k === 'B') { delete p.role; delete p.apt; delete p.pos2; delete p.twoWay; p.isP = false; if (!p.pos || p.pos === '投') p.pos = '外'; }
   else { p.pos = '投'; p.isP = true; if (!p.role) p.role = '先発'; }
   if (k === 'P') { ['traj', 'eye', 'steal', 'subs', 'pos2', 'twoWay'].forEach(x => delete p[x]); }
@@ -179,7 +185,8 @@ function onInput(e) {
   const t = e.target, p = players[cur];
   if (!p) return;
   const numKeys = ['traj', 'eye', 'steal', 'age', 'retireAge', 'start', 'weight'];
-  if (t.dataset.pitch != null) { const list = [...(p.pitches || [])]; list[+t.dataset.pitch] = t.value; p.pitches = Array.from(list, x => x || ''); }
+  if (t.dataset.pitchlv != null) { const list = [...(p.pitchLv || [])]; list[+t.dataset.pitchlv] = t.value === '' ? '' : +t.value; p.pitchLv = Array.from(list, x => x ?? ''); }
+  else if (t.dataset.pitch != null) { const list = [...(p.pitches || [])]; list[+t.dataset.pitch] = t.value; p.pitches = Array.from(list, x => x || ''); }
   else if (t.dataset.peak) { p.peak = p.peak || {}; p.peak[t.dataset.peak] = t.value === '' ? '' : +t.value; }
   else if (t.dataset.sub) { const s = new Set(p.subs || []); t.checked ? s.add(t.dataset.sub) : s.delete(t.dataset.sub); p.subs = SUBS.filter(x => s.has(x)); }
   else if (t.dataset.k === 'kind3') { p.isP = t.value !== 'B'; p.twoWay = t.value === 'two'; tidy(p); }

@@ -4,7 +4,7 @@
 // リストは家族の合言葉で暗号化してある（js/reborn.enc.json）。合言葉を入れた端末でだけ読めて、転生選手が出る
 // リストの元は _private/reborn.json（Git に入れない）。直したら python tools/reborn_lock.py で暗号化し直す
 //   name ：ゲームに出る名前 ／ team：元の所属球団の地名 ／ note：どんな選手か
-//   kind ：高校 / 大学 / 社会人 / 高卒社会人 ／ peak：ピーク時の能力 ／ traj：弾道 ／ pitches：持ち球（PITCHES の記号を、よく投げる順に。無ければ自動）／ weight：選ばれやすさ（ふつう 1）
+//   kind ：高校 / 大学 / 社会人 / 高卒社会人 ／ peak：ピーク時の能力 ／ traj：弾道 ／ pitches：持ち球（PITCHES の記号を、よく投げる順に。無ければ自動）／ pitchLv：その順に、ピーク時の変化量 1〜7（無ければ自動）／ weight：選ばれやすさ（ふつう 1）
 //   投手は peak に velo（km/h でよい）・control・stamina・breaking、role（先発 / 中継 / 抑え）、apt（{ sp, rp }：0△ 1〇 2◎。書かなければ role から）
 //   二刀流は twoWay: true にして、peak に投打の両方を書く（pos2：野手のときの守備位置）
 //   start：入団時の能力（ピーク時の何割か。書かなければ区分ごとの値）

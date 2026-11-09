@@ -121,21 +121,33 @@ function pitchesOf(p) {
   if (!p.pitches && canPitch(p)) p.pitches = rollPitches(p.a.breaking);
   return p.pitches || [];
 }
-function pitchLevel(p, i) { return U.clamp(Math.round(p.a.breaking / 14 + PITCH_OFFSET[i]), 1, 7); }
-// 投げる割合で平均した球種の効き目。持ち球が変わらなければ同じなので覚えておく
-const pitchProfiles = new WeakMap();
-function pitchProfile(p) {
-  const list = pitchesOf(p);
-  let r = pitchProfiles.get(list);
-  if (r) return r;
-  r = { k: 0, b: 0, hr: 0, f: 0 };
-  const total = U.sum(PITCH_SHARE.slice(0, list.length));
-  list.forEach((t, i) => { Object.keys(r).forEach(x => { r[x] += PITCHES[t][x] * PITCH_SHARE[i] / total; }); });
-  pitchProfiles.set(list, r);
-  return r;
+// 球種の変化量（1〜7）。転生選手で決めてあれば、ピーク時にその値になる（若いうちは変化球の能力に合わせて低い）
+function pitchLevel(p, i) {
+  const R = p.reborn ? rebornOf(p) : null, set = R && R.pitches && R.pitches.length && R.pitchLv && R.pitchLv[i];
+  if (set) {
+    const peak = p.ceilA && p.ceilA.breaking;
+    return U.clamp(Math.round(set * (peak ? Math.min(1, p.a.breaking / peak) : 1)), 1, 7);
+  }
+  return U.clamp(Math.round(p.a.breaking / 14 + PITCH_OFFSET[i]), 1, 7);
 }
-// 変化球の能力が低いと、球種の効き目も小さい
-function pitchScale(p) { return U.clamp(p.a.breaking / 60, 0.4, 1.3); }
+// 球種の効き目。変化量が高い球種ほどよく投げ（r）、変化量が全体に高いほど効き目が大きい（s）。能力が変わるまで覚えておく
+const pitchMixes = new WeakMap();
+function pitchMix(p) {
+  const list = pitchesOf(p);
+  let c = pitchMixes.get(p);
+  if (c && c.list === list && c.b === p.a.breaking && c.rb === REBORN) return c;
+  const share = PITCH_SHARE.slice(0, list.length);
+  const lv = list.map((_, i) => pitchLevel(p, i)), w = list.map((_, i) => share[i] * lv[i]);
+  const total = U.sum(w), r = { k: 0, b: 0, hr: 0, f: 0 };
+  list.forEach((t, i) => { Object.keys(r).forEach(x => { r[x] += PITCHES[t][x] * w[i] / total; }); });
+  const top = U.sum(w.map((x, i) => x * lv[i])) / total; // よく投げる球ほど重く見た変化量
+  c = { list, b: p.a.breaking, rb: REBORN, r, s: U.clamp(total / U.sum(share) / PITCH_LV_REF, 0.25, 1.7), q: (top - PITCH_Q_REF) * PITCH_Q, top };
+  pitchMixes.set(p, c);
+  return c;
+}
+function pitchProfile(p) { return pitchMix(p).r; }
+function pitchScale(p) { return pitchMix(p).s; }
+function pitchQual(p) { return pitchMix(p).q; }
 function pitchStyle(p) {
   const k = pitchProfile(p).k;
   return k >= PITCH_STYLE_K ? '三振型' : k <= PITCH_STYLE_G ? '打たせて取る' : 'バランス型';

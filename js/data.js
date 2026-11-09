@@ -58,6 +58,8 @@ const PITCHES = {
   sh: { name: 'シュート', w: 5, k: -0.025, b: -0.003, hr: -0.1, f: -0.08 },
 };
 const PITCH_MAX = 5;
+const PITCH_LV_REF = 4.2; // 変化量の平均がこれのとき、球種の効き目がそのままの大きさになる（仮・AI）
+const PITCH_Q = 1.5, PITCH_Q_REF = 5.2; // よく投げる球の変化量が 1 高いと、球威がこれだけ上がる（基準は PITCH_Q_REF。仮・AI）
 const PITCH_SHARE = [0.45, 0.25, 0.15, 0.1, 0.05]; // 持ち球の順に、投げる割合
 const PITCH_OFFSET = [1, 0, -1, -1, -2]; // 持ち球の順に、変化量のずれ
 const PITCH_LEARN = 0.2; // オフに新しい球種を覚える確率
