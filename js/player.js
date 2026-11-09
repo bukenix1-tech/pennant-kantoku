@@ -54,6 +54,7 @@ function newPlayer(S, opts) {
   const steal = isP ? undefined : rollSteal();
   const eye = isP ? undefined : U.pickW(EYE_W);
   const p = {
+    pitches: isP ? rollPitches(a.breaking) : undefined,
     id, name: makeName(opts.foreign), age, isP, pos, subs, steal, eye, role, type, traj,
     peak: GROWTH_PEAK[type] + U.rint(-1, 1), pot, a,
     foreign: !!opts.foreign, teamId: null, salary: 0,
@@ -102,6 +103,49 @@ function rollApt(stamina) {
 function aptOf(p) { return p.apt || { sp: 1, rp: 1 }; }
 // 先発で投げるか中継ぎで投げるかで、力の出方が少し変わる
 function aptMul(p, start) { const a = aptOf(p); return APT_MUL[start ? a.sp : a.rp]; }
+
+// 持ち球：[['sl', 順番], ...]。変化量は「変化球」の能力から計算するので、能力が伸びれば一緒に伸びる
+function pitchTarget(b) { return U.clamp(2 + (b >= 45 ? 1 : 0) + (b >= 65 ? 1 : 0) + (b >= 85 ? 1 : 0), 2, PITCH_MAX); }
+function rollPitch(have) {
+  const c = Object.keys(PITCHES).filter(t => !have.includes(t));
+  return U.pickW(c.map(t => [t, PITCHES[t].w]));
+}
+function rollPitches(b) {
+  const list = [], n = U.clamp(pitchTarget(b) + (U.chance(0.2) ? 1 : 0), 2, PITCH_MAX);
+  while (list.length < n) list.push(rollPitch(list));
+  return list;
+}
+function pitchesOf(p) {
+  if (!p.pitches && canPitch(p)) p.pitches = rollPitches(p.a.breaking);
+  return p.pitches || [];
+}
+function pitchLevel(p, i) { return U.clamp(Math.round(p.a.breaking / 14 + PITCH_OFFSET[i]), 1, 7); }
+// 投げる割合で平均した球種の効き目。持ち球が変わらなければ同じなので覚えておく
+const pitchProfiles = new WeakMap();
+function pitchProfile(p) {
+  const list = pitchesOf(p);
+  let r = pitchProfiles.get(list);
+  if (r) return r;
+  r = { k: 0, b: 0, hr: 0, f: 0 };
+  const total = U.sum(PITCH_SHARE.slice(0, list.length));
+  list.forEach((t, i) => { Object.keys(r).forEach(x => { r[x] += PITCHES[t][x] * PITCH_SHARE[i] / total; }); });
+  pitchProfiles.set(list, r);
+  return r;
+}
+// 変化球の能力が低いと、球種の効き目も小さい
+function pitchScale(p) { return U.clamp(p.a.breaking / 60, 0.4, 1.3); }
+function pitchStyle(p) {
+  const k = pitchProfile(p).k;
+  return k >= PITCH_STYLE_K ? '三振型' : k <= PITCH_STYLE_G ? '打たせて取る' : 'バランス型';
+}
+// 新しい球種を覚える。覚えられなければ null
+function learnPitch(p) {
+  const list = pitchesOf(p);
+  if (!list.length || list.length >= PITCH_MAX) return null;
+  const t = rollPitch(list);
+  p.pitches = [...list, t];
+  return t;
+}
 
 // 二刀流：投手と野手の両方の能力を持つ。p.isP は「本業」が投手かどうか
 function canPitch(p) { return p.isP || !!p.twoWay; }
@@ -270,6 +314,11 @@ function growthPhase(p) {
 function agePlayer(p) {
   p.age++;
   growTraj(p);
+  // 若いうちは、変化球の力に見合う数まで球種を覚えていく
+  if (canPitch(p) && p.age <= 33 && pitchesOf(p).length < pitchTarget(p.a.breaking) && U.chance(PITCH_LEARN)) {
+    const t = learnPitch(p);
+    if (t && p.teamId === S.myTeamId) addNews(`${p.name}が新しい球種「${PITCHES[t].name}」を覚えました。`, 'good');
+  }
   const over = p.age - (p.peak + 1);
   const t = p.teamId != null ? S.teams[p.teamId] : null;
   const gym = t ? 1 - (facLv(t, 'gym') - 1) * GYM_SLOW : 1; // トレーニングルーム

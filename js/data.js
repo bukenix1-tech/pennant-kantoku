@@ -47,6 +47,21 @@ const STARTER_REST = 6;   // 中 5 日以上あいていれば投げられる（
 const TRADE_DEADLINE_MONTH = 7; // 7 月末までトレードできる
 // 金銭トレード：お金 CASH_PER_VALUE 万円を、トレード価値 1 として数える。主力（総合で上から TRADE_CORE_N 人）はお金だけでは出してもらえない
 const CASH_PER_VALUE = 10, TRADE_CORE_N = 8;
+// 球種。w：持ち球に選ばれやすさ、k：三振の確率に足す、b：打球がヒットになる確率に足す、hr：本塁打の倍率に足す、f：凡打がフライになる割合に足す。値は仮（AI）
+const PITCHES = {
+  sl: { name: 'スライダー', w: 10, k: 0.005, b: 0.003, hr: 0.04, f: 0.03 },
+  cv: { name: 'カーブ', w: 7, k: 0.002, b: 0, hr: 0.05, f: 0.08 },
+  fk: { name: 'フォーク', w: 7, k: 0.028, b: 0.012, hr: 0.08, f: -0.02 },
+  ch: { name: 'チェンジアップ', w: 6, k: 0.015, b: 0.004, hr: 0.03, f: 0.01 },
+  ct: { name: 'カットボール', w: 6, k: -0.012, b: -0.006, hr: -0.03, f: 0 },
+  sk: { name: 'シンカー', w: 4, k: -0.03, b: -0.003, hr: -0.12, f: -0.12 },
+  sh: { name: 'シュート', w: 5, k: -0.025, b: -0.003, hr: -0.1, f: -0.08 },
+};
+const PITCH_MAX = 5;
+const PITCH_SHARE = [0.45, 0.25, 0.15, 0.1, 0.05]; // 持ち球の順に、投げる割合
+const PITCH_OFFSET = [1, 0, -1, -1, -2]; // 持ち球の順に、変化量のずれ
+const PITCH_LEARN = 0.2; // オフに新しい球種を覚える確率
+const PITCH_STYLE_K = 0.012, PITCH_STYLE_G = -0.006; // 三振の増減がこれを超えると「三振型」「打たせて取る」
 // 契約の選択肢。年俸は FA 相場や査定額に掛ける倍率。値は仮（AI）
 const CONTRACT_YEARS_MAX = 6;
 const CONTRACT_MULS = [0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.5, 2];

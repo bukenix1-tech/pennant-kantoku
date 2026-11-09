@@ -1366,6 +1366,11 @@ function awaken(p) {
     if (k === 'velo') return `球速 +${veloKmh(p.a[k]) - veloKmh(before)}km/h`;
     return `${lbl[k]} +${Math.round(p.a[k]) - Math.round(before)}`;
   });
+  // 変化球で覚醒したら、新しい球種も覚える
+  if (main === 'breaking') {
+    const t = learnPitch(p);
+    if (t) parts.push(`新球種「${PITCHES[t].name}」を習得`);
+  }
   p.pot = Math.min(1.7, p.pot + (big ? 0.08 : 0.02));
   p.cond = 5;
   p.awakened = (p.awakened || 0) + 1;

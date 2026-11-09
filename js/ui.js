@@ -24,10 +24,15 @@ function eyeTag(p) {
   return e ? `<span class="tag eye e${e < 0 ? 'x' : e}" title="${e < 0 ? '早打ち（四球が少ない）' : `選球眼${EYE_MARK[e]}（四球が多く、三振が少ない）`}">${e < 0 ? '早打ち' : '眼' + EYE_MARK[e]}</span>` : '';
 }
 // 弾道（↗の数）。野手だけ
-function trajTag(p) {
-  if (!canBat(p)) return '';
+function trajTag(p, batOnly) {
+  const style = !batOnly && canPitch(p) ? `<span class="tag" title="持ち球から決まる投球のタイプ">${pitchStyle(p)}</span>` : '';
+  if (!canBat(p)) return style;
   const t = trajOf(p);
-  return `<span class="ab traj t${t}" title="弾道${t}（高いほどホームランとフライが多い）">弾<b>${t}</b></span>`;
+  return `<span class="ab traj t${t}" title="弾道${t}（高いほどホームランとフライが多い）">弾<b>${t}</b></span>${style}`;
+}
+// 持ち球の一覧。ドラフト候補はスカウトの見立てしか分からないので、変化量を出さない
+function pitchList(p) {
+  return pitchesOf(p).map((t, i) => `<span class="tag">${PITCHES[t].name}${p.noise ? '' : ` <b>${pitchLevel(p, i)}</b>`}</span>`).join(' ');
 }
 
 function abilSum(p, view) {
@@ -517,7 +522,8 @@ function renderPlayerModal(p) {
   const keys = abilKeys(p), lbl = ALL_LABEL;
   const bars = keys.map(k => `<div class="bar"><span class="bl">${lbl[k]}</span>${abilStalled(p, k) ? `<span class="gstack"><span class="grow1">${gradeCell(p.a[k])}</span><small class="stall" title="伸びしろの上限に近く、練習してもほとんど伸びない">停滞</small></span>` : gradeCell(p.a[k])}
     <span class="bt"><span style="width:${Math.round(p.a[k] / ABIL_MAX * 100)}%"></span></span>${k === 'velo' ? `<span class="muted">${veloKmh(p.a.velo)}km/h</span>` : ''}</div>`).join('')
-    + (canBat(p) ? `<div class="bar"><span class="bl">弾道</span>${trajTag(p)}<span class="muted small">${TRAJ_WORD[trajOf(p)]}</span></div>
+    + (canPitch(p) ? `<div class="bar"><span class="bl">持ち球</span><span>${pitchList(p)} <span class="muted small">${pitchStyle(p)}</span></span></div>` : '')
+    + (canBat(p) ? `<div class="bar"><span class="bl">弾道</span>${trajTag(p, true)}<span class="muted small">${TRAJ_WORD[trajOf(p)]}</span></div>
       <div class="bar"><span class="bl">選球眼</span>${eyeTag(p) || '<span class="muted small">ふつう</span>'}</div>
       <div class="bar"><span class="bl">盗塁</span><span class="tag steal s-${stealWord(p)}">${stealWord(p)}</span><span class="muted small">${stealWord(p) === '積極的' ? 'すきがあればどんどん走る' : stealWord(p) === '慎重' ? 'あまり走らない' : ''}</span></div>` : '');
   const careerRows = [...p.career, { y: S.year, t: p.teamId != null ? S.teams[p.teamId].short : '-', s: p.stats, now: true }]

@@ -54,11 +54,12 @@ function doPA(b, rec, fld, bat) {
   const meet = b.a.meet * cb + anB, pow = b.a.power * cb + anB, spd = b.a.speed;
   const stuff = (p.a.velo * 0.45 + p.a.breaking * 0.55) * cp + anP;
   const ctrl = p.a.control * cp + anP;
+  const pr = pitchProfile(p), ps = pitchScale(p); // 球種で、三振・本塁打・打球の質が変わる
   const eye = eyeOf(b); // 選球眼：見極めのいい打者ほど四球が多く、三振が少ない
   const pBB = U.clamp((0.102 + (50 - ctrl) * 0.0013) * EYE_BB[eye], 0.02, 0.25);
-  const pK = U.clamp((0.179 + (stuff - 50) * 0.0035 - (meet - 50) * 0.003) * EYE_K[eye], 0.05, 0.42);
+  const pK = U.clamp((0.179 + (stuff - 50) * 0.0035 - (meet - 50) * 0.003) * EYE_K[eye] + pr.k * ps, 0.05, 0.42);
   const tj = trajOf(b);
-  const pHR = U.clamp((0.013 + (pow - 50) * 0.00076 - (stuff - 50) * 0.0003) * TRAJ_HR[tj], 0.002, 0.11);
+  const pHR = U.clamp((0.013 + (pow - 50) * 0.00076 - (stuff - 50) * 0.0003) * TRAJ_HR[tj] * (1 + pr.hr * ps), 0.002, 0.11);
   let r = Math.random();
   if (r < pBB) return { t: 'BB', pc: U.rint(4, 7) };
   r -= pBB;
@@ -67,14 +68,14 @@ function doPA(b, rec, fld, bat) {
   if (r < pHR) return { t: 'HR', pc: U.rint(1, 6) };
   const pc = U.rint(1, 6);
   const babip = U.clamp(0.296 + (meet - 50) * 0.0022 + (spd - 50) * 0.0007
-    - (fld.def - 50) * 0.0018 - (stuff - 50) * 0.0008 + TRAJ_BABIP[tj], 0.2, 0.42);
+    - (fld.def - 50) * 0.0018 - (stuff - 50) * 0.0008 + TRAJ_BABIP[tj] + pr.b * ps, 0.2, 0.42);
   if (Math.random() < babip) {
     const x = Math.random();
     if (x < 0.011 + Math.max(0, spd - 50) * 0.0006) return { t: '3B', pc };
     if (x < 0.17 + (pow - 50) * 0.002) return { t: '2B', pc };
     return { t: '1B', pc };
   }
-  return { t: Math.random() < TRAJ_FLY[tj] ? 'FO' : 'GO', pc };
+  return { t: Math.random() < U.clamp(TRAJ_FLY[tj] + pr.f * ps, 0.1, 0.9) ? 'FO' : 'GO', pc };
 }
 
 function changePitcher(g, fld, bat, inning, atStart) {
