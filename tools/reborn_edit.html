@@ -69,7 +69,7 @@ const TYPES = ['早熟', '普通', '晩成', '超晩成'];
 const POS = ['捕', '一', '二', '三', '遊', '外', '指'];
 const SUBS = ['捕', '一', '二', '三', '遊', '外'];
 const BAT = [['meet', 'ミート'], ['power', 'パワー'], ['speed', '走力'], ['arm', '肩力'], ['field', '守備力']];
-const PIT = [['velo', '球速（km/h）'], ['control', 'コントロール'], ['stamina', 'スタミナ'], ['breaking', '変化球']];
+const PIT = [['velo', '球速（km/h）'], ['control', 'コントロール'], ['stamina', 'スタミナ']];
 const APT = [['', '役割から'], ['0', '△'], ['1', '〇'], ['2', '◎']];
 const EYE = [['', 'なし'], ['-1', '早打ち'], ['1', '○'], ['2', '◎']];
 
@@ -144,7 +144,7 @@ function renderForm() {
     <label>先発の向き${sel('apt_sp', APT, p.apt ? p.apt.sp : '')}</label>
     <label>中継ぎの向き${sel('apt_rp', APT, p.apt ? p.apt.rp : '')}</label>
   </div>
-  <p class="muted">持ち球（よく投げる順に。空なら自動で決まります。入れた選手は新しい球種を覚えません）と、ピーク時の変化量（1〜7。空なら自動。若いうちは低めから伸びます）</p><div class="grid">${[0, 1, 2, 3, 4].map(i => `<label>${i + 1} つ目<select data-pitch="${i}"><option value="">（なし）</option>${PITCH_NAMES.map(([v, n]) => `<option value="${v}" ${(p.pitches || [])[i] === v ? 'selected' : ''}>${n}</option>`).join('')}</select> 変化量 <input type="number" data-pitchlv="${i}" min="1" max="7" step="1" value="${(p.pitchLv || [])[i] ?? ''}" style="width:4em"></label>`).join('')}</div>
+  <p class="muted">持ち球（よく投げる順に。空なら自動で決まります。入れた選手は新しい球種を覚えません）と、ピーク時の変化量（1〜7。空なら自動。若いうちは低めから伸びます）。変化量の高さと球種の数が、そのまま投手の強さになります（7・6・5・5・4 で超一流、5・4・3 で主力くらい）</p><div class="grid">${[0, 1, 2, 3, 4].map(i => `<label>${i + 1} つ目<select data-pitch="${i}"><option value="">（なし）</option>${PITCH_NAMES.map(([v, n]) => `<option value="${v}" ${(p.pitches || [])[i] === v ? 'selected' : ''}>${n}</option>`).join('')}</select> 変化量 <input type="number" data-pitchlv="${i}" min="1" max="7" step="1" value="${(p.pitchLv || [])[i] ?? ''}" style="width:4em"></label>`).join('')}</div>
   <p class="muted">ピーク時の能力（100 以下で。球速は km/h で 170 まで）</p><div class="grid">${PIT.map(peakIn).join('')}</div></fieldset>` : ''}
 
   <fieldset><legend>成長と出やすさ</legend><div class="grid">

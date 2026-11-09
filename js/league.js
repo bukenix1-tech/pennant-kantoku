@@ -625,11 +625,10 @@ function randomEvent() {
     const young = ps.filter(p => p.age <= 27 && !p.inj);
     if (!young.length) return;
     const p = U.pick(young);
-    const keys = abilKeys(p);
-    const k = U.pick(keys);
+    const k = U.pick(pickKeys(p));
     const up = U.rint(3, 7);
-    p.a[k] = Math.min(abilMax(p, k), p.a[k] + up);
-    addNews(`${p.name}が居残り特訓でコツをつかんだ！ ${ALL_LABEL[k]}が${up}上がった。`, 'good');
+    abilSet(p, k, Math.min(abilMax(p, k), abilGet(p, k) + up));
+    addNews(`${p.name}が居残り特訓でコツをつかんだ！ ${abilLabel(k)}が${up}上がった。`, 'good');
   } else if (roll === 3) {
     t.pop = U.clamp(t.pop + 3, 0, 100);
     addNews('ファン感謝デーが大盛況！ 人気が上がった。', 'good');
@@ -1328,16 +1327,16 @@ function awakenCheck(mult) {
 // 上限解放：停滞している能力の伸びしろの上限が広がり、少し伸びる。衰退期には起きない
 function limitBreakCheck(p, mult) {
   if (growthPhase(p).k === 'decline') return;
-  const keys = abilKeys(p).filter(k => abilStalled(p, k) && ((p.ceilUp && p.ceilUp[k]) || 0) < LIMIT_BREAK_MAX);
+  const keys = growKeys(p).filter(k => abilStalled(p, k) && ((p.ceilUp && p.ceilUp[k]) || 0) < LIMIT_BREAK_MAX);
   if (!keys.length || !U.chance(LIMIT_BREAK_CHANCE * mult)) return;
-  const k = U.pick(keys), before = p.a[k];
+  const k = U.pick(keys), before = abilGet(p, k);
   p.ceilUp = p.ceilUp || {};
   p.ceilUp[k] = Math.min(LIMIT_BREAK_MAX, (p.ceilUp[k] || 0) + U.rint(LIMIT_BREAK_UP[0], LIMIT_BREAK_UP[1]));
-  p.a[k] = Math.min(abilMax(p, k), p.a[k] + U.rint(2, 4));
+  abilSet(p, k, Math.min(abilMax(p, k), abilGet(p, k) + U.rint(2, 4)));
   p.limitBroken = (p.limitBroken || 0) + 1;
   if (p.teamId === S.myTeamId) {
-    const up = k === 'velo' ? `球速 +${veloKmh(p.a[k]) - veloKmh(before)}km/h` : `${ALL_LABEL[k]} +${Math.round(p.a[k]) - Math.round(before)}`;
-    const text = `${p.name}が壁を破った！ ${ALL_LABEL[k]}の伸びしろが広がった（${up}）`;
+    const up = k === 'velo' ? `球速 +${veloKmh(p.a[k]) - veloKmh(before)}km/h` : `${abilLabel(k)} +${Math.round(abilGet(p, k)) - Math.round(before)}`;
+    const text = `${p.name}が壁を破った！ ${abilLabel(k)}の伸びしろが広がった（${up}）`;
     addNews('【上限解放】' + text, 'awaken');
     S.popups.push({ pid: p.id, text, limit: true });
   }
@@ -1346,7 +1345,7 @@ function limitBreakCheck(p, mult) {
 const BIG_AWAKEN_CHANCE = 0.07; // 覚醒のうち、ごくまれに大爆発（大覚醒）する
 
 function awaken(p) {
-  const keys = abilKeys(p), lbl = ALL_LABEL;
+  const keys = pickKeys(p);
   const big = U.chance(BIG_AWAKEN_CHANCE);
   const fk = focusToKey(p);
   const main = fk && U.chance(0.6) ? fk : U.pick(keys); // いちばん伸びる能力。きっかけの言葉もこれに合わせる
@@ -1356,18 +1355,25 @@ function awaken(p) {
     ? [[main, U.rint(18, 28)], [others[0], U.rint(10, 16)], [others[1], U.rint(6, 12)]]
     : [[main, U.rint(8, 15)], [others[0], U.rint(3, 7)]];
   const parts = ups.map(([k, v]) => {
-    const before = p.a[k];
-    p.a[k] = Math.max(p.a[k], Math.min(abilMax(p, k), p.a[k] + v));
+    const before = abilGet(p, k);
+    abilSet(p, k, Math.max(before, Math.min(abilMax(p, k), before + v)));
     // 伸びた分だけ伸びしろの上限も広げる（広げないと、上限を超えた能力が「停滞」して練習で伸びなくなる）。転生選手も同じ
-    if (p.a[k] > before) {
+    if (abilGet(p, k) > before) {
       p.awakeUp = p.awakeUp || {};
-      p.awakeUp[k] = (p.awakeUp[k] || 0) + (p.a[k] - before);
+      p.awakeUp[k] = (p.awakeUp[k] || 0) + (abilGet(p, k) - before);
     }
+    // 球種の覚醒は、ほかの球種も半分伸びる（1 球種だけだと投手の強さがほとんど変わらないので）
+    if (PITCHES[k]) pitchesOf(p).filter(t => t !== k).forEach(t => {
+      const b0 = abilGet(p, t);
+      abilSet(p, t, Math.max(b0, Math.min(abilMax(p, t), b0 + v * 0.5)));
+      p.awakeUp = p.awakeUp || {};
+      p.awakeUp[t] = (p.awakeUp[t] || 0) + (abilGet(p, t) - b0);
+    });
     if (k === 'velo') return `球速 +${veloKmh(p.a[k]) - veloKmh(before)}km/h`;
-    return `${lbl[k]} +${Math.round(p.a[k]) - Math.round(before)}`;
+    return `${abilLabel(k)} +${Math.round(abilGet(p, k)) - Math.round(before)}`;
   });
-  // 変化球で覚醒したら、新しい球種も覚える
-  if (main === 'breaking') {
+  // 球種で覚醒したら、新しい球種も覚える
+  if (PITCHES[main]) {
     const t = learnPitch(p);
     if (t) parts.push(`新球種「${PITCHES[t].name}」を習得`);
   }
@@ -1377,7 +1383,8 @@ function awaken(p) {
   if (big) p.bigAwakened = (p.bigAwakened || 0) + 1;
   addFame(p, big ? 20 : 6);
   if (p.teamId === S.myTeamId) {
-    const keyText = AWAKEN_KEY_TEXTS[main] && U.chance(0.8) ? U.pick(AWAKEN_KEY_TEXTS[main]) : null; // ときどきは、どの能力にも合う言葉
+    const keyTexts = AWAKEN_KEY_TEXTS[PITCHES[main] ? 'breaking' : main];
+    const keyText = keyTexts && U.chance(0.8) ? U.pick(keyTexts) : null; // ときどきは、どの能力にも合う言葉
     const how = p.age >= p.peak + 2 ? `衰えたと言われていた${p.name}が${keyText || U.pick(VETERAN_TEXTS)}` : `${p.name}が${keyText || U.pick(AWAKEN_TEXTS)}`;
     const text = `${how}${big ? '大覚醒' : '覚醒'}した！ ${parts.join('、')}`;
     addNews((big ? '【大覚醒】' : '【覚醒】') + text, 'awaken');
@@ -1769,7 +1776,7 @@ function offContract() {
       if (p.contractYears > 0) leave = false; // 複数年契約が残っているあいだは引退しない
       if (leave) {
         const can = t.id === my.id && !(p.foreign && o < 55); // 力が足りずに出ていく外国人選手は引き止めない
-        if (t.id === my.id) retired.push({ pid: p.id, name: p.name, age: p.age, why: p.foreign && p.age < 35 ? '退団' : '引退', can, pos: p.isP ? '投' : p.pos, ovr: Math.round(o), abil: abilKeys(p).map(k => [k, Math.round(p.a[k])]) }); // 退団した選手はデータが消えるので、強さを写しておく
+        if (t.id === my.id) retired.push({ pid: p.id, name: p.name, age: p.age, why: p.foreign && p.age < 35 ? '退団' : '引退', can, pos: p.isP ? '投' : p.pos, ovr: Math.round(o), abil: abilKeys(p).map(k => [k, Math.round(p.a[k])]), pit: canPitch(p) ? pitchesOf(p).map(t => [t, pitchLevel(p, t)]) : undefined }); // 退団した選手はデータが消えるので、強さを写しておく
         honorCheck(t, p, honor);
         if (can) p.retiring = true; // ドラフトへ進むときに引退する（retireFinish）
         else retireLeave(p);
@@ -1835,6 +1842,7 @@ function makeDraftClass() {
     p.salary = 600;
     if (p.isP && p.pot >= 1.1 && U.chance(TWO_WAY_CHANCE / 0.2)) {
       PIT_KEYS.forEach(k => { p.a[k] = Math.min(abilMax(p, k), p.a[k] + 6); });
+      pitchesOf(p).forEach(t => abilSet(p, t, Math.min(abilMax(p, t), abilGet(p, t) + 6)));
       makeTwoWay(p, q + 4);
     }
     finishProspect(p, kind);
@@ -1850,6 +1858,7 @@ function finishProspect(p, kind) {
   const miss = () => ({ unit: U.clamp(U.gauss() * 0.5, -1, 1) });
   p.noise = {};
   abilKeys(p).forEach(k => { p.noise[k] = miss(); });
+  if (canPitch(p)) p.noise.kire = miss(); // 球のキレ
   p.noise.pot = miss();
   p.amateur = makeAmateur(p, kind);
   const ry = rareYears(p);
@@ -1877,6 +1886,8 @@ function makeRebornPlayer(R) {
   const age = R.foreign ? R.age || U.rint(26, 30) : R.kind === '高校' ? 18 : R.kind === '大学' ? 22 : R.kind === '高卒社会人' ? 21 : 24;
   // ピーク時の能力（R.peak）から、入団時の能力・才能・伸びしろの上限を決める
   const peakA = { ...R.peak };
+  const oldBreaking = peakA.breaking; // 前の版のデータにある「変化球」。持ち球を決めていないときの目安にだけ使う
+  delete peakA.breaking;
   if (peakA.velo >= 100) peakA.velo = kmhToVelo(peakA.velo); // 球速は km/h でも書ける
   const keys = Object.keys(peakA), avg = U.sum(keys, k => peakA[k]) / keys.length;
   const ratio = R.start || (R.foreign ? FOREIGN_REBORN_START : REBORN_START[R.kind]) || 0.65; // start を書けば、その選手だけ入団時の高さを変えられる
@@ -1886,6 +1897,7 @@ function makeRebornPlayer(R) {
   if (R.twoWay) { makeTwoWay(p, avg * ratio); if (R.isP) { p.pos2 = R.pos2 || '外'; p.subs = R.subs || []; } } // 二刀流は peak に投打両方を書く
   keys.forEach(k => { p.a[k] = U.clamp(peakA[k] * ratio + U.gauss() * 2, 5, ABIL_MAX); });
   p.ceilA = peakA;
+  if (oldBreaking != null) p.ceilA.breaking = oldBreaking;
   if (R.isP) {
     // 先発・中継ぎ・抑えの向き不向き
     p.apt = R.apt ? { ...R.apt } : R.role === '先発' ? { sp: 2, rp: 1 } : { sp: 0, rp: 2 }; // apt（0△ 1〇 2◎）を書けばそれを使う
@@ -1897,6 +1909,10 @@ function makeRebornPlayer(R) {
   p.type = R.type || '晩成'; p.peak = GROWTH_PEAK[p.type]; // 転生選手はふつう晩成型（R.type で変えられる）
   p.genius = U.chance(GENIUS_CHANCE); // 天才肌になる確率はふつうの選手と同じ
   p.reborn = R.id;
+  if (canPitch(p)) {
+    initPitches(p, (oldBreaking || PITCH_AUTO_CEIL) * ratio); // 決めた持ち球は、ピークの変化量から始める。合言葉のない端末ではこの自動の持ち球を見せる
+    if (R.pitches && R.pitches.length) R.pitches.forEach(t => { p.pv[t] = U.clamp(abilCeil(p, t) * ratio + U.gauss() * 2, 5, ABIL_MAX); });
+  }
   if (R.team) p.rebornTeam = R.team;
   if (R.foreign) { p.salary = calcSalary(p); return p; }
   p.kind = R.kind;
@@ -1969,7 +1985,7 @@ function scoutRange() { return SCOUT_RANGE[myTeam().fac.scout]; }
 // どの能力も少しずつずれて見える。ずれの大きさはスカウトの段階で決まる
 function scoutView(p, key) {
   const n = p.noise && p.noise[key];
-  const real = key === 'pot' ? p.pot : p.a[key];
+  const real = key === 'pot' ? p.pot : key === 'kire' ? pitchPower(p) : p.a[key];
   if (!n || typeof n !== 'object') return real;
   const unit = n.unit != null ? n.unit : (n.dev || 0) / 15; // 前の版のセーブにも対応
   const dev = unit * scoutRange();
@@ -1978,7 +1994,7 @@ function scoutView(p, key) {
 }
 
 // ---------- ドラフトの評価（スカウトの見立てで決めるので、スカウトが低いと外れることもある） ----------
-function seenOvr(p) { return ovr({ ...p, a: Object.fromEntries(Object.keys(p.a).map(k => [k, scoutView(p, k)])) }); }
+function seenOvr(p) { return ovr({ ...p, a: Object.fromEntries(Object.keys(p.a).map(k => [k, scoutView(p, k)])), pvSeen: canPitch(p) ? scoutView(p, 'kire') : undefined }); }
 function draftScore(p) { return scoutView(p, 'pot') * 40 + seenOvr(p) * 0.6; }
 // ふつうの年に「目玉 3 人・1 位級 12 人・上位 36 人」くらいになる点
 const DRAFT_TIERS = [
@@ -2039,7 +2055,7 @@ function makeAmateur(p, kind) {
       if (all > 0.8 && U.chance(0.6)) A.title = '都市対抗で打撃賞';
     }
   } else {
-    const zq = z((p.a.velo + p.a.control + p.a.breaking) / 3), zk = z((p.a.velo + p.a.breaking) / 2);
+    const kire = pitchPower(p), zq = z((p.a.velo + p.a.control + kire) / 3), zk = z((p.a.velo + kire) / 2);
     if (kind === '高校') {
       A.line = `最速${km}km/h ・ 3年夏の県大会 防御率${era(1.5 - 0.4 * zq + U.gauss() * 0.3)}`;
       if (zq > 0.3 && U.chance(0.6)) A.title = U.chance(0.5) ? `甲子園で${U.rint(15, 45)}奪三振` : `甲子園ベスト${U.pick([4, 8, 16])}`;
@@ -2060,16 +2076,16 @@ function makeAmateur(p, kind) {
 
 const SCOUT_GOOD = {
   meet: '確実性が高く広角に打てる', power: 'スイングが速く長打力が魅力', speed: '50m 5秒台の俊足', arm: '強肩で送球が正確', field: '守備範囲が広い',
-  velo: '威力のある直球が武器', control: '制球が良く四球が少ない', stamina: '完投できるスタミナ', breaking: 'キレのある変化球',
+  velo: '威力のある直球が武器', control: '制球が良く四球が少ない', stamina: '完投できるスタミナ', kire: 'キレのある変化球',
 };
 const SCOUT_BAD = {
   meet: '確実性に課題', power: '長打は少なめ', speed: '足は速くない', arm: '送球に不安', field: '守備に課題',
-  velo: '球速はもう一つ', control: '制球にばらつき', stamina: 'スタミナに課題', breaking: '変化球の精度が課題',
+  velo: '球速はもう一つ', control: '制球にばらつき', stamina: 'スタミナに課題', kire: '変化球の精度が課題',
 };
 
 // スカウトの講評。見立て（scoutView）で書くので、スカウトが低いと外れていることもある
 function scoutComment(p) {
-  const keys = abilKeys(p).slice().sort((a, b) => scoutView(p, b) - scoutView(p, a));
+  const keys = [...abilKeys(p), ...(canPitch(p) ? ['kire'] : [])].sort((a, b) => scoutView(p, b) - scoutView(p, a));
   const best = keys[0], worst = keys[keys.length - 1];
   const base = KIND_BASE[p.kind] || 45;
   const parts = [SCOUT_GOOD[best]];
@@ -2702,6 +2718,7 @@ function migrate() {
   if (!S.retired) S.retired = [];
   if (!S.draftHist) S.draftHist = [];
   S.retired.forEach(r => { if (r.hof && r.star === undefined) r.star = true; });
+  Object.values(S.players).forEach(migratePitches);
   Object.values(S.players).forEach(p => { if (p.svc == null) initService(p); });
   Object.values(S.players).forEach(p => { if (canPitch(p) && !p.apt) p.apt = rollApt(p.a.stamina); });
   Object.values(S.players).forEach(p => { if (p.home === undefined) p.home = p.foreign ? null : U.pick(PREFS); });
@@ -2733,6 +2750,23 @@ function migrate() {
     if (p.fame == null) p.fame = initialFame(p);
     if (p.loyalty == null) p.loyalty = U.rint(30, 80);
   });
+}
+
+// 前の版の「変化球」の値を、球種ごとのキレに移す。強さが変わらないように、いちばんの球をその値にする
+function migratePitches(p) {
+  if (!canPitch(p)) { if (p.a) delete p.a.breaking; return; }
+  if (p.pv && p.a.breaking == null) return;
+  const b = p.a.breaking != null ? p.a.breaking : 40, list = p.pitches && p.pitches.length ? p.pitches : rollPitches(b);
+  p.pitches = list; p.pv = {}; p.pc = {};
+  list.forEach((t, i) => { const off = PITCH_OFFSET[i] * PITCH_STEP; p.pc[t] = off; p.pv[t] = U.clamp(b + off, 5, ABIL_MAX); });
+  const R = rebornPitches(p), peak = p.ceilA && p.ceilA.breaking;
+  if (R) R.pitches.forEach((t, i) => {
+    const set = R.pitchLv && R.pitchLv[i], off = PITCH_OFFSET[i] * PITCH_STEP;
+    p.pv[t] = U.clamp(set ? set * PITCH_STEP * Math.min(1, peak ? b / peak : 1) : b + off, 5, ABIL_MAX);
+  });
+  if (p.noise && p.noise.breaking) { p.noise.kire = p.noise.breaking; delete p.noise.breaking; }
+  delete p.a.breaking;
+  if (p.focus === '変化球') p.focus = PITCHES[pitchesOf(p)[0]].name;
 }
 
 // ---------- 保存 ----------

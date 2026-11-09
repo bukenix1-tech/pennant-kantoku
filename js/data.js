@@ -49,19 +49,21 @@ const TRADE_DEADLINE_MONTH = 7; // 7 月末までトレードできる
 const CASH_PER_VALUE = 10, TRADE_CORE_N = 8;
 // 球種。w：持ち球に選ばれやすさ、k：三振の確率に足す、b：打球がヒットになる確率に足す、hr：本塁打の倍率に足す、f：凡打がフライになる割合に足す。値は仮（AI）
 const PITCHES = {
-  sl: { name: 'スライダー', w: 10, k: 0.005, b: 0.003, hr: 0.04, f: 0.03 },
-  cv: { name: 'カーブ', w: 7, k: 0.002, b: 0, hr: 0.05, f: 0.08 },
-  fk: { name: 'フォーク', w: 7, k: 0.028, b: 0.012, hr: 0.08, f: -0.02 },
-  ch: { name: 'チェンジアップ', w: 6, k: 0.015, b: 0.004, hr: 0.03, f: 0.01 },
-  ct: { name: 'カットボール', w: 6, k: -0.012, b: -0.006, hr: -0.03, f: 0 },
-  sk: { name: 'シンカー', w: 4, k: -0.03, b: -0.003, hr: -0.12, f: -0.12 },
-  sh: { name: 'シュート', w: 5, k: -0.025, b: -0.003, hr: -0.1, f: -0.08 },
+  sl: { name: 'スライダー', short: 'スラ', w: 10, k: 0.005, b: 0.003, hr: 0.04, f: 0.03 },
+  cv: { name: 'カーブ', short: 'カブ', w: 7, k: 0.002, b: 0, hr: 0.05, f: 0.08 },
+  fk: { name: 'フォーク', short: 'フォ', w: 7, k: 0.028, b: 0.012, hr: 0.08, f: -0.02 },
+  ch: { name: 'チェンジアップ', short: 'チェ', w: 6, k: 0.015, b: 0.004, hr: 0.03, f: 0.01 },
+  ct: { name: 'カットボール', short: 'カト', w: 6, k: -0.012, b: -0.006, hr: -0.03, f: 0 },
+  sk: { name: 'シンカー', short: 'シン', w: 4, k: -0.03, b: -0.003, hr: -0.12, f: -0.12 },
+  sh: { name: 'シュート', short: 'シュ', w: 5, k: -0.025, b: -0.003, hr: -0.1, f: -0.08 },
 };
 const PITCH_MAX = 5;
-const PITCH_LV_REF = 4.2; // 変化量の平均がこれのとき、球種の効き目がそのままの大きさになる（仮・AI）
-const PITCH_Q = 1.5, PITCH_Q_REF = 5.2; // よく投げる球の変化量が 1 高いと、球威がこれだけ上がる（基準は PITCH_Q_REF。仮・AI）
+const PITCH_STEP = 14; // 球種のキレ（裏の値。5〜110）がこれだけで、変化量が 1 になる
+const PITCH_S_REF = 45; // キレの平均がこれのとき、球種の効き目がそのままの大きさになる（仮・AI）
+const PITCH_N_BONUS = [0, 0, 5, 9, 11, 12.6]; // 持ち球の数で球威に足す分。数が多いほど打者は絞りにくい（仮・AI）
+const PITCH_AUTO_CEIL = 56; // 持ち球を決めていない転生選手の、いちばんの球のピーク（変化量 4）
 const PITCH_SHARE = [0.45, 0.25, 0.15, 0.1, 0.05]; // 持ち球の順に、投げる割合
-const PITCH_OFFSET = [1, 0, -1, -1, -2]; // 持ち球の順に、変化量のずれ
+const PITCH_OFFSET = [0, -1, -2, -2, -3]; // 作ったときの、持ち球の順ごとの変化量のずれ
 const PITCH_LEARN = 0.2; // オフに新しい球種を覚える確率
 const PITCH_STYLE_K = 0.012, PITCH_STYLE_G = -0.006; // 三振の増減がこれを超えると「三振型」「打たせて取る」
 // 契約の選択肢。年俸は FA 相場や査定額に掛ける倍率。値は仮（AI）
@@ -79,8 +81,8 @@ const WEEKDAYS = '日月火水木金土';
 
 const BAT_KEYS = ['meet', 'power', 'speed', 'arm', 'field'];
 const BAT_LABEL = { meet: 'ミート', power: 'パワー', speed: '走力', arm: '肩力', field: '守備力' };
-const PIT_KEYS = ['velo', 'control', 'stamina', 'breaking'];
-const PIT_LABEL = { velo: '球速', control: 'コントロール', stamina: 'スタミナ', breaking: '変化球' };
+const PIT_KEYS = ['velo', 'control', 'stamina'];
+const PIT_LABEL = { velo: '球速', control: 'コントロール', stamina: 'スタミナ' };
 const ALL_LABEL = { ...BAT_LABEL, ...PIT_LABEL };
 const CEIL_BASE = 31, CEIL_PER_POT = 30; // 伸びしろの上限 = CEIL_BASE + 才能 × CEIL_PER_POT（天才は +10）
 // 上限解放：停滞した能力の伸びしろの上限が、ときどき広がる（1 週間ごとに 1 人あたりこの確率。キャンプは 3 倍）
@@ -97,7 +99,7 @@ const TRAJ_FLY = [0, 0.36, 0.46, 0.55, 0.64];     // 凡打のうちフライに
 const TRAJ_BABIP = [0, 0.012, 0.004, -0.004, -0.012]; // 低い弾道はライナー・ゴロで安打が少し出やすい
 const TRAJ_UP_POWER = [0, 0, 45, 60, 75];         // この弾道に上がるのに要るパワー
 const TRAJ_UP_CHANCE = 0.3;                        // パワーが足りていれば、オフにこの確率で 1 つ上がる
-const SHORT_LABEL = { meet: 'ミ', power: 'パ', speed: '走', arm: '肩', field: '守', velo: '', control: '制', stamina: 'ス', breaking: '変' };
+const SHORT_LABEL = { meet: 'ミ', power: 'パ', speed: '走', arm: '肩', field: '守', velo: '', control: '制', stamina: 'ス', breaking: '変', kire: 'キレ' }; // breaking は前の版の引退記録を出すために残す
 
 // 選手の本来の守備位置（外 = 外野）
 const FPOS = ['捕', '一', '二', '三', '遊', '外'];

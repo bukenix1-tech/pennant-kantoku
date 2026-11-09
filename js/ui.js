@@ -25,19 +25,29 @@ function eyeTag(p) {
 }
 // 弾道（↗の数）。野手だけ
 function trajTag(p, batOnly) {
-  const style = !batOnly && canPitch(p) ? `<span class="tag" title="持ち球から決まる投球のタイプ">${pitchStyle(p)}</span>` : '';
+  const style = !batOnly && canPitch(p) ? `<span class="tag" title="持ち球と変化量（1〜7）">${pitchBrief(p)}</span><span class="tag" title="持ち球から決まる投球のタイプ">${pitchStyle(p)}</span>` : '';
   if (!canBat(p)) return style;
   const t = trajOf(p);
   return `<span class="ab traj t${t}" title="弾道${t}（高いほどホームランとフライが多い）">弾<b>${t}</b></span>${style}`;
 }
 // 持ち球の一覧。ドラフト候補はスカウトの見立てしか分からないので、変化量を出さない
 function pitchList(p) {
-  return pitchesOf(p).map((t, i) => `<span class="tag">${PITCHES[t].name}${p.noise ? '' : ` <b>${pitchLevel(p, i)}</b>`}</span>`).join(' ');
+  return pitchesOf(p).map(t => `<span class="tag">${PITCHES[t].name}${p.noise ? '' : ` <b>${pitchLevel(p, t)}</b>`}</span>`).join(' ');
+}
+// 表に入れる短い持ち球（スラ5 フォ4）
+function pitchBrief(p) {
+  return pitchesOf(p).map(t => `${PITCHES[t].short}${p.noise ? '' : pitchLevel(p, t)}`).join(' ');
+}
+// スカウトの見立ての球のキレ（ドラフト候補の欄で使う）
+function kireTag(p) {
+  if (!canPitch(p)) return '';
+  const g = U.grade(scoutView(p, 'kire'));
+  return `<span class="ab" title="スカウトが見た、球のキレ">${SHORT_LABEL.kire}<span class="g g${g}">${g}</span></span>`;
 }
 
 function abilSum(p, view) {
   const v = k => (view ? scoutView(p, k) : p.a[k]);
-  return abilKeys(p).map(k => `<span class="ab">${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(v(k)) + 'km' : `<span class="g g${U.grade(v(k))}">${U.grade(v(k))}</span>`}</span>`).join('') + trajTag(p) + eyeTag(p);
+  return abilKeys(p).map(k => `<span class="ab">${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(v(k)) + 'km' : `<span class="g g${U.grade(v(k))}">${U.grade(v(k))}</span>`}</span>`).join('') + (view ? kireTag(p) : '') + trajTag(p) + eyeTag(p);
 }
 
 function statLine(p) {
@@ -455,12 +465,12 @@ function batTable(list) {
 function pitTable(list) {
   if (isMobile()) return cardList(list, p => playerCard(p, { sub: `<span>${p.role || '-'}</span><span class="muted">人気${Math.round(p.fame)} ・ ${U.money(p.salary)}</span>`, lines: `<div class="pc-line">${statLine(p)}</div>` }));
   return `<div class="scroll"><table class="tbl">
-  <tr><th>名前</th><th>役割</th><th>年</th><th>調</th><th>球速</th>${PIT_KEYS.slice(1).map(k => `<th>${PIT_LABEL[k]}</th>`).join('')}<th>総合</th><th>人気</th>
+  <tr><th>名前</th><th>役割</th><th>年</th><th>調</th><th>球速</th>${PIT_KEYS.slice(1).map(k => `<th>${PIT_LABEL[k]}</th>`).join('')}<th>球種</th><th>総合</th><th>人気</th>
   <th>登板</th><th>勝</th><th>敗</th><th>S</th><th>防御率</th><th>回</th><th>三振</th><th>年俸</th></tr>
   ${list.map(p => {
     const s = p.stats;
     return `<tr><td class="l">${nameCell(p)}</td><td class="nowrap">${p.role || '-'} ${aptBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${condCell(p)}</td>
-    <td class="num">${veloKmh(p.a.velo)}km</td>${PIT_KEYS.slice(1).map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}<td>${Math.round(ovr(p))}</td><td>${Math.round(p.fame)}</td>
+    <td class="num">${veloKmh(p.a.velo)}km</td>${PIT_KEYS.slice(1).map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}<td class="nowrap small">${pitchBrief(p)}</td><td>${Math.round(ovr(p))}</td><td>${Math.round(p.fame)}</td>
     <td>${s.pg}</td><td>${s.w}</td><td>${s.l}</td><td>${s.sv}</td><td>${U.era(s.per, s.outs)}</td><td>${U.ip(s.outs)}</td><td>${s.pk}</td><td>${U.money(p.salary)}</td></tr>`;
   }).join('')}</table></div>`;
 }
@@ -494,7 +504,8 @@ function careerTables(rows, total, bat, pit, twoWay) {
 function retireStrength(r) {
   if (r.ovr == null) return '';
   const abil = r.abil.map(([k, v]) => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(v) + 'km' : `<span class="g g${U.grade(v)}">${U.grade(v)}</span>`}`).join(' ');
-  return `　<span class="small">${h(r.pos)} 総合<b>${r.ovr}</b> ${abil}</span>`;
+  const pit = r.pit ? ' ' + r.pit.map(([t, v]) => `${PITCHES[t].short}${v}`).join(' ') : '';
+  return `　<span class="small">${h(r.pos)} 総合<b>${r.ovr}</b> ${abil}${pit}</span>`;
 }
 // 引退・退団の欄の慰留ボタン
 function retainCell(r, i, c) {
@@ -522,7 +533,9 @@ function renderPlayerModal(p) {
   const keys = abilKeys(p), lbl = ALL_LABEL;
   const bars = keys.map(k => `<div class="bar"><span class="bl">${lbl[k]}</span>${abilStalled(p, k) ? `<span class="gstack"><span class="grow1">${gradeCell(p.a[k])}</span><small class="stall" title="伸びしろの上限に近く、練習してもほとんど伸びない">停滞</small></span>` : gradeCell(p.a[k])}
     <span class="bt"><span style="width:${Math.round(p.a[k] / ABIL_MAX * 100)}%"></span></span>${k === 'velo' ? `<span class="muted">${veloKmh(p.a.velo)}km/h</span>` : ''}</div>`).join('')
-    + (canPitch(p) ? `<div class="bar"><span class="bl">持ち球</span><span>${pitchList(p)} <span class="muted small">${pitchStyle(p)}</span></span></div>` : '')
+    + (canPitch(p) ? (p.noise ? `<div class="bar"><span class="bl">持ち球</span><span>${pitchList(p)} ${kireTag(p)} <span class="muted small">${pitchStyle(p)}</span></span></div>`
+      : pitchesOf(p).map(t => `<div class="bar"><span class="bl">${PITCHES[t].name}</span>${abilStalled(p, t) ? `<span class="gstack"><span class="grow1"><b>${pitchLevel(p, t)}</b></span><small class="stall" title="伸びしろの上限に近く、練習してもほとんど伸びない">停滞</small></span>` : `<b>${pitchLevel(p, t)}</b>`}
+        <span class="bt"><span style="width:${Math.round(pitchVal(p, t) / ABIL_MAX * 100)}%"></span></span></div>`).join('') + `<div class="bar"><span class="bl">投球</span><span class="tag">${pitchStyle(p)}</span></div>`) : '')
     + (canBat(p) ? `<div class="bar"><span class="bl">弾道</span>${trajTag(p, true)}<span class="muted small">${TRAJ_WORD[trajOf(p)]}</span></div>
       <div class="bar"><span class="bl">選球眼</span>${eyeTag(p) || '<span class="muted small">ふつう</span>'}</div>
       <div class="bar"><span class="bl">盗塁</span><span class="tag steal s-${stealWord(p)}">${stealWord(p)}</span><span class="muted small">${stealWord(p) === '積極的' ? 'すきがあればどんどん走る' : stealWord(p) === '慎重' ? 'あまり走らない' : ''}</span></div>` : '');
@@ -586,9 +599,9 @@ function penTable(list, t) {
   const role = p => (p.id === t.closer ? '抑え' : p.id === t.setup ? 'セットアッパー' : '中継ぎ');
   if (isMobile()) return cardList(list, p => playerCard(p, { sub: `<span>${role(p)}</span><span class="muted">${p.stats.pg}登板 防${U.era(p.stats.per, p.stats.outs)} ${p.stats.sv}S</span>` }));
   if (!list.length) return '<p class="muted">なし</p>';
-  return `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>役割</th><th>年</th><th>調</th><th>球速</th>${PIT_KEYS.slice(1).map(k => `<th>${PIT_LABEL[k]}</th>`).join('')}<th>総合</th><th>登板</th><th>防御率</th><th>S</th></tr>
+  return `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>役割</th><th>年</th><th>調</th><th>球速</th>${PIT_KEYS.slice(1).map(k => `<th>${PIT_LABEL[k]}</th>`).join('')}<th>球種</th><th>総合</th><th>登板</th><th>防御率</th><th>S</th></tr>
     ${list.map(p => `<tr><td class="l">${nameCell(p)}</td><td class="nowrap">${role(p)} ${aptBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${condCell(p)}</td><td class="num">${veloKmh(p.a.velo)}km</td>
-      ${PIT_KEYS.slice(1).map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}<td>${Math.round(ovr(p))}</td><td>${p.stats.pg}</td><td>${U.era(p.stats.per, p.stats.outs)}</td><td>${p.stats.sv}</td></tr>`).join('')}</table></div>`;
+      ${PIT_KEYS.slice(1).map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}<td class="nowrap small">${pitchBrief(p)}</td><td>${Math.round(ovr(p))}</td><td>${p.stats.pg}</td><td>${U.era(p.stats.per, p.stats.outs)}</td><td>${p.stats.sv}</td></tr>`).join('')}</table></div>`;
 }
 
 function renderOrder() {
@@ -600,7 +613,7 @@ function renderOrder() {
   const pOpt = (cur, list) => list.map(p => `<option value="${p.id}" ${p.id === cur ? 'selected' : ''}>${pitOpt(p)}</option>`).join('');
   const rot = t.rotation.map((id, i) => `<tr><td>${i + 1}${i === t.rotIdx % t.rotation.length ? ' <span class="tag">次</span>' : ''}</td>
       <td class="l"><select data-chg="rot" data-i="${i}">${pOpt(id, pitchers)}</select></td>
-      <td>${condCell(S.players[id])}</td><td class="num">${veloKmh(S.players[id].a.velo)}km</td>${PIT_KEYS.slice(1).map(k => `<td>${gradeCell(S.players[id].a[k])}</td>`).join('')}<td>${Math.round(ovr(S.players[id]))}</td><td>${S.players[id].rest >= STARTER_REST ? '◯' : `中${Math.max(0, S.players[id].rest - 1)}日`}</td>
+      <td>${condCell(S.players[id])}</td><td class="num">${veloKmh(S.players[id].a.velo)}km</td>${PIT_KEYS.slice(1).map(k => `<td>${gradeCell(S.players[id].a[k])}</td>`).join('')}<td class="nowrap small">${pitchBrief(S.players[id])}</td><td>${Math.round(ovr(S.players[id]))}</td><td>${S.players[id].rest >= STARTER_REST ? '◯' : `中${Math.max(0, S.players[id].rest - 1)}日`}</td>
       <td>${S.players[id].stats.w}-${S.players[id].stats.l}</td><td>${U.era(S.players[id].stats.per, S.players[id].stats.outs)}</td></tr>`).join('');
   const pen = pitchers.filter(p => !t.rotation.includes(p.id));
   return `
@@ -612,7 +625,7 @@ function renderOrder() {
   <section class="card">
     <h2>先発ローテーション（${ROTATION_SIZE}人）</h2>
     <p class="muted">月曜が休みなので、6 人で回すとそれぞれ中 6 日で投げられます。間が中 5 日より短いと次の人に飛ばします。</p>
-    <div class="scroll"><table class="tbl"><tr><th>#</th><th>投手</th><th>調</th><th>球速</th>${PIT_KEYS.slice(1).map(k => `<th>${PIT_LABEL[k]}</th>`).join('')}<th>総合</th><th>登板</th><th>勝敗</th><th>防御率</th></tr>${rot}</table></div>
+    <div class="scroll"><table class="tbl"><tr><th>#</th><th>投手</th><th>調</th><th>球速</th>${PIT_KEYS.slice(1).map(k => `<th>${PIT_LABEL[k]}</th>`).join('')}<th>球種</th><th>総合</th><th>登板</th><th>勝敗</th><th>防御率</th></tr>${rot}</table></div>
     <h2>リリーフ</h2>
     <p>抑え（9回）：<select data-chg="closer"><option value="">なし</option>${pOpt(t.closer, pen.filter(p => p.id !== t.setup))}</select></p>
     <p>セットアッパー（8回）：<select data-chg="setup"><option value="">なし</option>${pOpt(t.setup, pen.filter(p => p.id !== t.closer))}</select></p>
@@ -1574,7 +1587,7 @@ function prospectTable(ids, mode) {
     return `<tr class="${on ? 'sel' : ''}"><td><button class="star-btn ${on ? 'on' : ''}" data-act="watch" data-pid="${p.id}" title="気になる">${on ? '★' : '☆'}</button></td>
       <td class="l"><b>${h(p.name)}</b>${p.twoWay ? '<span class="tag twoway">二刀流</span>' : ''}${rebornTag(p)}${rareTag(p)}</td><td>${p.kind}</td><td>${posBadge(p)}</td><td>${p.age}</td>
       <td>${geniusHint(p) ? '<span class="tag genius">天才肌？</span>' : ''}</td><td class="stars">${potStars(scoutView(p, 'pot'))}</td><td class="stars">${visualStars(p.visual)}</td>
-      <td class="l">${keys.map(k => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(scoutView(p, k)) + 'km' : `<span class="g g${U.grade(scoutView(p, k))}">${U.grade(scoutView(p, k))}</span>`}`).join(' ')}${trajTag(p)}</td>
+      <td class="l">${keys.map(k => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(scoutView(p, k)) + 'km' : `<span class="g g${U.grade(scoutView(p, k))}">${U.grade(scoutView(p, k))}</span>`}`).join(' ')} ${kireTag(p)}${trajTag(p)}</td>
       <td class="l wrap amateur"><div>${tierTag(p)}</div>${A ? `<div>${h(A.team)}</div><div>${h(A.line)}</div>${A.title ? `<div class="atitle">🏆 ${h(A.title)}</div>` : ''}` : ''}
         <div class="muted">講評：${h(scoutComment(p))}</div></td>
       ${pickable ? `<td>${pickBtn(p)}</td>` : ''}</tr>`;
