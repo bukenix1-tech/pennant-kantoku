@@ -1894,8 +1894,9 @@ function renderMenu() {
   <h3>家族の合言葉</h3>
   ${REBORN.length
     ? `<p>✅ 合言葉が入っています（転生選手 ${REBORN.length}人）。</p>
-       <p><label><input type="checkbox" data-chg="toggleReborn" ${S.noReborn ? '' : 'checked'}> このデータ（スロット${currentSlot}）で転生選手を出す</label></p>
-       <p class="muted small">${S.noReborn ? '転生選手は出ません。もう現れた選手はそのままです。' : 'ドラフト候補と外国人スカウトの候補に、まれに転生選手が現れます。'}データごとに選べます。</p>
+       <p><label>このデータ（スロット${currentSlot}）の転生選手の出やすさ
+         <select data-chg="toggleReborn"><option value="off" ${S.noReborn ? 'selected' : ''}>出さない</option>${Object.keys(REBORN_RATES).map(k => `<option value="${k}" ${!S.noReborn && (S.rebornRate || 'mid') === k ? 'selected' : ''}>${REBORN_RATES[k].name}</option>`).join('')}</select></label></p>
+       <p class="muted small">${S.noReborn ? '転生選手は出ません。もう現れた選手はそのままです。' : 'ドラフト候補と外国人スカウトの候補に転生選手が現れます。変えると、次に候補を作るときから効きます。'}データごとに選べます。候補が足りなくなると、選んだ数より少なくなります。</p>
        <p><button class="sm" data-act="clearPass">この端末から合言葉を消す</button></p>`
     : `<p class="muted">家族の合言葉を入れると、ドラフト候補に転生選手が現れるようになります（この端末に覚えます）。</p>
        <p><input id="passIn" type="password" autocomplete="off" placeholder="合言葉"> <button data-act="setPass">入れる</button></p>`}

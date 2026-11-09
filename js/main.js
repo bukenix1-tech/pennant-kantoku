@@ -366,7 +366,8 @@ const ACTIONS = {
 
 const CHANGES = {
   toggleReborn(el) {
-    S.noReborn = !el.checked;
+    S.noReborn = el.value === 'off';
+    if (!S.noReborn) S.rebornRate = el.value;
     openModal(renderMenu());
     return 'keep';
   },

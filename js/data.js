@@ -107,6 +107,13 @@ const REBORN_OVER = 7; // 転生選手がピーク時の値を超えられる幅
 const FOREIGN_REBORN_CHANCE = 0.2, FOREIGN_REBORN_START = 0.92;
 const REBORN_YEAR_CHANCE = 0.85; // 転生選手がその年のドラフト候補に現れる確率
 const REBORN_MORE_CHANCE = [0.15, 0.25]; // 現れた年に、2 人目・3 人目も現れる確率（前の人が現れたときだけ）
+// 転生選手の出やすさ（データごとに選ぶ）。year：その年のドラフトに現れる確率、more：2 人目・3 人目、foreign：外国人スカウトの候補に混ざる確率。ふつう以外の値は仮（AI）
+const REBORN_RATES = {
+  low:  { name: '少ない（年 0.4 人くらい）', year: 0.4, more: [], foreign: 0.1 },
+  mid:  { name: 'ふつう（年 1 人くらい）', year: REBORN_YEAR_CHANCE, more: REBORN_MORE_CHANCE, foreign: FOREIGN_REBORN_CHANCE },
+  high: { name: '多い（年 1.6 人くらい）', year: 1, more: [0.5, 0.3], foreign: 0.4 },
+  max:  { name: 'とても多い（年 2.4 人くらい）', year: 1, more: [0.9, 0.6], foreign: 0.6 },
+};
 const SUB_FIT = 0.9;
 // 盗塁の積極性（試みる回数の倍率）。1 がふつう。これ以上で「積極的」、これ以下で「慎重」
 const STEAL_SD = 0.3, STEAL_HI = 1.3, STEAL_LO = 0.7;
