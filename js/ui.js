@@ -1233,7 +1233,7 @@ function renderIntl(I) {
     <details><summary>1次リーグの全試合</summary><div class="scroll"><table class="tbl">${gHead}${I.games.filter(g => g.stage === '1次リーグ').map(gRow).join('')}</table></div></details>
     <h3>日本代表（${I.japan.length}人）</h3><p class="muted small">12 球団の日本人選手から、能力で自動で選ばれました。出た選手は人気が上がります（優勝するとさらに）。</p>
     <div class="grid2"><div><h4>野手</h4><table class="tbl">${I.japan.filter(x => !x.P).map(jpRow).join('')}</table></div><div><h4>投手</h4><table class="tbl">${I.japan.filter(x => x.P).map(jpRow).join('')}</table></div></div>
-    <button class="primary big" data-act="offNext">FAへ ▶</button></section>`;
+    <button class="primary big" data-act="offNext">${S.off.camped ? `${S.year + 1}年シーズン開幕 ▶` : 'ドラフトへ ▶'}</button></section>`;
 }
 
 // 国際大会：歴代の結果
@@ -1254,9 +1254,9 @@ function recFeat() {
 function recIntl() {
   const H = S.intlHist || [];
   const next = S.year + ((INTL_EVERY - (S.year % INTL_EVERY)) % INTL_EVERY);
-  const note = `<p class="muted">${INTL_EVERY} 年に 1 回、日本シリーズのあとに 8 か国で行います。${H.length && H[0].y === S.year ? '' : `次は ${next}年のオフです。`}</p>`;
+  const note = `<p class="muted">${INTL_EVERY} 年に 1 回、春のキャンプのあと（開幕の前）に 8 か国で行います。${H.length && H[0].y >= S.year ? '' : `次は ${next + 1}年の春です。`}</p>`;
   if (!H.length) return note;
-  const shown = H.filter(y => !(y.y === S.year && pbpUnseenKind('intl')));
+  const shown = H.filter(y => !(y.y >= S.year && pbpUnseenKind('intl')));
   if (!shown.length) return note;
   return `${note}<div class="scroll"><table class="tbl"><tr><th>年</th><th>優勝</th><th>日本</th><th>大会MVP</th></tr>
     ${shown.map(y => `<tr><td>${y.y}</td><td class="l">${y.champ === '日本' ? '🏆 ' : ''}${h(y.champ)}</td><td class="l">${h(y.jp)}<span class="muted">（${y.w}勝${y.l}敗）</span></td><td class="l">${y.mvp ? `${h(y.mvp[0])}<span class="muted">（${h(y.mvp[1])}）</span>` : '-'}</td></tr>`).join('')}</table></div>`;
@@ -1526,7 +1526,7 @@ function renderFA() {
 // ---------- オフシーズン ----------
 function renderOff() {
   const O = S.off;
-  const steps = [['awards', '表彰'], ...(O.intl || intlYear() ? [['intl', '国際大会']] : []), ['fa', 'FA'], ['contract', '契約更改'], ['draft', 'ドラフト'], ['camp', 'キャンプ']];
+  const steps = [['awards', '表彰'], ['draft', 'ドラフト'], ['fa', 'FA'], ['contract', '契約更改'], ['camp', 'キャンプ'], ...(O.intl || intlYear() ? [['intl', '国際大会']] : [])];
   const bar = `<div class="steps">${steps.map(([k, n]) => `<span class="${O.step === k ? 'on' : ''}">${n}</span>`).join('→')}</div>`;
   let body = '';
   if (O.step === 'awards' && pbpUnseenKind('js')) {
@@ -1544,7 +1544,7 @@ function renderOff() {
     </section>
     <section class="card"><h2>表彰</h2><div class="grid2">${LEAGUES.map(lg => `<div><h3>${LEAGUE_NAME[lg]}</h3><table class="tbl">${O.awards.filter(a => (a.lg || lg) === lg).map(a => `<tr class="${S.players[a.pid] && S.players[a.pid].teamId === S.myTeamId ? 'me' : ''}"><th class="l">${a.title}</th><td class="l">${h(a.name)}（${h(a.team)}）</td><td>${a.val}</td></tr>`).join('')}</table></div>`).join('')}</div>
       ${posAwards('ベストナイン', O.b9)}${posAwards('ゴールデングラブ', O.gg)}
-      <button class="primary big" data-act="offNext">${intlYear() && !O.intl ? '国際大会へ ▶' : 'FAへ ▶'}</button></section>`;
+      <button class="primary big" data-act="offNext">ドラフトへ ▶</button></section>`;
   } else if (O.step === 'intl') {
     body = renderIntl(O.intl);
   } else if (O.step === 'fa') {
@@ -1553,10 +1553,10 @@ function renderOff() {
     const c = O.contract;
     body = `
     <section class="card"><h2>引退・退団</h2>${c.retired.length ? `<ul>${c.retired.map((r, i) => `<li>${S.players[r.pid] ? nameCell(S.players[r.pid]) : h(r.name)}（${r.age}歳）${r.why}${retireStrength(r)}${retainCell(r, i, c)}</li>`).join('')}</ul>
-      ${c.retired.some(r => r.can) ? '<p class="muted small">「慰留する」で引き止められます（1 人 1 回）。忠誠心が高く若い選手ほど残ってくれやすく、残ったら、来季の査定額に 1 割上乗せした年俸の 1 年契約になります。ドラフトへ進むと引退します。</p>' : ''}` : '<p>いません。</p>'}</section>
+      ${c.retired.some(r => r.can) ? '<p class="muted small">「慰留する」で引き止められます（1 人 1 回）。忠誠心が高く若い選手ほど残ってくれやすく、残ったら、来季の査定額に 1 割上乗せした年俸の 1 年契約になります。キャンプの準備へ進むと引退します。</p>' : ''}` : '<p>いません。</p>'}</section>
     ${(c.honor || []).length ? `<section class="card"><h2>永久欠番</h2>
       <p>長くチームを支えた名選手が引退しました。背番号を永久欠番にすると、これから先だれもその番号を付けられなくなり、球団の人気が少し上がります。</p>
-      <p class="muted small">名前を押すと、その選手の成績が見られます。ドラフトへ進むと、選べなくなります。</p>
+      <p class="muted small">名前を押すと、その選手の成績が見られます。キャンプの準備へ進むと、選べなくなります。</p>
       <table class="tbl">${c.honor.map((x, i) => `<tr><td class="l"><b>#${x.no}</b> <a href="#" data-act="honorView" data-i="${i}">${h(x.name)}</a></td><td>${x.years}年在籍</td><td>功績 ${x.merit}</td>
         <td>${x.done ? '<b>永久欠番にしました</b>' : `<button data-act="retireNo" data-i="${i}">永久欠番にする</button>`}</td></tr>`).join('')}</table></section>` : ''}
     <section class="card"><h2>契約更改</h2><p class="muted">成績と能力で来季の年俸が決まりました。選手は 1 つ歳を取りました。「複数年」から長い契約を申し込めます（1 人 1 回）。忠誠心が高く、上乗せが多いほど受けてくれやすく、若手は長い契約を嫌い、ベテランは喜びます。契約のあいだは年俸が変わらず、FA 宣言もしません。「戦力外」を押すと自由契約にできます（複数年契約の途中の選手はできません）。</p>
@@ -1564,7 +1564,7 @@ function renderOff() {
       ${c.raises.filter(r => S.players[r.pid] && S.players[r.pid].teamId === S.myTeamId).map(r => { const p = S.players[r.pid]; return `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${Math.round(ovr(p))}</td><td>${U.money(r.old)}</td><td>${U.money(r.now)}</td><td class="${r.now >= r.old ? 'win' : 'lose'}">${r.locked ? '<span class="muted">複数年契約</span>' : `${r.now >= r.old ? '+' : ''}${U.money(r.now - r.old)}`}</td><td class="l nowrap">${extendCell(r, p)}</td><td>${underContract(p) ? '<span class="muted small">契約中</span>' : `<button class="sm danger" data-act="release" data-pid="${p.id}">戦力外</button>`}</td></tr>`; }).join('')}
       </table></div>
       <p>来季の年俸総額 <b>${U.money(payroll(myTeam()))}</b></p>
-      <button class="primary big" data-act="offNext">ドラフトへ ▶</button></section>`;
+      <button class="primary big" data-act="offNext">${O.draft ? 'キャンプ準備へ ▶' : 'ドラフトへ ▶'}</button></section>`;
   } else if (O.step === 'draft') {
     body = renderDraft();
   } else if (O.step === 'camp') {
@@ -1576,7 +1576,7 @@ function renderOff() {
       ${over > 0 ? `<p class="neg">あと${over}人、戦力外通告（自由契約）かトレードで減らしてください。下の一覧からできます。</p>` : ''}
       <p>トレード・自由契約選手や外国人の補強・自由契約（戦力外）・施設の改修・オーダーの見直しができます。準備ができたら春のキャンプへ。</p>
       <p class="muted">他球団の戦力外になった選手が「自由契約」の画面に並んでいます。</p>
-      <button class="primary big" data-act="offNext" ${over > 0 ? 'disabled' : ''}>キャンプを行い ${S.year + 1}年シーズン開幕 ▶</button>
+      <button class="primary big" data-act="offNext" ${over > 0 ? 'disabled' : ''}>キャンプを行い ${intlYear() && !O.intl ? '国際大会へ' : `${S.year + 1}年シーズン開幕`} ▶</button>
     </section>
     ${renderReleasePanel()}`;
   }
@@ -1720,7 +1720,7 @@ function draftReview(ids) {
 }
 
 function renderProspects() {
-  if (S.phase === 'off' && !['awards', 'intl', 'contract'].includes(S.off.step)) {
+  if (S.phase === 'off' && S.off.draft) {
     return `<section class="card"><h2>ドラフト候補</h2><p>${S.off.step === 'draft' ? 'ドラフト会議中です。「オフシーズン」の画面で指名してください。' : '今年のドラフトは終わりました。次の候補は開幕のときに発表されます。'}</p></section>`;
   }
   const ids = S.draftClass || [];
@@ -1798,7 +1798,7 @@ function renderDraft() {
     <section class="card">${head}
       <p>支配下 <b>${t.players.length}人</b>（上限${ROSTER_MAX}人）${t.players.length > ROSTER_MAX ? ` <span class="tag">上限を${t.players.length - ROSTER_MAX}人こえています</span>` : ''}</p>
       <p class="muted">ドラフトでは上限をこえて指名してかまいません。開幕前（キャンプの前）までに戦力外通告で${ROSTER_MAX}人以内にすれば大丈夫です。</p>
-      ${done ? '<button class="primary big" data-act="offNext">キャンプ準備へ ▶</button>'
+      ${done ? `<button class="primary big" data-act="offNext">${S.off.fa ? 'キャンプ準備へ ▶' : 'FAへ ▶'}</button>`
         : D.stage === 'waiver' ? '<button data-act="draftPass">選択終了（このあとは指名しない）</button>' : ''}
       ${myPicks ? `<h3>${h(t.short)}の指名</h3><ul class="news">${myPicks}</ul>` : ''}
     </section>

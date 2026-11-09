@@ -228,15 +228,21 @@ const ACTIONS = {
   },
   offNext() {
     const step = S.off.step;
-    if (step === 'awards') { if (intlYear() && !S.off.intl) offIntl(); else offFAStart(); }
-    else if (step === 'intl') offFAStart();
+    // 表彰 → ドラフト → FA → 契約更改 → キャンプ →（国際大会）→ 開幕。前の版の順番の途中で保存したデータは、終わっていないほうへ進める
+    const toCamp = () => { offCampStart(); tradeOfferRoll(); };
+    if (step === 'awards') offDraftStart();
+    else if (step === 'intl') {
+      if (S.off.camped) { offNewSeason(); UI.tab = 'home'; }
+      else offDraftStart(); // 前の版の順番で、表彰のあとに国際大会をしていたデータ
+    }
+    else if (step === 'draft') { offDraftFinish(); if (S.off.fa) toCamp(); else offFAStart(); }
     else if (step === 'fa') { faCompSettle(); offContract(); }
-    else if (step === 'contract') offDraftStart();
-    else if (step === 'draft') { offCampStart(); tradeOfferRoll(); }
+    else if (step === 'contract') { if (S.off.draft) toCamp(); else offDraftStart(); }
     else if (step === 'camp') {
       if (myTeam().players.length > ROSTER_MAX) return;
-      offNewSeason();
-      UI.tab = 'home';
+      offCampTrain();
+      if (intlYear() && !S.off.intl) offIntl();
+      else { offNewSeason(); UI.tab = 'home'; }
     }
     window.scrollTo(0, 0);
   },

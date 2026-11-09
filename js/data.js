@@ -210,7 +210,7 @@ const AS_AT = 0.55, AS_BAT = 16, AS_PIT = 12, AS_FAME = { fan: 5, pick: 3, mvp: 
 // 起用への不満：チームで上位の力があるのに出番が GRUMBLE_SHARE より少ない選手は、毎週忠誠心が GRUMBLE_LOYALTY 下がる（GRUMBLE_FROM 試合目から）
 // 「上位の力」はチームで野手 GRUMBLE_RANK.B 番手・投手 GRUMBLE_RANK.P 番手まで（総合の順）
 const GRUMBLE_SHARE = 0.4, GRUMBLE_LOYALTY = 1.5, GRUMBLE_FROM = 18, GRUMBLE_RANK = { B: 7, P: 8 };
-// 国際大会：INTL_EVERY 年に 1 回、日本シリーズのあと。8 か国が 4 か国ずつ 2 組で総当たり → 上位 2 か国で準決勝 → 決勝
+// 国際大会：INTL_EVERY 年に 1 回、春のキャンプのあと（開幕の前）。8 か国が 4 か国ずつ 2 組で総当たり → 上位 2 か国で準決勝 → 決勝
 // 日本代表は野手 INTL_BAT 人・投手 INTL_PIT 人を自動で選ぶ。相手の国は、日本代表の総合の平均 ＋ q の強さで選手を作る（選手は架空）
 // 出た選手は人気が上がる（INTL_FAME）。疲れやケガは考えない（人の言葉 2026-11-02）
 const INTL_EVERY = 4, INTL_BAT = 15, INTL_PIT = 13, INTL_FAME = { pick: 3, champ: 5, mvp: 6 };

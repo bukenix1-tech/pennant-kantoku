@@ -859,7 +859,7 @@ function intlTeam(name, ids, i, gi) {
   };
 }
 
-// 国際大会をまるごと行う（オフの表彰のあと）
+// 国際大会をまるごと行う（春のキャンプのあと、開幕の前。だから年は次の年になる）
 function offIntl() {
   const japan = selectJapan();
   const base = U.sum(japan, x => ovr(S.players[x.pid])) / japan.length;
@@ -875,7 +875,7 @@ function offIntl() {
     [...home.players, ...away.players].forEach(id => { const p = S.players[id]; p.stats = newStats(); p.rest = 7; p.fatigue = 0; p.cond = 3; });
     const fin = stage === '決勝';
     const res = playGame(S, home, away, false, fin);
-    if (fin) { if (!S.pbp) S.pbp = []; S.pbp.push({ label: `${S.year}年 国際大会 決勝`, kind: 'intl', ...res.pbp }); }
+    if (fin) { if (!S.pbp) S.pbp = []; S.pbp.push({ label: `${S.year + 1}年 国際大会 決勝`, kind: 'intl', ...res.pbp }); }
     let best = null, bv = 0;
     res.sides.forEach(s => {
       const add = (p, v) => { if (v <= 0) return; pts[p.id] = (pts[p.id] || 0) + v; if (v > bv) { bv = v; best = p; } };
@@ -908,9 +908,9 @@ function offIntl() {
   const mvp = mvpP ? { name: mvpP.name, team: champ.jp ? `日本・${S.teams[mvpP.teamId].short}` : champ.name, pid: champ.jp ? mvpP.id : null } : null;
   if (mvpP && champ.jp) { addFame(mvpP, INTL_FAME.mvp); mvpP.intlMvp = (mvpP.intlMvp || 0) + 1; }
   countries.slice(1).forEach(c => c.ids.forEach(id => { delete S.players[id]; }));
-  S.off.intl = { year: S.year, japan, table, games, champ: champ.name, jp: jpResult, mvp };
+  S.off.intl = { year: S.year + 1, japan, table, games, champ: champ.name, jp: jpResult, mvp };
   if (!S.intlHist) S.intlHist = [];
-  S.intlHist.unshift({ y: S.year, champ: champ.name, jp: jpResult, w: U.sum(reached, g => (g.away === jpName ? g.score[0] > g.score[1] : g.score[1] > g.score[0]) ? 1 : 0), l: U.sum(reached, g => (g.away === jpName ? g.score[0] < g.score[1] : g.score[1] < g.score[0]) ? 1 : 0), mvp: mvp ? [mvp.name, mvp.team] : null });
+  S.intlHist.unshift({ y: S.year + 1, champ: champ.name, jp: jpResult, w: U.sum(reached, g => (g.away === jpName ? g.score[0] > g.score[1] : g.score[1] > g.score[0]) ? 1 : 0), l: U.sum(reached, g => (g.away === jpName ? g.score[0] < g.score[1] : g.score[1] < g.score[0]) ? 1 : 0), mvp: mvp ? [mvp.name, mvp.team] : null });
   const mine = japan.filter(x => S.players[x.pid].teamId === S.myTeamId).map(x => x.name);
   const fi = (S.pbp || []).findIndex(g => g.kind === 'intl');
   const n = addNews(`国際大会：${champ.name}が優勝！ 日本は${jpResult}。${mvp ? `MVP は${mvp.name}（${mvp.team}）。` : ''}`, champ.jp ? 'big' : '');
@@ -1762,11 +1762,13 @@ function retireChance(p, ca, o) {
   return 0;
 }
 
+function isRookie(p) { return !!p.drafted && p.drafted.year === S.year; }
 function offContract() {
   const my = myTeam();
   const retired = [], raises = [], honor = [];
   S.teams.forEach(t => {
     teamPlayers(t).forEach(p => {
+      if (isRookie(p)) return; // このオフに指名した新人は、引退も査定も年齢もこれから
       const o = ovr(p);
       let leave = false;
       const ca = careerAge(p);
@@ -1778,7 +1780,7 @@ function offContract() {
         const can = t.id === my.id && !(p.foreign && o < 55); // 力が足りずに出ていく外国人選手は引き止めない
         if (t.id === my.id) retired.push({ pid: p.id, name: p.name, age: p.age, why: p.foreign && p.age < 35 ? '退団' : '引退', can, pos: p.isP ? '投' : p.pos, ovr: Math.round(o), abil: abilKeys(p).map(k => [k, Math.round(p.a[k])]), pit: canPitch(p) ? pitchesOf(p).map(t => [t, pitchLevel(p, t)]) : undefined }); // 退団した選手はデータが消えるので、強さを写しておく
         honorCheck(t, p, honor);
-        if (can) p.retiring = true; // ドラフトへ進むときに引退する（retireFinish）
+        if (can) p.retiring = true; // キャンプの準備へ進むときに引退する（retireFinish）
         else retireLeave(p);
       }
     });
@@ -1786,7 +1788,7 @@ function offContract() {
   agingFreeAgents();
   S.teams.forEach(t => {
     teamPlayers(t).forEach(p => {
-      if (p.retiring) return;
+      if (p.retiring || isRookie(p)) return;
       const old = p.salary;
       const locked = p.contractYears > 0;
       if (locked) { p.contractYears--; p.contractNow = true; } // 複数年契約のあいだは年俸がそのまま
@@ -2258,7 +2260,10 @@ function draftNow(h) {
   return gradeByRank(rows, 'nowPts');
 }
 
-function offCampStart() {
+// ドラフトを締める
+function offDraftFinish() {
+  if (!S.off.draft || S.off.draft.finished) return;
+  S.off.draft.finished = true;
   // ドラフト採点を残す（スカウトの見立てが消える前に）
   const grades = draftGrades(S.off.draft);
   if (!S.draftHist) S.draftHist = [];
@@ -2269,6 +2274,11 @@ function offCampStart() {
   S.off.draft.pool.forEach(id => delete S.players[id]);
   S.off.draft.pool = [];
   Object.values(S.players).forEach(p => { delete p.noise; });
+}
+
+function offCampStart() {
+  offDraftFinish();
+  retireFinish(); // 慰留しなかった選手は、ここで引退する
   // 他球団の戦力外通告（自由契約になる）と、自由契約選手の獲得
   S.teams.forEach(t => {
     if (t.id === S.myTeamId) return;
@@ -2313,11 +2323,11 @@ function fillRoster(t, min) {
 
 // ---------- 自由契約 ----------
 // 自由契約にできるのはオフの契約更改〜開幕前だけ（戦力外通告の時期）
-function releaseOpen() { return S.phase === 'off' && ['contract', 'draft', 'camp'].includes(S.off.step); }
+function releaseOpen() { return S.phase === 'off' && ['contract', 'camp'].includes(S.off.step); }
 
 // 自由契約選手・外国人と契約できるのは、オフの契約更改〜開幕前と、シーズン中の 7 月末まで
 function faOpen() {
-  if (S.phase === 'off') return ['contract', 'draft', 'camp'].includes(S.off.step);
+  if (S.phase === 'off') return ['contract', 'camp'].includes(S.off.step);
   if (S.phase !== 'season') return false;
   return S.schedule[Math.min(S.day, S.schedule.length - 1)].m <= TRADE_DEADLINE_MONTH;
 }
@@ -2385,10 +2395,16 @@ function agingFreeAgents() {
   addIndependentFAs(6);
 }
 
-function offNewSeason() {
-  // 春のキャンプ
+// 春のキャンプ
+function offCampTrain() {
+  if (S.off.camped) return;
+  S.off.camped = true;
   for (let i = 0; i < 4; i++) weeklyTraining();
   awakenCheck(3); // キャンプは覚醒のチャンス
+}
+
+function offNewSeason() {
+  offCampTrain();
   S.year++;
   startSeason();
 }
