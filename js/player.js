@@ -116,6 +116,8 @@ function rollPitches(b) {
   return list;
 }
 function pitchesOf(p) {
+  const R = p.reborn ? rebornOf(p) : null; // 転生選手は、編集画面で決めた持ち球を使う（あとから直しても、もう現れた選手に効く）
+  if (R && R.pitches && R.pitches.length) return R.pitches;
   if (!p.pitches && canPitch(p)) p.pitches = rollPitches(p.a.breaking);
   return p.pitches || [];
 }
@@ -140,8 +142,8 @@ function pitchStyle(p) {
 }
 // 新しい球種を覚える。覚えられなければ null
 function learnPitch(p) {
-  const list = pitchesOf(p);
-  if (!list.length || list.length >= PITCH_MAX) return null;
+  const list = pitchesOf(p), R = p.reborn ? rebornOf(p) : null;
+  if (!list.length || list.length >= PITCH_MAX || (R && R.pitches && R.pitches.length)) return null; // 持ち球を決めた転生選手は、本人らしさを保つため増やさない
   const t = rollPitch(list);
   p.pitches = [...list, t];
   return t;
