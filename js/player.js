@@ -281,9 +281,9 @@ function ovr(p) {
 
 function calcSalary(p) {
   const o = ovr(p);
-  let s = 500 + Math.pow(Math.max(0, o - 46), 2.5) * 3;
+  let s = realSal(500 + Math.pow(Math.max(0, o - 46), 2.5) * 3);
   if (p.foreign) s *= 1.3;
-  return Math.round(s / 10) * 10;
+  return Math.max(MIN_SALARY, Math.round(s / 10) * 10);
 }
 
 // サブポジを決める。守備がうまい選手ほど、いろいろ守れやすい

@@ -46,7 +46,7 @@ const ROTATION_SIZE = 6;  // 先発ローテは 6 人
 const STARTER_REST = 6;   // 中 5 日以上あいていれば投げられる（ふつうは月曜休みで中 6 日になる）
 const TRADE_DEADLINE_MONTH = 7; // 7 月末までトレードできる
 // 金銭トレード：お金 CASH_PER_VALUE 万円を、トレード価値 1 として数える。主力（総合で上から TRADE_CORE_N 人）はお金だけでは出してもらえない
-const CASH_PER_VALUE = 10, TRADE_CORE_N = 8;
+const CASH_PER_VALUE = 15, TRADE_CORE_N = 8; // お金を本物の大きさにしたとき 10 から上げた（仮・AI）
 // 球種。w：持ち球に選ばれやすさ、k：三振の確率に足す、b：打球がヒットになる確率に足す、hr：本塁打の倍率に足す、f：凡打がフライになる割合に足す。値は仮（AI）
 const PITCHES = {
   sl: { name: 'スライダー', short: 'スラ', dir: 22, w: 10, k: 0.005, b: 0.003, hr: 0.04, f: 0.03 },
@@ -206,6 +206,27 @@ const RETAIN_BASE = 0.1, RETAIN_LOYAL = 0.6, RETAIN_AGE = 34, RETAIN_AGE_DROP = 
 // FA と出場機会：今季あまり出られなかった選手は、宣言しやすく（FA_PLAY_DECLARE）、レギュラーになれる球団を選びやすい
 // 移籍先で何番手になるか：野手は 9 番手、投手は 10 番手までならレギュラー。外れると評価が FA_PLAY_PICK（出られなかった選手は 2 倍まで）下がる
 const FA_PLAY_DECLARE = 0.35, FA_PLAY_PICK = 0.12, FA_PLAY_MIN_OVR = 48;
+// ポスティングと海外 FA（人の言葉 2026-11-10「a もどる b 海外FAをたそう 譲渡金は相場を調べてほしい」）
+// メジャーが欲しがるのは、総合 MLB_MIN_OVR 以上で MLB_MAX_AGE 歳までの選手（仮・AI）
+const MLB_MIN_OVR = 76, MLB_MAX_AGE = 33;
+const MLB_FA_YEARS = 9; // 海外 FA に要る一軍の年数（本物と同じ 9 年）
+const POST_WANT = 0.2; // 力のある選手が、そのオフにポスティングを願い出る割合。25 歳未満は半分（仮・AI）
+const POST_DENIED_WANT = 0.2; // 認めてもらえなかった選手が、次の年に願い出やすくなる分（仮・AI）
+const POST_AI_OK = 0.5; // ほかの球団がポスティングを認める割合（仮・AI）
+const POST_DENY_LOYALTY = 25; // 認めなかったときに下がる忠誠心（仮・AI）
+const MLB_FA_WANT = 0.45; // 海外 FA の権利を持つ力のある選手が、海外 FA 宣言する割合。忠誠心が高いほど・残留の提示があるほど下がる（仮・AI）
+// 譲渡金：メジャーとの契約の総額のうち、2500 万ドルまでは 20%、5000 万ドルまでは 17.5%、その上は 15%。
+// 25 歳未満はマイナー契約になり、契約金の 25%（出典: MLB と NPB の取り決め 2018 年 https://www.mlb.com/press-release/mlb-clubs-ratify-new-posting-system-agreement-with-npb-262712102）
+const POST_FEE_TIERS = [[2500, 0.2], [2500, 0.175], [Infinity, 0.15]]; // [万ドル, 割合]
+const POST_MINOR_AGE = 25, POST_MINOR_RATE = 0.25;
+// メジャーとの契約の見込み（万ドル）。総合 MLB_MIN_OVR で年 MLB_AAV[0]、1 上がるごとに MLB_AAV[1] 増える。
+// 一番の選手（総合 85）が 25 歳なら 12 年 3 億ドルほどで、山本由伸（12 年 3 億 2500 万ドル）くらいになるように合わせた（仮・AI）
+const MLB_AAV = [1100, 170], MLB_MINOR_BONUS = [250, 60];
+const YEN_PER_USD = 150;
+const MLB_DEAL_BASE = 0.6; // ポスティングで契約がまとまる割合（総合が 1 上がるごとに 0.08 上がる。仮・AI）
+const MLB_TRAIN = 25; // メジャーにいるあいだ、1 年に練習する回数（仮・AI）
+const MLB_RETURN_MIN = 2, MLB_RETURN_CHANCE = 0.25, MLB_RETURN_OLD = 33; // 2 年たつと、毎年 25% で日本に戻ってくる。33 歳からは +25%（仮・AI）
+const MLB_RETIRE_AGE = 40;
 // オールスター：シーズンの AS_AT（割合）あたりに 2 試合。各リーグ 野手 AS_BAT 人・投手 AS_PIT 人
 // ファン投票（人気度）で野手 9 人と投手 3 人、残りは監督推薦（成績）。選ばれると人気が上がる
 const AS_AT = 0.55, AS_BAT = 16, AS_PIT = 12, AS_FAME = { fan: 5, pick: 3, mvp: 8 };
@@ -272,7 +293,19 @@ const DRAFT_ROUNDS = 7;
 const RARE_PROSPECT = [[110.7, 200], [108.7, 100], [106.7, 50], [105.4, 30], [104.3, 20], [102.4, 10]];
 const SAVE_KEY = 'pennant_save_v2'; // 12 球団にしたので v1 とは別
 
-// 年俸（万円）。成績の目安額 = 800 + 勝利数 × SAL_PER_WIN + 勝利数² × SAL_PER_WIN2
+// 年俸（万円）。成績の目安額 = 800 + 勝利数 × SAL_PER_WIN + 勝利数² × SAL_PER_WIN2（を realSal で本物の大きさに直す）
 const MIN_SALARY = 420;
+// お金は本物の大きさに合わせる（人の言葉 2026-11-10「お金の動きは現実準拠がいいなあ」「お金全体を本物の大きさに」）
+// 年俸は前の版の額を realSal で直す。中央値（1390 万円）は 1.2 倍、上ほど大きく上げ、一番上（3 億円ほど）は 1.45 倍。何年か回すと平均が 4900 万円ほど、上の 5 人が 6 億円ほどになる。
+// 目安は 2025 年の選手会の調べ：日本人選手の平均 4905 万円・中央値 1900 万円（出典: https://www.hb-nippon.com/articles/12853）。式の形と数は仮（AI）
+const SAL_REAL = { mul: 1.2, mid: 1390, pow: 0.06 };
+function realSal(v) { return v > 0 ? v * SAL_REAL.mul * Math.pow(v / SAL_REAL.mid, SAL_REAL.pow) : v; }
+const MONEY_REAL = 1.45; // 年俸の合計が増えた分。球団の資金・賞金・補強の上限・金銭トレードはこの倍率で大きくした（仮・AI）
+// 収入と費用。チケット代と観客数はもとから本物に近いのでそのまま。飲食・放映権・スポンサー（親会社の広告料を含む）と運営費を本物の大きさにした。
+// 中くらいの球団で収入が年 165 億円ほど・運営費が年 110 億円ほどになり、1 年のもうけは前の版と同じくらい（+10〜20 億円）に収まる（仮・AI）
+const FOOD_PER_FAN = 0.12; // 1 人あたりの飲食（万円。1200 円）
+const TV_PER_GAME = 4000; // 放映権（ホーム 1 試合ごと・万円）
+const SPONSOR_BASE = 600000, SPONSOR_PER_POP = 2000; // スポンサー（1 年・万円）= 基本 + 人気 × これ
+const OPS_PER_GAME = 14650, OPS_PER_STADIUM = 500; // 運営費（ホーム 1 試合ごと・万円）= これ + 球場のレベル × これ
 const SAL_PER_WIN = 2200;
 const SAL_PER_WIN2 = 600;

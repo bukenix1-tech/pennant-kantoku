@@ -30,7 +30,7 @@ function newFin() { return { gate: 0, food: 0, tv: 0, goods: 0, sponsor: 0, othe
 // ---------- 新しいゲーム ----------
 function newGame(myTeamId, games) {
   S = {
-    version: 1, year: 2027, day: 0, games, myTeamId, phase: 'season', pitchFit: true,
+    version: 1, year: 2027, day: 0, games, myTeamId, phase: 'season', pitchFit: true, moneyReal: true, abroad: [],
     teams: [], players: {}, nextPid: 1, schedule: [], news: [], history: [], awardHist: [], records: { season: {} }, retired: [],
     lastGame: null, myGames: [], off: null, post: null, foreignCands: null, popups: [], freeAgents: [],
   };
@@ -39,7 +39,7 @@ function newGame(myTeamId, games) {
       id: i, name: d.name, short: d.short, color: d.color, lg: d.lg,
       players: [], active: [], lineup: [], rotation: [], closer: null, setup: null, rotIdx: 0,
       w: 0, l: 0, d: 0, rs: 0, ra: 0,
-      money: 150000 + U.rint(0, 10) * 5000, pop: U.rint(40, 60), goods: [], nextGoodsId: 1,
+      money: Math.round((150000 + U.rint(0, 10) * 5000) * MONEY_REAL / 1000) * 1000, pop: U.rint(40, 60), goods: [], nextGoodsId: 1,
       fac: { train: 1, stadium: 1, scout: 1, medical: 1, dorm: 1, gym: 1, analysis: 1 }, promoUsed: [], intensity: '普通', fin: newFin(),
     };
     if (i !== myTeamId) t.fac.train = U.rint(1, 3);
@@ -419,7 +419,7 @@ function startSeason() {
     t.fin = newFin();
     t.goods.forEach(g => { g.season = 0; });
     t.promoUsed = [];
-    const sponsor = Math.round((t.pop * 800 + 20000) * S.games / 143);
+    const sponsor = Math.round((SPONSOR_BASE + t.pop * SPONSOR_PER_POP) * S.games / 143);
     t.money += sponsor; t.fin.sponsor += sponsor;
     if (t.id !== S.myTeamId) { autoActive(t); autoLineup(t); autoRotation(t); }
     else {
@@ -439,9 +439,9 @@ function homeGate(t) {
   const fill = U.clamp(0.62 + (t.pop - 50) / 250 + U.rnd(-0.03, 0.03), 0.4, 1);
   const att = Math.round(capacity(t) * fill / 10) * 10;
   const gate = att * TICKET_PRICE / 10000;
-  const food = att * 0.05;
-  const ops = 3000 + t.fac.stadium * 500;
-  const tv = 1400; // 放映権（ホーム 1 試合ごと）
+  const food = att * FOOD_PER_FAN;
+  const ops = OPS_PER_GAME + t.fac.stadium * OPS_PER_STADIUM;
+  const tv = TV_PER_GAME; // 放映権（ホーム 1 試合ごと）
   t.money += gate + food + tv - ops;
   t.fin.gate += gate; t.fin.food += food; t.fin.tv += tv; t.fin.ops += ops;
   return att;
@@ -618,7 +618,7 @@ function randomEvent() {
   const ps = teamPlayers(t);
   const roll = U.rint(1, 6);
   if (roll === 1) {
-    const m = U.rint(2, 8) * 1000;
+    const m = Math.round(U.rint(2, 8) * 1000 * MONEY_REAL / 100) * 100;
     t.money += m; t.fin.other += m;
     addNews(`地元企業とスポンサー契約！ ${U.money(m)}の収入。`, 'good');
   } else if (roll === 2) {
@@ -641,7 +641,7 @@ function randomEvent() {
     p.cond = 5;
     addNews(`${p.name}が絶好調！ 目の色が違う。`, 'good');
   } else {
-    const m = 1500;
+    const m = Math.round(1500 * MONEY_REAL / 100) * 100;
     t.money += m; t.fin.other += m; t.pop = U.clamp(t.pop + 1, 0, 100);
     addNews(`選手が地元テレビに出演。${U.money(m)}の出演料。`);
   }
@@ -1109,9 +1109,9 @@ function endPost(jpId) {
   if (jpId === my.id) post = '日本一';
   else if (last) post = `${SERIES_RULE[last.stage].name}敗退`;
   let prize = 0;
-  if (rank === 1) prize += 30000;
-  if (reached.some(s => s.stage === 'js')) prize += 20000;
-  if (jpId === my.id) prize += 50000;
+  if (rank === 1) prize += 30000 * MONEY_REAL;
+  if (reached.some(s => s.stage === 'js')) prize += 20000 * MONEY_REAL;
+  if (jpId === my.id) prize += 50000 * MONEY_REAL;
   if (prize) { my.money += prize; my.fin.other += prize; }
   S.history.unshift({ year: S.year, lg: my.lg, lgChamp: S.teams[P.champs[my.lg]].name, jp: jp.name, rank, post, w: my.w, l: my.l, d: my.d });
   const jsLast = P.series.find(s => s.stage === 'js').games.slice(-1)[0];
@@ -1432,7 +1432,7 @@ function seasonWins(p) {
 function playedEnough(p) { const st = p.stats; return st.pa >= 100 || st.outs >= 60; }
 function perfSalary(p) {
   const w = Math.max(0, seasonWins(p));
-  return Math.round((800 + w * SAL_PER_WIN + w * w * SAL_PER_WIN2) / 10) * 10;
+  return Math.round(realSal(800 + w * SAL_PER_WIN + w * w * SAL_PER_WIN2) / 10) * 10;
 }
 
 // 契約更改：去年の年俸から、今年の成績で上げ下げする（能力の数字は使わない）
@@ -1519,7 +1519,7 @@ function faMood(c) { return c < 0.2 ? '残留濃厚' : c < 0.4 ? '残留寄り' 
 function offFAStart() {
   const eligible = [];
   S.teams.forEach(t => teamPlayers(t).forEach(p => { if (hasFA(p) && !(p.contractYears > 0)) eligible.push(p.id); })); // 複数年契約の途中は宣言しない
-  S.off.fa = { stage: 'pre', eligible, retain: {}, declared: [], myBids: {}, results: [] };
+  S.off.fa = { stage: 'pre', eligible, retain: {}, declared: [], myBids: {}, results: [], post: postingRequests(), postOk: {}, abroad: [] };
   S.off.step = 'fa';
 }
 
@@ -1531,6 +1531,8 @@ function setRetain(pid, mul, years) {
 // FA 宣言の発表。宣言した選手は FA 市場に出て、他球団が条件を出す
 function offFADeclare() {
   const F = S.off.fa;
+  if (!F.abroad) F.abroad = [];
+  postingResolve(F);
   F.eligible.forEach(id => {
     const p = S.players[id];
     if (!p || p.teamId == null) return;
@@ -1538,6 +1540,7 @@ function offFADeclare() {
     const mine = t.id === S.myTeamId;
     // 他球団は、いい選手なら引き留める
     const retain = retainOffer(mine ? F.retain[id] : (ovr(p) >= 60 && U.chance(0.5) ? { mul: 1, years: p.age <= 30 ? U.rint(2, 3) : 1 } : null));
+    if (mlbFAOk(p) && U.chance(mlbFAChance(p, retain))) { goAbroad(p, '海外FA', 0); return; }
     if (!U.chance(declareChance(p, retain))) {
       if (retain) {
         p.salary = retainSalary(p, retain);
@@ -1558,6 +1561,7 @@ function offFADeclare() {
     p.lastTeam = t.short;
     addNews(`${p.name}（${t.short}・${p.isP ? '投手' : p.pos}）が${why}FA宣言しました。`, mine ? 'bad' : '');
   });
+  mlbReturns(F);
   F.stage = 'market';
 }
 
@@ -1574,7 +1578,7 @@ function aiBids(p, from) {
     if (!want || !U.chance(former ? 0.65 : 0.55)) return;
     const salary = Math.round(mv * U.rnd(0.9, 1.25) / 10) * 10;
     if (t.money < salary * 1.5) return;
-    if (payroll(t) + salary > 380000) return; // 年俸総額が 38 億円を超える補強はしない
+    if (payroll(t) + salary > 380000 * MONEY_REAL) return; // 年俸総額が 55 億円ほどを超える補強はしない
     bids.push({ team: t.id, salary, years: p.age <= 30 ? U.rint(2, 4) : U.rint(1, 2) });
   });
   // 手を挙げるのは多くても 4 球団
@@ -1618,11 +1622,13 @@ function offFAResolve() {
     if (!best) {
       // どこからも声がかからなければ元の球団に残る（宣言残留）
       signPlayer(from, p);
-      F.results.push({ pid: d.pid, name: p.name, from: d.from, to: d.from, salary: p.salary, years: 1, bids: bids.length, note: '宣言残留' });
+      if (d.back) mlbHome(p);
+      F.results.push({ pid: d.pid, name: p.name, from: d.from, to: d.from, salary: p.salary, years: 1, bids: bids.length, note: d.back ? 'メジャーから古巣へ' : '宣言残留' });
       return;
     }
     const to = S.teams[best.team];
     signPlayer(to, p);
+    if (d.back) mlbHome(p);
     p.salary = best.salary;
     delete p.contractNow;
     p.contractYears = best.years; // このオフの契約更改で 1 つ減り、来季から best.years 年ぶん年俸が固定される
@@ -1637,7 +1643,7 @@ function offFAResolve() {
       p.loyalty = 50;
     } else addLoyalty(p, 10);
     if (to.id !== S.myTeamId) autoActive(to);
-    F.results.push({ pid: d.pid, name: p.name, from: d.from, to: to.id, salary: best.salary, years: best.years, bids: bids.length, comp, cp, note: to.id === from.id ? '残留' : '移籍' });
+    F.results.push({ pid: d.pid, name: p.name, from: d.from, to: to.id, salary: best.salary, years: best.years, bids: bids.length, comp, cp, note: d.back ? (to.id === from.id ? 'メジャーから古巣へ' : 'メジャーから') : to.id === from.id ? '残留' : '移籍' });
     const involved = to.id === S.myTeamId || from.id === S.myTeamId;
     addNews(`FA：${p.name}が${to.id === from.id ? `${to.short}に残留` : `${from.short}から${to.short}へ移籍`}（${best.years}年・年俸${U.money(best.salary)}${comp ? `・補償金${U.money(comp)}` : ''}${cp && cp.pick ? `・補償に${cp.year}年ドラフト${cp.round}巡目の指名権` : ''}）`,
       involved ? (to.id === S.myTeamId ? 'good' : 'bad') : '');
@@ -1684,6 +1690,110 @@ function applyPickTrades(picks) {
   });
   S.pickTrades = (S.pickTrades || []).filter(x => x.year > S.year);
   return notes;
+}
+
+// ---------- ポスティングと海外 FA ----------
+// メジャーが欲しがる選手か
+function mlbWanted(p) { return !p.foreign && p.teamId != null && p.age <= MLB_MAX_AGE && ovr(p) >= MLB_MIN_OVR; }
+function hasMlbFA(p) { return (p.svc || 0) >= MLB_FA_YEARS; }
+function mlbFAOk(p) { return mlbWanted(p) && hasMlbFA(p); }
+function mlbFAChance(p, retain) { return MLB_FA_WANT * (1 - (p.loyalty || 0) / 200) * (retain ? 0.6 : 1); }
+// メジャーとの契約の見込み（万ドル）。25 歳未満はマイナー契約で、契約金だけ
+function mlbDeal(p) {
+  const o = ovr(p);
+  if (p.age < POST_MINOR_AGE) return { minor: true, total: Math.round(U.clamp(MLB_MINOR_BONUS[0] + (o - MLB_MIN_OVR) * MLB_MINOR_BONUS[1], 100, 700)) };
+  const aav = MLB_AAV[0] + Math.max(0, o - MLB_MIN_OVR) * MLB_AAV[1];
+  const years = U.clamp(Math.round(2 + (o - 72) / 2 + (30 - p.age) * 0.6), 1, Math.min(12, Math.max(1, 38 - p.age))); // 38 歳を越える契約はしない
+  return { minor: false, aav: Math.round(aav), years, total: Math.round(aav * years) };
+}
+// ドルの額（万ドル）を読みやすく
+function usdText(v) { return v >= 10000 ? `${(v / 10000).toFixed(1)}億ドル` : `${Math.round(v)}万ドル`; }
+function mlbDealText(d) { return d.minor ? `マイナー契約・契約金${usdText(d.total)}` : `${d.years}年総額${usdText(d.total)}`; }
+// 譲渡金（万円）
+function postingFee(p) {
+  const d = mlbDeal(p);
+  let usd = 0;
+  if (d.minor) usd = d.total * POST_MINOR_RATE;
+  else { let left = d.total; POST_FEE_TIERS.forEach(([w, r]) => { const x = Math.min(left, w); usd += x * r; left -= x; }); }
+  return Math.round(usd * YEN_PER_USD / 10) * 10; // 本物と同じ額
+}
+function mlbDealChance(p) { return U.clamp(MLB_DEAL_BASE + (ovr(p) - MLB_MIN_OVR) * 0.08, MLB_DEAL_BASE, 1); }
+// このオフにポスティングを願い出る選手（海外 FA の権利がある選手は願い出ない）
+function postingRequests() {
+  const list = [];
+  S.teams.forEach(t => teamPlayers(t).forEach(p => {
+    if (isRookie(p) || !mlbWanted(p) || hasMlbFA(p)) return;
+    const c = POST_WANT * (p.age < POST_MINOR_AGE ? 0.5 : 1) + (p.postDenied ? POST_DENIED_WANT : 0);
+    if (U.chance(c)) list.push(p.id);
+  }));
+  return list;
+}
+function setPostOk(pid, ok) { if (S.off && S.off.fa) S.off.fa.postOk[pid] = !!ok; }
+// FA 宣言の前に、ポスティングを決める。自分の球団は監督が選んだとおり、ほかの球団は半々
+function postingResolve(F) {
+  if (F.postDone) return;
+  F.postDone = true;
+  (F.post || []).forEach(id => {
+    const p = S.players[id];
+    if (!p || p.teamId == null) return;
+    const t = S.teams[p.teamId], mine = t.id === S.myTeamId;
+    const ok = mine ? !!(F.postOk || {})[id] : U.chance(POST_AI_OK);
+    if (!ok) {
+      p.postDenied = (p.postDenied || 0) + 1;
+      if (mine) { addLoyalty(p, -POST_DENY_LOYALTY); addNews(`${p.name}のポスティングを認めませんでした。${p.name}は不満そうです。`, 'bad'); }
+      return;
+    }
+    if (!U.chance(mlbDealChance(p))) {
+      F.abroad.push({ pid: p.id, name: p.name, from: t.id, via: 'ポスティング', fee: 0, deal: '契約がまとまらず残留', failed: true });
+      addNews(`${p.name}（${t.short}）はポスティングでメジャーに挑みましたが、契約がまとまらず残ることになりました。`, mine ? 'bad' : '');
+      return;
+    }
+    goAbroad(p, 'ポスティング', postingFee(p));
+  });
+}
+function goAbroad(p, via, fee) {
+  const t = S.teams[p.teamId], deal = mlbDealText(mlbDeal(p));
+  removeFromTeam(p);
+  p.lastTeam = t.short;
+  p.abroad = { year: S.year, via, from: t.id, fee };
+  p.contractYears = 0; delete p.contractNow; delete p.postDenied;
+  if (!S.abroad) S.abroad = [];
+  S.abroad.push(p.id);
+  if (fee) { t.money += fee; if (t.id === S.myTeamId) t.fin.other += fee; }
+  S.off.fa.abroad.push({ pid: p.id, name: p.name, from: t.id, via, fee, deal });
+  addNews(`${p.name}（${t.short}）が${via}でメジャーへ（${deal}${fee ? `・${t.short}に譲渡金${U.money(fee)}` : ''}）。`, t.id === S.myTeamId ? 'big' : '');
+}
+// メジャーにいる選手は、日本の選手と同じように練習して歳を取る。歳を取ると向こうで引退する
+function agingAbroad() {
+  S.abroad = (S.abroad || []).filter(id => {
+    const p = S.players[id];
+    if (!p) return false;
+    for (let i = 0; i < MLB_TRAIN; i++) trainPlayer(p, 1);
+    agePlayer(p);
+    if (careerAge(p) >= MLB_RETIRE_AGE || ovr(p) < 45) { retireRecord(p); delete S.players[id]; return false; }
+    return true;
+  });
+}
+// メジャーから日本に戻ってくる選手は、FA 市場に出る（補償はいらない。古巣は少し有利）
+function mlbReturns(F) {
+  S.abroad = (S.abroad || []).filter(id => {
+    const p = S.players[id];
+    if (!p) return false;
+    const yrs = S.year - p.abroad.year;
+    if (yrs < MLB_RETURN_MIN || !U.chance(MLB_RETURN_CHANCE + (p.age >= MLB_RETURN_OLD ? 0.25 : 0))) return true;
+    const from = S.teams[p.abroad.from] || S.teams[0];
+    p.salary = calcSalary(p);
+    p.lastTeam = 'メジャー';
+    F.declared.push({ pid: id, from: from.id, rank: 'C', no: 0, oldSalary: p.salary, mv: faMarket(p), bids: aiBids(p, from), back: true });
+    addNews(`${p.name}（元${from.short}）が${yrs}年ぶりにメジャーから日本に戻ってきます。FA 市場で交渉できます。`, 'big');
+    return false;
+  });
+}
+// 日本の球団と契約したら、メジャーにいた年を残す
+function mlbHome(p) {
+  if (!p.abroad) return;
+  p.mlb = [...(p.mlb || []), { from: p.abroad.year + 1, to: S.year, via: p.abroad.via }];
+  delete p.abroad;
 }
 
 // ---------- オフ ----------
@@ -1786,6 +1896,7 @@ function offContract() {
     });
   });
   agingFreeAgents();
+  agingAbroad();
   S.teams.forEach(t => {
     teamPlayers(t).forEach(p => {
       if (p.retiring || isRookie(p)) return;
@@ -1841,7 +1952,7 @@ function makeDraftClass() {
     const pot = U.clamp(0.97 + U.gauss() * 0.24 + (kind === '高校' ? 0.08 : kind === '高卒社会人' ? 0.04 : 0), 0.6, 1.7);
     const p = newPlayer(S, { isP, q, age, pot });
     p.kind = kind;
-    p.salary = 600;
+    p.salary = Math.round(realSal(600) / 10) * 10;
     if (p.isP && p.pot >= 1.1 && U.chance(TWO_WAY_CHANCE / 0.2)) {
       PIT_KEYS.forEach(k => { p.a[k] = Math.min(abilMax(p, k), p.a[k] + 6); });
       pitchesOf(p).forEach(t => abilSet(p, t, Math.min(abilMax(p, t), abilGet(p, t) + 6)));
@@ -1918,7 +2029,7 @@ function makeRebornPlayer(R) {
   if (R.team) p.rebornTeam = R.team;
   if (R.foreign) { p.salary = calcSalary(p); return p; }
   p.kind = R.kind;
-  p.salary = 600;
+  p.salary = Math.round(realSal(600) / 10) * 10;
   finishProspect(p, R.kind);
   p.amateur.team = '？？？'; // 転生選手の出身校・所属は伏せる
   return p;
@@ -2724,6 +2835,7 @@ function migrate() {
   S.teams.forEach(t => { ['dorm', 'gym', 'analysis'].forEach(k => { if (!t.fac[k]) t.fac[k] = 1; }); if (!t.promoUsed) t.promoUsed = []; });
   if (!S.popups) S.popups = [];
   if (!S.freeAgents) S.freeAgents = [];
+  if (!S.abroad) S.abroad = [];
   if (!S.watch) S.watch = [];
   // ウェーバーだけだったころのドラフトの途中から読み込んだとき
   if (S.off && S.off.draft && !S.off.draft.stage) Object.assign(S.off.draft, { stage: 'waiver', r1: { sub: 0, log: [] }, myDone: false, first: 'セ' });
@@ -2739,6 +2851,7 @@ function migrate() {
     Object.values(S.players).forEach(p => { if (canPitch(p) && growthPhase(p).k !== 'decline') pitchesOf(p).forEach(t => pitchFitCeil(p, t)); });
     S.pitchFit = true;
   }
+  if (!S.moneyReal) migrateMoney();
   Object.values(S.players).forEach(p => { if (p.svc == null) initService(p); });
   Object.values(S.players).forEach(p => { if (canPitch(p) && !p.apt) p.apt = rollApt(p.a.stamina); });
   Object.values(S.players).forEach(p => { if (p.home === undefined) p.home = p.foreign ? null : U.pick(PREFS); });
@@ -2787,6 +2900,22 @@ function migratePitches(p) {
   if (p.noise && p.noise.breaking) { p.noise.kire = p.noise.breaking; delete p.noise.breaking; }
   delete p.a.breaking;
   if (p.focus === '変化球') p.focus = PITCHES[pitchesOf(p)[0]].name;
+}
+
+// 前の版のセーブのお金を、本物の大きさに一度だけ直す（年俸は realSal、球団の資金は MONEY_REAL 倍）
+function migrateMoney() {
+  const sal = v => (v > 0 ? Math.max(MIN_SALARY, Math.round(realSal(v) / 10) * 10) : v);
+  Object.values(S.players).forEach(p => { if (p.salary) p.salary = sal(p.salary); });
+  S.teams.forEach(t => { t.money = Math.round(t.money * MONEY_REAL); });
+  const F = S.off && S.off.fa;
+  if (F) {
+    (F.declared || []).forEach(d => { d.oldSalary = sal(d.oldSalary); d.mv = sal(d.mv); (d.bids || []).forEach(b => { b.salary = sal(b.salary); }); });
+    Object.values(F.myBids || {}).forEach(b => { b.salary = sal(b.salary); });
+    (F.results || []).forEach(r => { r.salary = sal(r.salary); });
+  }
+  const C = S.off && S.off.contract;
+  if (C) (C.raises || []).forEach(r => { r.old = sal(r.old); r.now = sal(r.now); });
+  S.moneyReal = true;
 }
 
 // ---------- 保存 ----------

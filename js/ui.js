@@ -593,6 +593,8 @@ function renderPlayerModal(p) {
   ${rebornOf(p) ? `<p class="muted">転生選手：${h(rebornOf(p).note)}</p>` : ''}
   <p>${team ? teamChip(team) : ''} ${p.twoWay ? `二刀流（投手：${p.role || '-'}・野手：${p.isP ? p.pos2 : p.pos}）` : p.isP ? `投手（${p.role}）` : `野手（${p.pos}）`}${canPitch(p) ? `・${isLefty(p) ? '左' : '右'}投げ` : ''} ${posBadge(p)}${canBat(p) ? ` ・ サブポジ ${subsOf(p).length ? subsOf(p).join('・') : 'なし'}` : ''} ・ ${p.age}歳 ・ ${p.type}型 ・ 才能 <span class="stars">${potStars(p.pot)}</span>
    ・ 調子 ${condCell(p)} ${COND_LABEL[p.cond]} ・ 年俸 ${U.money(p.salary)} ${p.inj ? `<span class="tag bad">故障 残り${p.inj}日</span>` : ''}${p.awakened ? `<span class="tag awaken-tag">覚醒×${p.awakened}</span>` : ''}${p.bigAwakened ? `<span class="tag awaken-tag big">大覚醒×${p.bigAwakened}</span>` : ''}${p.limitBroken ? `<span class="tag awaken-tag">上限解放×${p.limitBroken}</span>` : ''}${p.b9 ? `<span class="tag">ベストナイン×${p.b9}</span>` : ''}${p.gg ? `<span class="tag">GG×${p.gg}</span>` : ''}${p.as ? `<span class="tag">オールスター×${p.as}</span>` : ''}${p.asMvp ? `<span class="tag">球宴MVP×${p.asMvp}</span>` : ''}${p.jp ? `<span class="tag">日本代表×${p.jp}</span>` : ''}${p.intlMvp ? `<span class="tag awaken-tag">国際大会MVP×${p.intlMvp}</span>` : ''}${Object.keys(p.fx || {}).map(k => `<span class="tag awaken-tag">${k === 'k' ? `${FEAT_K}奪三振以上` : FEAT_WORD[k]}×${p.fx[k]}</span>`).join('')}${team && grumbling(team, p) ? '<span class="tag bad">起用に不満</span>' : ''}</p>
+  ${p.abroad ? `<p><span class="tag">メジャー</span> ${p.abroad.year}年オフに${h(p.abroad.via)}でメジャーへ（元${h(S.teams[p.abroad.from] ? S.teams[p.abroad.from].short : '-')}）</p>` : ''}
+  ${(p.mlb || []).map(m => `<p class="muted">⚾ メジャー：${m.from}〜${m.to}年（${h(m.via)}）</p>`).join('')}
   ${growthBox(p)}
   <div class="bars">${bars}</div>
   <p>総合 <b>${Math.round(ovr(p))}</b>　トレード価値 ${tradeValue(p).toLocaleString()}</p>
@@ -764,7 +766,9 @@ function renderFAStep() {
         <b>今季あまり出られなかった選手（出場が少ない）は、出場機会を求めて出ていきやすく</b>、移籍先もレギュラーになれる球団を選びやすくなります。</p>
       <p class="muted">残留の条件（年俸と年数）を提示できます。高い年俸・長い年数ほど残りやすく、歳を取った選手ほど長い契約を喜びます。受けてくれたら、その年数のあいだ年俸は変わらず、FA 宣言もしません。他球団では ${others} 人が FA 権を持っています。</p>
       ${rows ? `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>総合</th><th>年俸</th><th>FA相場</th><th>忠誠心</th><th>出場</th><th>意向</th><th>残留の提示</th></tr>${rows}</table></div>` : '<p>あなたのチームには FA 権を持つ選手がいません。</p>'}
-      <button class="primary big" data-act="faDeclare">FA宣言の発表へ ▶</button></section>`;
+      ${mine.some(p => mlbFAOk(p)) ? `<p class="muted">海外 FA の権利（一軍 ${MLB_FA_YEARS} 年）を持つ力のある選手は、メジャーへ行くこともあります（譲渡金はありません）。残留の提示をすると、少し残りやすくなります。</p>` : ''}
+      </section>${renderPostingPre(F, t)}
+      <section class="card"><button class="primary big" data-act="faDeclare">FA宣言の発表へ ▶</button></section>`;
   }
   if (F.stage === 'market') {
     const rows = F.declared.map(d => {
@@ -775,13 +779,13 @@ function renderFAStep() {
       const c = faComp(d);
       const comp = d.from === t.id || !(c.money || c.round) ? '-' : `${U.money(c.money)}${c.round ? `<br><span class="muted small">か${c.round}巡目</span>` : ''}`;
       return `<tr class="${my ? 'sel' : ''}"><td class="l">${nameCell(p)}${isHomeTeam(p, t) ? '<span class="tag">地元</span>' : ''}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${Math.round(ovr(p))}</td>
-        <td>${teamChip(from)}</td><td>${d.rank}${d.no ? `<span class="muted small">（${d.no}位）</span>` : ''}</td><td>${U.money(d.mv)}</td><td>${comp}</td><td>${d.bids.length ? `${d.bids.length}球団` : 'なし'}</td>
+        <td>${d.back ? `<span class="tag">メジャー帰り</span><br><span class="muted small">元</span>` : ''}${teamChip(from)}</td><td>${d.back ? '-' : `${d.rank}${d.no ? `<span class="muted small">（${d.no}位）</span>` : ''}`}</td><td>${U.money(d.mv)}</td><td>${comp}</td><td>${d.bids.length ? `${d.bids.length}球団` : 'なし'}</td>
         <td class="l nowrap">${my ? `<b>年俸${U.money(my.salary)}・${my.years}年</b> <button class="sm" data-act="faBidCancel" data-pid="${d.pid}">取り消す</button>` : `
           <select data-chg="faMul" data-pid="${d.pid}">${CONTRACT_MULS.map(v => `<option value="${v}" ${dr.mul === v ? 'selected' : ''}>相場×${v}（${U.money(Math.round(d.mv * v / 10) * 10)}）</option>`).join('')}</select>
           <select data-chg="faYears" data-pid="${d.pid}">${U.range(1, CONTRACT_YEARS_MAX).map(v => `<option value="${v}" ${dr.years === v ? 'selected' : ''}>${v}年</option>`).join('')}</select>
           <button class="sm primary" data-act="faBid" data-pid="${d.pid}">${d.from === t.id ? '残留を申し込む' : '申し込む'}</button>`}</td></tr>`;
     }).join('');
-    return `<section class="card"><h2>FA市場（${F.declared.length}人が宣言）</h2>
+    return `${renderAbroadList(F, t)}<section class="card"><h2>FA市場（${F.declared.length}人が宣言）</h2>
       <p>宣言した選手に条件（年俸と年数）を出せます。選手は、年俸・年数・チームの強さと人気・元の球団への忠誠心・地元かどうかを比べて決めます。
         年を取った選手ほど長い契約を喜びます。</p>
       <p class="muted">補償：ランクは元の球団の中の年俸の順位で、1〜3 位が A、4〜8 位が B。ほかの球団から取ると、元の球団が<b>翌年のドラフトの指名権</b>か<b>金銭</b>を選んで受け取ります。
@@ -799,11 +803,38 @@ function renderFAStep() {
   const rows = F.results.map((r, i) => `<tr class="${r.to === t.id || r.from === t.id ? 'me' : ''}"><td class="l">${S.players[r.pid] ? nameCell(S.players[r.pid]) : h(r.name)}</td>
     <td>${teamChip(S.teams[r.from])}</td><td>→</td><td>${teamChip(S.teams[r.to])}</td><td>${h(r.note)}</td><td>${U.money(r.salary)}</td><td>${r.years}年</td><td class="nowrap">${compCell(r, i)}</td><td>${r.bids}球団</td></tr>`).join('');
   const minePick = F.results.some(r => r.cp && r.cp.round && r.from === t.id);
-  return `<section class="card"><h2>FAの結果</h2>
+  return `${renderAbroadList(F, t)}<section class="card"><h2>FAの結果</h2>
     ${minePick ? `<p>出ていった選手の補償を、<b>翌年のドラフトの指名権</b>か<b>金銭</b>から選べます。契約更改へ進むと決まります。</p>` : ''}
     ${rows ? `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>元</th><th></th><th>先</th><th></th><th>年俸</th><th>年数</th><th>補償</th><th>条件を出した</th></tr>${rows}</table></div>` : '<p>今年は FA の動きがありませんでした。</p>'}
     ${pickTradeList()}
     <button class="primary big" data-act="offNext">契約更改へ ▶</button></section>`;
+}
+
+// ポスティングを願い出た選手（自分の球団は、認めるかどうかを選ぶ）
+function renderPostingPre(F, t) {
+  const all = (F.post || []).map(id => S.players[id]).filter(Boolean);
+  const mine = all.filter(p => p.teamId === t.id), others = all.length - mine.length;
+  const rows = mine.map(p => {
+    const ok = !!(F.postOk || {})[p.id];
+    return `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${Math.round(ovr(p))}</td><td>${Math.round(p.loyalty)}</td>
+      <td class="nowrap">${mlbDealText(mlbDeal(p))}</td><td><b>${U.money(postingFee(p))}</b></td><td>${Math.round(mlbDealChance(p) * 100)}%</td>
+      <td><select data-chg="postOk" data-pid="${p.id}"><option value="0" ${ok ? '' : 'selected'}>認めない</option><option value="1" ${ok ? 'selected' : ''}>認める</option></select></td></tr>`;
+  }).join('');
+  return `<section class="card"><h2>ポスティングの希望</h2>
+    <p>FA の権利がまだない選手が、メジャーに挑戦したいと言っています。<b>認めると</b>、メジャーと契約がまとまれば選手はいなくなり、球団に<b>譲渡金</b>が入ります。
+      <b>認めないと</b>選手は残りますが、忠誠心が ${POST_DENY_LOYALTY} 下がり、次の年もまた言い出しやすくなります。</p>
+    <p class="muted">譲渡金は本物の決まりと同じく、メジャーとの契約の総額で決まります（2500 万ドルまでは 20%、5000 万ドルまでは 17.5%、その上は 15%）。
+      ${POST_MINOR_AGE} 歳未満はマイナー契約になるので、譲渡金はとても安くなります。メジャーに行った選手は、何年かあとに日本に戻ってくることがあります。他球団では ${others} 人が希望しています。</p>
+    ${rows ? `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>総合</th><th>忠誠心</th><th>メジャーとの契約の見込み</th><th>譲渡金</th><th>まとまる見込み</th><th>あなたの答え</th></tr>${rows}</table></div>` : '<p>あなたのチームには、ポスティングを希望する選手がいません。</p>'}
+  </section>`;
+}
+// このオフにメジャーへ行った選手
+function renderAbroadList(F, t) {
+  const list = F.abroad || [];
+  if (!list.length) return '';
+  return `<section class="card"><h2>メジャーへ（${list.filter(a => !a.failed).length}人）</h2><div class="scroll"><table class="tbl"><tr><th>名前</th><th>元</th><th></th><th>契約</th><th>譲渡金</th></tr>
+    ${list.map(a => `<tr class="${a.from === t.id ? 'me' : ''}"><td class="l">${S.players[a.pid] ? nameCell(S.players[a.pid]) : h(a.name)}</td><td>${teamChip(S.teams[a.from])}</td><td>${h(a.via)}</td><td class="nowrap">${h(a.deal || '')}</td><td>${a.fee ? U.money(a.fee) : '-'}</td></tr>`).join('')}
+  </table></div></section>`;
 }
 
 // ---------- 一軍・二軍 ----------
@@ -1544,7 +1575,17 @@ function renderFA() {
     ${posFilter('fa')}
     ${list.length ? `${list.some(p => !p.isP) ? `<h3>野手</h3>${block(list.filter(p => !p.isP))}` : ''}
       ${list.some(p => p.isP) ? `<h3>投手</h3>${block(list.filter(p => p.isP))}` : ''}` : '<p class="muted">該当する選手はいません。</p>'}
-  </section>`;
+  </section>${renderAbroadNow()}`;
+}
+// いまメジャーにいる選手。何年かたつとオフの FA 市場に戻ってくる
+function renderAbroadNow() {
+  const ps = (S.abroad || []).map(id => S.players[id]).filter(Boolean).sort((a, b) => ovr(b) - ovr(a));
+  if (!ps.length) return '';
+  return `<section class="card"><h2>メジャーにいる選手（${ps.length}人）</h2>
+    <p class="muted">${MLB_RETURN_MIN} 年たつと、オフの FA のときに日本に戻ってくることがあります。戻ってきたら FA 市場で交渉できます（補償はいりません）。</p>
+    <div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>総合</th><th>元</th><th>行った年</th><th></th></tr>
+    ${ps.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td>${p.age}</td><td>${Math.round(ovr(p))}</td><td>${teamChip(S.teams[p.abroad.from])}</td><td>${p.abroad.year}年</td><td>${h(p.abroad.via)}</td></tr>`).join('')}
+  </table></div></section>`;
 }
 
 // ---------- オフシーズン ----------

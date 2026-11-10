@@ -404,6 +404,7 @@ const CHANGES = {
   geniusOnly(el) { UI.geniusOnly = el.checked; },
   histYear(el) { UI.histYear = +el.value; },
   // 残留の提示：年俸の倍率と年数
+  postOk(el) { setPostOk(+el.dataset.pid, el.value === '1'); },
   retain(el) {
     const pid = +el.dataset.pid, now = retainOffer(S.off.fa.retain[pid]) || { mul: 0, years: 1 };
     if (el.dataset.k === 'years') now.years = +el.value; else now.mul = +el.value;
