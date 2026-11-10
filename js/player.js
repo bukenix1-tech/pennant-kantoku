@@ -117,6 +117,7 @@ function rollPitches(b) {
 // 持ち球を作る。b はいちばんの球のキレ
 function initPitches(p, b) {
   p.pitches = rollPitches(b); p.pv = {}; p.pc = {};
+  if (p.lefty == null) p.lefty = U.chance(LEFTY_CHANCE);
   p.pitches.forEach((t, i) => {
     const off = PITCH_OFFSET[i] * PITCH_STEP;
     p.pv[t] = U.clamp(b + off + U.gauss() * 4, 5, ABIL_MAX);
@@ -142,6 +143,15 @@ function pitchesOf(p) {
   if (!p.pitches && canPitch(p)) initPitches(p, 40);
   return p.pitches || [];
 }
+// 利き腕（投手だけ）。転生選手は編集画面で決めた腕。前の版の選手は、はじめて見たときに決める
+function isLefty(p) {
+  const R = p.reborn ? rebornOf(p) : null;
+  if (R && R.hand) return R.hand === '左';
+  if (p.lefty == null) p.lefty = U.chance(LEFTY_CHANCE);
+  return p.lefty;
+}
+// 球の曲がる向き（度。右が 0、下が 90。捕手から見た向き）。左投げは左右が逆
+function pitchDir(p, t) { const d = PITCHES[t].dir; return isLefty(p) ? 180 - d : d; }
 function pitchOff(p, t) {
   if (p.pc && p.pc[t] != null) return p.pc[t];
   return PITCH_OFFSET[Math.max(0, pitchesOf(p).indexOf(t))] * PITCH_STEP;

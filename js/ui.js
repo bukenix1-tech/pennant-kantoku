@@ -32,11 +32,35 @@ function trajTag(p, batOnly) {
 }
 // 持ち球の一覧。ドラフト候補はスカウトの見立てしか分からないので、変化量を出さない
 function pitchList(p) {
-  return pitchesOf(p).map(t => `<span class="tag">${PITCHES[t].name}${p.noise ? '' : ` <b>${pitchLevel(p, t)}</b>`}</span>`).join(' ');
+  return pitchesOf(p).map(t => `<span class="tag">${pitchArrow(p, t)}${PITCHES[t].name}${p.noise ? '' : ` <b>${pitchLevel(p, t)}</b>`}</span>`).join(' ');
 }
 // 表に入れる短い持ち球（スラ5 フォ4）
 function pitchBrief(p) {
-  return pitchesOf(p).map(t => `${PITCHES[t].short}${p.noise ? '' : pitchLevel(p, t)}`).join(' ');
+  return pitchesOf(p).map(t => `<span class="pch">${pitchArrow(p, t)}${PITCHES[t].short}${p.noise ? '' : pitchLevel(p, t)}</span>`).join('');
+}
+// 表の球種の欄。3 つずつで折り返して、欄が横に広がりすぎないようにする
+function pitchCell(p) { return `<td class="small"><div class="pbrief">${pitchBrief(p)}</div></td>`; }
+// 曲がる向きの矢印（→↘↓↙←）。FE0E は絵文字にしないための印
+const DIR_ARROWS = ['→', '↘', '↓', '↙', '←'];
+function pitchArrow(p, t) { return `<span class="parr">${DIR_ARROWS[U.clamp(Math.round(pitchDir(p, t) / 45), 0, 4)]}︎</span>`; }
+// 選手の画面の変化球の図。中心から曲がる向きに矢印をのばし、長さで変化量を見せる
+function pitchChart(p) {
+  const cx = 120, cy = 27, at = (d, r) => [cx + Math.cos(d) * r, cy + Math.sin(d) * r].map(v => v.toFixed(1));
+  const placed = []; // 置いた字の場所。重なったら矢印の向きに少しずつずらす
+  const marks = pitchesOf(p).map(t => {
+    const d = pitchDir(p, t) * Math.PI / 180, lv = pitchLevel(p, t), len = 10 + lv * 11;
+    const [x, y] = at(d, len);
+    let r = len + 15, lx, ly;
+    for (let i = 0; i < 8; i++, r += 8) {
+      [lx, ly] = at(d, r);
+      if (!placed.some(([px, py]) => Math.abs(px - lx) < 27 && Math.abs(py - ly) < 17)) break;
+    }
+    placed.push([+lx, +ly]);
+    return `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" marker-end="url(#pah)"/><text x="${lx}" y="${(+ly + 4).toFixed(1)}" text-anchor="middle">${PITCHES[t].short}${lv}</text>`;
+  }).join('');
+  return `<svg class="pchart" viewBox="0 0 240 160" role="img" aria-label="変化球の向きと変化量"><defs><marker id="pah" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M1 1L8 5L1 9z"/></marker></defs>
+    <line class="axis" x1="10" y1="${cy}" x2="230" y2="${cy}"/><line class="axis" x1="${cx}" y1="6" x2="${cx}" y2="150"/><circle cx="${cx}" cy="${cy}" r="4"/>
+    <text class="hand" x="4" y="154">${isLefty(p) ? '左投げ' : '右投げ'}</text>${marks}</svg>`;
 }
 // スカウトの見立ての球のキレ（ドラフト候補の欄で使う）
 function kireTag(p) {
@@ -490,7 +514,7 @@ function pitTable(list) {
   ${list.map(p => {
     const s = p.stats;
     return `<tr><td class="l">${nameCell(p)}</td><td class="nowrap">${p.role || '-'} ${aptBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${condCell(p)}</td>
-    <td class="num">${veloKmh(p.a.velo)}km</td>${PIT_KEYS.slice(1).map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}<td class="nowrap small">${pitchBrief(p)}</td><td>${Math.round(ovr(p))}</td><td>${Math.round(p.fame)}</td>
+    <td class="num">${veloKmh(p.a.velo)}km</td>${PIT_KEYS.slice(1).map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}${pitchCell(p)}<td>${Math.round(ovr(p))}</td><td>${Math.round(p.fame)}</td>
     <td>${s.pg}</td><td>${s.w}</td><td>${s.l}</td><td>${s.sv}</td><td>${U.era(s.per, s.outs)}</td><td>${U.ip(s.outs)}</td><td>${s.pk}</td><td>${U.money(p.salary)}</td></tr>`;
   }).join('')}</table></div>`;
 }
@@ -555,7 +579,7 @@ function renderPlayerModal(p) {
     <span class="bt"><span style="width:${Math.round(p.a[k] / ABIL_MAX * 100)}%"></span></span>${k === 'velo' ? `<span class="muted">${veloKmh(p.a.velo)}km/h</span>` : ''}</div>`).join('')
     + (canPitch(p) ? (p.noise ? `<div class="bar"><span class="bl">持ち球</span><span>${pitchList(p)} ${kireTag(p)} <span class="muted small">${pitchStyle(p)}</span></span></div>`
       : pitchesOf(p).map(t => `<div class="bar"><span class="bl">${PITCHES[t].name}</span>${abilStalled(p, t) ? `<span class="gstack"><span class="grow1"><b>${pitchLevel(p, t)}</b></span><small class="stall" title="伸びしろの上限に近く、練習してもほとんど伸びない">停滞</small></span>` : `<b>${pitchLevel(p, t)}</b>`}
-        <span class="bt"><span style="width:${Math.round(pitchVal(p, t) / ABIL_MAX * 100)}%"></span></span></div>`).join('') + `<div class="bar"><span class="bl">投球</span><span class="tag">${pitchStyle(p)}</span></div>`) : '')
+        <span class="bt"><span style="width:${Math.round(pitchVal(p, t) / ABIL_MAX * 100)}%"></span></span></div>`).join('') + `<div class="bar"><span class="bl">変化</span>${pitchChart(p)}</div><div class="bar"><span class="bl">投球</span><span class="tag">${pitchStyle(p)}</span></div>`) : '')
     + (canBat(p) ? `<div class="bar"><span class="bl">弾道</span>${trajTag(p, true)}<span class="muted small">${TRAJ_WORD[trajOf(p)]}</span></div>
       <div class="bar"><span class="bl">選球眼</span>${eyeTag(p) || '<span class="muted small">ふつう</span>'}</div>
       <div class="bar"><span class="bl">盗塁</span><span class="tag steal s-${stealWord(p)}">${stealWord(p)}</span><span class="muted small">${stealWord(p) === '積極的' ? 'すきがあればどんどん走る' : stealWord(p) === '慎重' ? 'あまり走らない' : ''}</span></div>` : '');
@@ -567,7 +591,7 @@ function renderPlayerModal(p) {
   return `
   <h2>${p.no != null && team ? `<span class="muted">#${p.no}</span> ` : ''}${h(p.name)} ${p.foreign ? '<span class="tag">外国人</span>' : ''}${rebornTag(p)}</h2>
   ${rebornOf(p) ? `<p class="muted">転生選手：${h(rebornOf(p).note)}</p>` : ''}
-  <p>${team ? teamChip(team) : ''} ${p.twoWay ? `二刀流（投手：${p.role || '-'}・野手：${p.isP ? p.pos2 : p.pos}）` : p.isP ? `投手（${p.role}）` : `野手（${p.pos}）`} ${posBadge(p)}${canBat(p) ? ` ・ サブポジ ${subsOf(p).length ? subsOf(p).join('・') : 'なし'}` : ''} ・ ${p.age}歳 ・ ${p.type}型 ・ 才能 <span class="stars">${potStars(p.pot)}</span>
+  <p>${team ? teamChip(team) : ''} ${p.twoWay ? `二刀流（投手：${p.role || '-'}・野手：${p.isP ? p.pos2 : p.pos}）` : p.isP ? `投手（${p.role}）` : `野手（${p.pos}）`}${canPitch(p) ? `・${isLefty(p) ? '左' : '右'}投げ` : ''} ${posBadge(p)}${canBat(p) ? ` ・ サブポジ ${subsOf(p).length ? subsOf(p).join('・') : 'なし'}` : ''} ・ ${p.age}歳 ・ ${p.type}型 ・ 才能 <span class="stars">${potStars(p.pot)}</span>
    ・ 調子 ${condCell(p)} ${COND_LABEL[p.cond]} ・ 年俸 ${U.money(p.salary)} ${p.inj ? `<span class="tag bad">故障 残り${p.inj}日</span>` : ''}${p.awakened ? `<span class="tag awaken-tag">覚醒×${p.awakened}</span>` : ''}${p.bigAwakened ? `<span class="tag awaken-tag big">大覚醒×${p.bigAwakened}</span>` : ''}${p.limitBroken ? `<span class="tag awaken-tag">上限解放×${p.limitBroken}</span>` : ''}${p.b9 ? `<span class="tag">ベストナイン×${p.b9}</span>` : ''}${p.gg ? `<span class="tag">GG×${p.gg}</span>` : ''}${p.as ? `<span class="tag">オールスター×${p.as}</span>` : ''}${p.asMvp ? `<span class="tag">球宴MVP×${p.asMvp}</span>` : ''}${p.jp ? `<span class="tag">日本代表×${p.jp}</span>` : ''}${p.intlMvp ? `<span class="tag awaken-tag">国際大会MVP×${p.intlMvp}</span>` : ''}${Object.keys(p.fx || {}).map(k => `<span class="tag awaken-tag">${k === 'k' ? `${FEAT_K}奪三振以上` : FEAT_WORD[k]}×${p.fx[k]}</span>`).join('')}${team && grumbling(team, p) ? '<span class="tag bad">起用に不満</span>' : ''}</p>
   ${growthBox(p)}
   <div class="bars">${bars}</div>
@@ -621,7 +645,7 @@ function penTable(list, t) {
   if (!list.length) return '<p class="muted">なし</p>';
   return `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>役割</th><th>年</th><th>調</th><th>球速</th>${PIT_KEYS.slice(1).map(k => `<th>${PIT_LABEL[k]}</th>`).join('')}<th>球種</th><th>総合</th><th>登板</th><th>防御率</th><th>S</th></tr>
     ${list.map(p => `<tr><td class="l">${nameCell(p)}</td><td class="nowrap">${role(p)} ${aptBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${condCell(p)}</td><td class="num">${veloKmh(p.a.velo)}km</td>
-      ${PIT_KEYS.slice(1).map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}<td class="nowrap small">${pitchBrief(p)}</td><td>${Math.round(ovr(p))}</td><td>${p.stats.pg}</td><td>${U.era(p.stats.per, p.stats.outs)}</td><td>${p.stats.sv}</td></tr>`).join('')}</table></div>`;
+      ${PIT_KEYS.slice(1).map(k => `<td>${gradeCell(p.a[k])}</td>`).join('')}${pitchCell(p)}<td>${Math.round(ovr(p))}</td><td>${p.stats.pg}</td><td>${U.era(p.stats.per, p.stats.outs)}</td><td>${p.stats.sv}</td></tr>`).join('')}</table></div>`;
 }
 
 function renderOrder() {
@@ -633,7 +657,7 @@ function renderOrder() {
   const pOpt = (cur, list) => list.map(p => `<option value="${p.id}" ${p.id === cur ? 'selected' : ''}>${pitOpt(p)}</option>`).join('');
   const rot = t.rotation.map((id, i) => `<tr><td>${i + 1}${i === t.rotIdx % t.rotation.length ? ' <span class="tag">次</span>' : ''}</td>
       <td class="l"><select data-chg="rot" data-i="${i}">${pOpt(id, pitchers)}</select></td>
-      <td>${condCell(S.players[id])}</td><td class="num">${veloKmh(S.players[id].a.velo)}km</td>${PIT_KEYS.slice(1).map(k => `<td>${gradeCell(S.players[id].a[k])}</td>`).join('')}<td class="nowrap small">${pitchBrief(S.players[id])}</td><td>${Math.round(ovr(S.players[id]))}</td><td>${S.players[id].rest >= STARTER_REST ? '◯' : `中${Math.max(0, S.players[id].rest - 1)}日`}</td>
+      <td>${condCell(S.players[id])}</td><td class="num">${veloKmh(S.players[id].a.velo)}km</td>${PIT_KEYS.slice(1).map(k => `<td>${gradeCell(S.players[id].a[k])}</td>`).join('')}${pitchCell(S.players[id])}<td>${Math.round(ovr(S.players[id]))}</td><td>${S.players[id].rest >= STARTER_REST ? '◯' : `中${Math.max(0, S.players[id].rest - 1)}日`}</td>
       <td>${S.players[id].stats.w}-${S.players[id].stats.l}</td><td>${U.era(S.players[id].stats.per, S.players[id].stats.outs)}</td></tr>`).join('');
   const pen = pitchers.filter(p => !t.rotation.includes(p.id));
   return `

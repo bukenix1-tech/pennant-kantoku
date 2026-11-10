@@ -472,3 +472,15 @@ details.slim summary { cursor: pointer; font-weight: bold; }
 .pbp-log li.pbp-run { font-weight: bold; }
 
 .pbp-nono { margin-top: 6px; padding: 4px 8px; border-radius: 6px; background: #f5c542; color: #2b2100; font-weight: bold; text-align: center; }
+/* 球種：表は 3 つずつで折り返す。選手の画面は矢印の図 */
+.pbrief { display: grid; grid-template-columns: repeat(3, max-content); gap: 0 5px; justify-content: start; line-height: 1.35; }
+.pch { white-space: nowrap; }
+.tag .pch + .pch { margin-left: 4px; }
+.parr { color: var(--accent); margin-right: -3px; }
+.pchart { width: 240px; max-width: 100%; height: auto; display: block; }
+.pchart line { stroke: var(--accent); stroke-width: 3; }
+.pchart line.axis { stroke: var(--line); stroke-width: 1; }
+.pchart marker path, .pchart circle { fill: var(--accent); }
+.pchart circle { fill: var(--muted); }
+.pchart text { font-size: 11px; fill: var(--ink); }
+.pchart text.hand { fill: var(--muted); }
