@@ -30,7 +30,7 @@ function newFin() { return { gate: 0, food: 0, tv: 0, goods: 0, sponsor: 0, othe
 // ---------- 新しいゲーム ----------
 function newGame(myTeamId, games) {
   S = {
-    version: 1, year: 2027, day: 0, games, myTeamId, phase: 'season',
+    version: 1, year: 2027, day: 0, games, myTeamId, phase: 'season', pitchFit: true,
     teams: [], players: {}, nextPid: 1, schedule: [], news: [], history: [], awardHist: [], records: { season: {} }, retired: [],
     lastGame: null, myGames: [], off: null, post: null, foreignCands: null, popups: [], freeAgents: [],
   };
@@ -2735,6 +2735,10 @@ function migrate() {
   if (!S.draftHist) S.draftHist = [];
   S.retired.forEach(r => { if (r.hof && r.star === undefined) r.star = true; });
   Object.values(S.players).forEach(migratePitches);
+  if (!S.pitchFit) { // 前の版で上限を超えて生まれた球種を一度だけ直す（衰えの時期の投手はそのまま）
+    Object.values(S.players).forEach(p => { if (canPitch(p) && growthPhase(p).k !== 'decline') pitchesOf(p).forEach(t => pitchFitCeil(p, t)); });
+    S.pitchFit = true;
+  }
   Object.values(S.players).forEach(p => { if (p.svc == null) initService(p); });
   Object.values(S.players).forEach(p => { if (canPitch(p) && !p.apt) p.apt = rollApt(p.a.stamina); });
   Object.values(S.players).forEach(p => { if (p.home === undefined) p.home = p.foreign ? null : U.pick(PREFS); });

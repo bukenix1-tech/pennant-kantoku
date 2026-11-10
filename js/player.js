@@ -122,6 +122,14 @@ function initPitches(p, b) {
     p.pv[t] = U.clamp(b + off + U.gauss() * 4, 5, ABIL_MAX);
     p.pc[t] = off + Math.round(U.gauss() * 5);
   });
+  p.pitches.forEach(t => pitchFitCeil(p, t));
+}
+// 球種のキレが伸びしろの上限を超えて生まれたら、上限を少し上に置き直す。
+// 持ち球の数はキレで、上限は素質で決まるので、直さないと球種の多い投手ほど最初から停滞になる
+function pitchFitCeil(p, t) {
+  if (p.reborn || !p.pc) return;
+  const v = p.pv[t], c = abilCeil(p, t);
+  if (c < v) p.pc[t] += Math.round(v + U.rnd(0, 8) - c);
 }
 // 転生選手は、編集画面で決めた持ち球を使う（あとから直しても、もう現れた選手に効く）
 function rebornPitches(p) {
@@ -192,6 +200,7 @@ function learnPitch(p) {
   p.pitches = [...list, t];
   p.pv[t] = Math.max(5, top + off + U.gauss() * 4);
   p.pc = p.pc || {}; p.pc[t] = off + Math.round(U.gauss() * 5);
+  pitchFitCeil(p, t);
   return t;
 }
 // 能力と球種を同じように扱う（k は能力か球種の記号）
