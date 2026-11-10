@@ -30,7 +30,7 @@ function newFin() { return { gate: 0, food: 0, tv: 0, goods: 0, sponsor: 0, othe
 // ---------- 新しいゲーム ----------
 function newGame(myTeamId, games) {
   S = {
-    version: 1, year: 2027, day: 0, games, myTeamId, phase: 'season', pitchFit: true, moneyReal: true, abroad: [],
+    version: 1, year: 2027, day: 0, games, myTeamId, phase: 'season', pitchFit: true, moneyReal: true, meritBase: true, abroad: [],
     teams: [], players: {}, nextPid: 1, schedule: [], news: [], history: [], awardHist: [], records: { season: {} }, retired: [],
     lastGame: null, myGames: [], off: null, post: null, foreignCands: null, popups: [], freeAgents: [],
   };
@@ -77,6 +77,13 @@ function newGame(myTeamId, games) {
 function initService(p) {
   p.svc = Math.max(0, (p.age - 21) * U.rnd(0.2, 0.8));
   p.faNeed = U.chance(0.5) ? 8 : 7;
+  p.meritBase = startMerit(p, p.age);
+}
+// 最初からいるベテランの功績（それまでの通算は分からないので、年齢と力から推す）
+function startMerit(p, age) {
+  if (p.foreign || p.reborn) return 0;
+  const M = START_MERIT;
+  return Math.round(U.clamp((ovr(p) - M.ovr) / M.ovrSpan, 0, 1) * U.clamp((age - M.age) / M.ageSpan, 0, 1) * M.max * 100) / 100;
 }
 
 function newFarmPlayer(tq, opts) {
@@ -1254,7 +1261,7 @@ function meritPts(c, titles) {
     + mvp * 0.15 + (titles.length - mvp) * 0.05;
 }
 // 功績（0〜1。1 で殿堂入りくらい）
-function meritOf(p) { return U.clamp(meritPts(careerTotal(p), titlesOf(p.id)) + (p.b9 || 0) * 0.04 + (p.gg || 0) * 0.02 + (p.as || 0) * 0.01 + (p.jp || 0) * 0.01, 0, 1); }
+function meritOf(p) { return U.clamp((p.meritBase || 0) + meritPts(careerTotal(p), titlesOf(p.id)) + (p.b9 || 0) * 0.04 + (p.gg || 0) * 0.02 + (p.as || 0) * 0.01 + (p.jp || 0) * 0.01, 0, 1); }
 
 function retireRecord(p) {
   if (!S.retired) S.retired = [];
@@ -1440,7 +1447,8 @@ function renewSalary(p) {
   const old = p.salary;
   let now;
   if (!playedEnough(p)) {
-    now = p.age <= 25 ? old * 1.03 : old * 0.9; // あまり出ていない：若手は少しだけ上がり、ほかは少し下がる
+    // あまり出ていない：若手は少しだけ上がり、ほかは少し下がる。高い年俸の選手は減額制限いっぱいまで下がる（功績があればゆるむ）
+    now = p.age <= 25 ? old * 1.03 : old > HIGH_SAL_CUT_FROM ? old * (old > 10000 ? 0.6 : 0.75) : old * 0.9;
   } else {
     const target = perfSalary(p);
     if (seasonWins(p) < 0.5) now = Math.min(old, target); // 出ても働けなかった人は上げない
@@ -2237,6 +2245,7 @@ function assignPick(teamId, pid, round, note) {
   p.loyalty = U.rint(55, 75);
   p.faNeed = p.kind === '高校' ? 8 : 7;
   p.svc = 0;
+  p.salary = ROOKIE_SALARY[U.clamp(round, 1, ROOKIE_SALARY.length) - 1] || p.salary;
   // 何年のドラフトの何位で、どの球団に入ったか（選手の詳細に出す）
   p.drafted = { year: S.year, round, team: S.teams[teamId].short, note: note || '', from: p.amateur ? p.amateur.team : '' };
   D.result.push({ round, team: teamId, pid, name: p.name, pos: p.pos, kind: p.kind, note: note || '' });
@@ -2852,6 +2861,10 @@ function migrate() {
     S.pitchFit = true;
   }
   if (!S.moneyReal) migrateMoney();
+  if (!S.meritBase) { // 前の版のセーブ：ゲームを始めたときからいる選手に、始めたときの年齢で功績を持たせる
+    Object.values(S.players).forEach(p => { if (!p.drafted && p.meritBase == null) p.meritBase = startMerit(p, p.age - (S.year - 2027)); });
+    S.meritBase = true;
+  }
   Object.values(S.players).forEach(p => { if (p.svc == null) initService(p); });
   Object.values(S.players).forEach(p => { if (canPitch(p) && !p.apt) p.apt = rollApt(p.a.stamina); });
   Object.values(S.players).forEach(p => { if (p.home === undefined) p.home = p.foreign ? null : U.pick(PREFS); });

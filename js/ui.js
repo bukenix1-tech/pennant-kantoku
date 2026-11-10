@@ -27,8 +27,9 @@ function eyeTag(p) {
 function trajTag(p, batOnly) {
   const style = !batOnly && canPitch(p) ? `<span class="tag" title="持ち球と変化量（1〜7）">${pitchBrief(p)}</span><span class="tag" title="持ち球から決まる投球のタイプ">${pitchStyle(p)}</span>` : '';
   if (!canBat(p)) return style;
-  const t = trajOf(p);
-  return `<span class="ab traj t${t}" title="弾道${t}（高いほどホームランとフライが多い）">弾<b>${t}</b></span>${style}`;
+  const t = trajOf(p), b = batSide(p);
+  const bats = b === '右' ? '' : `<span class="bats">${b}</span>`; // 右打ちは多いので出さない
+  return `<span class="ab traj t${t}" title="${b === '右' ? '' : b === '左' ? '左打ち・' : '両打ち（スイッチヒッター）・'}弾道${t}（高いほどホームランとフライが多い）">${bats}弾<b>${t}</b></span>${style}`;
 }
 // 持ち球の一覧。ドラフト候補はスカウトの見立てしか分からないので、変化量を出さない
 function pitchList(p) {
@@ -591,7 +592,7 @@ function renderPlayerModal(p) {
   return `
   <h2>${p.no != null && team ? `<span class="muted">#${p.no}</span> ` : ''}${h(p.name)} ${p.foreign ? '<span class="tag">外国人</span>' : ''}${rebornTag(p)}</h2>
   ${rebornOf(p) ? `<p class="muted">転生選手：${h(rebornOf(p).note)}</p>` : ''}
-  <p>${team ? teamChip(team) : ''} ${p.twoWay ? `二刀流（投手：${p.role || '-'}・野手：${p.isP ? p.pos2 : p.pos}）` : p.isP ? `投手（${p.role}）` : `野手（${p.pos}）`}${canPitch(p) ? `・${isLefty(p) ? '左' : '右'}投げ` : ''} ${posBadge(p)}${canBat(p) ? ` ・ サブポジ ${subsOf(p).length ? subsOf(p).join('・') : 'なし'}` : ''} ・ ${p.age}歳 ・ ${p.type}型 ・ 才能 <span class="stars">${potStars(p.pot)}</span>
+  <p>${team ? teamChip(team) : ''} ${p.twoWay ? `二刀流（投手：${p.role || '-'}・野手：${p.isP ? p.pos2 : p.pos}）` : p.isP ? `投手（${p.role}）` : `野手（${p.pos}）`}・${handText(p)} ${posBadge(p)}${canBat(p) ? ` ・ サブポジ ${subsOf(p).length ? subsOf(p).join('・') : 'なし'}` : ''} ・ ${p.age}歳 ・ ${p.type}型 ・ 才能 <span class="stars">${potStars(p.pot)}</span>
    ・ 調子 ${condCell(p)} ${COND_LABEL[p.cond]} ・ 年俸 ${U.money(p.salary)} ${p.inj ? `<span class="tag bad">故障 残り${p.inj}日</span>` : ''}${p.awakened ? `<span class="tag awaken-tag">覚醒×${p.awakened}</span>` : ''}${p.bigAwakened ? `<span class="tag awaken-tag big">大覚醒×${p.bigAwakened}</span>` : ''}${p.limitBroken ? `<span class="tag awaken-tag">上限解放×${p.limitBroken}</span>` : ''}${p.b9 ? `<span class="tag">ベストナイン×${p.b9}</span>` : ''}${p.gg ? `<span class="tag">GG×${p.gg}</span>` : ''}${p.as ? `<span class="tag">オールスター×${p.as}</span>` : ''}${p.asMvp ? `<span class="tag">球宴MVP×${p.asMvp}</span>` : ''}${p.jp ? `<span class="tag">日本代表×${p.jp}</span>` : ''}${p.intlMvp ? `<span class="tag awaken-tag">国際大会MVP×${p.intlMvp}</span>` : ''}${Object.keys(p.fx || {}).map(k => `<span class="tag awaken-tag">${k === 'k' ? `${FEAT_K}奪三振以上` : FEAT_WORD[k]}×${p.fx[k]}</span>`).join('')}${team && grumbling(team, p) ? '<span class="tag bad">起用に不満</span>' : ''}</p>
   ${p.abroad ? `<p><span class="tag">メジャー</span> ${p.abroad.year}年オフに${h(p.abroad.via)}でメジャーへ（元${h(S.teams[p.abroad.from] ? S.teams[p.abroad.from].short : '-')}）</p>` : ''}
   ${(p.mlb || []).map(m => `<p class="muted">⚾ メジャー：${m.from}〜${m.to}年（${h(m.via)}）</p>`).join('')}

@@ -143,13 +143,25 @@ function pitchesOf(p) {
   if (!p.pitches && canPitch(p)) initPitches(p, 40);
   return p.pitches || [];
 }
-// 利き腕（投手だけ）。転生選手は編集画面で決めた腕。前の版の選手は、はじめて見たときに決める
+// 利き腕。転生選手は編集画面で決めた腕。前の版の選手は、はじめて見たときに決める
 function isLefty(p) {
   const R = p.reborn ? rebornOf(p) : null;
   if (R && R.hand) return R.hand === '左';
-  if (p.lefty == null) p.lefty = U.chance(LEFTY_CHANCE);
+  if (p.lefty == null) p.lefty = canPitch(p) ? U.chance(LEFTY_CHANCE) : !RIGHT_ONLY_POS.includes(p.pos) && U.chance(LEFTY_FIELD_CHANCE);
   return p.lefty;
 }
+// 打席（'右' '左' '両'）。左投げはほとんど左打ちで、右投げにも左打ちがいる（右投げ左打ち）
+function batSide(p) {
+  const R = p.reborn ? rebornOf(p) : null;
+  if (R && R.bats) return R.bats;
+  if (!p.bats) {
+    const r = Math.random();
+    p.bats = isLefty(p) ? (r < BAT_L_IF_LEFTY ? '左' : '右') : r < BAT_S_CHANCE ? '両' : r < BAT_S_CHANCE + BAT_L_IF_RIGHTY ? '左' : '右';
+  }
+  return p.bats;
+}
+// 「右投左打」のような書き方。打たない投手は「右投げ」
+function handText(p) { return canBat(p) ? `${isLefty(p) ? '左' : '右'}投${batSide(p)}打` : `${isLefty(p) ? '左' : '右'}投げ`; }
 // 球の曲がる向き（度。右が 0、下が 90。捕手から見た向き）。左投げは左右が逆
 function pitchDir(p, t) { const d = PITCHES[t].dir; return isLefty(p) ? 180 - d : d; }
 function pitchOff(p, t) {
