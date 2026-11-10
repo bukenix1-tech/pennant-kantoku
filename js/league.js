@@ -1439,7 +1439,8 @@ function seasonWins(p) {
 function playedEnough(p) { const st = p.stats; return st.pa >= 100 || st.outs >= 60; }
 function perfSalary(p) {
   const w = Math.max(0, seasonWins(p));
-  return Math.round(realSal(800 + w * SAL_PER_WIN + w * w * SAL_PER_WIN2) / 10) * 10;
+  const v = realSal(800 + w * SAL_PER_WIN + w * w * SAL_PER_WIN2);
+  return Math.round((v > SAL_SOFT ? SAL_SOFT + (v - SAL_SOFT) * SAL_SOFT_RATE : v) / 10) * 10;
 }
 
 // 契約更改：去年の年俸から、今年の成績で上げ下げする（能力の数字は使わない）
@@ -1465,7 +1466,9 @@ function renewSalary(p) {
 // FA 市場での相場（年俸）。今の年俸と今年の成績の間くらいを、少し上乗せして
 function faMarket(p) {
   const v = playedEnough(p) ? Math.max(p.salary, (p.salary + perfSalary(p)) / 2) : p.salary;
-  return Math.max(1000, Math.round(v * 1.2 / 10) * 10);
+  let mv = v * 1.2;
+  if (mv > SAL_SOFT) mv = Math.max(p.salary, SAL_SOFT + (mv - SAL_SOFT) * SAL_SOFT_RATE); // SAL_SOFT を超えると、FA のたびに積み上がらないようにする
+  return Math.max(1000, Math.round(mv / 10) * 10);
 }
 
 // 年俸のチーム内順位で A（上位 3 人）・B（4〜10 位）・C（それ以外）
@@ -1584,7 +1587,7 @@ function aiBids(p, from) {
     const former = t.id === from.id;
     const want = ovr(p) > bar + (former ? -5 : -2);
     if (!want || !U.chance(former ? 0.65 : 0.55)) return;
-    const salary = Math.round(mv * U.rnd(0.9, 1.25) / 10) * 10;
+    const salary = Math.round(mv * U.rnd(0.9, mv > SAL_SOFT ? 1.05 : 1.25) / 10) * 10; // 高い選手には、相場を大きく超える額は出さない
     if (t.money < salary * 1.5) return;
     if (payroll(t) + salary > 380000 * MONEY_REAL) return; // 年俸総額が 55 億円ほどを超える補強はしない
     bids.push({ team: t.id, salary, years: p.age <= 30 ? U.rint(2, 4) : U.rint(1, 2) });

@@ -196,7 +196,7 @@ function facilityUpkeep(level, k) {
 // 施設の効き目（レベル 1 で効き目なし。1 つ上がるごと）
 const DORM_GROW = 0.06, GYM_SLOW = 0.08, ANALYSIS_BONUS = 0.6;
 // 功績のある選手の減俸をゆるめる：功績 1（殿堂入りくらい）で、下げ幅を MERIT_SOFT だけ減らし、減額制限を MERIT_FLOOR だけ上げる
-const MERIT_SOFT = 0.5, MERIT_FLOOR = 0.15;
+const MERIT_SOFT = 0.3, MERIT_FLOOR = 0.05; // 0.5・0.15 だと、力の落ちた功労者が全盛期の年俸のまま残り、30 年で一番上が 12 億円を超えたので弱めた（仮・AI）
 // 人気度は毎週、下限との差の FAME_DECAY ずつ下がる。下限は 5 ＋ 功績×FAME_FLOOR_MERIT（殿堂入りくらいで 60）
 const FAME_DECAY = 0.05, FAME_FLOOR_MERIT = 55;
 // 達成記録（ノーヒットノーラン・完全試合・サイクル安打・1 試合 4 本塁打・1 試合の奪三振）。FEAT_K 個以上の奪三振で記録に入る。値は仮（AI）
@@ -309,6 +309,9 @@ function realSal(v) { return v > 0 ? v * SAL_REAL.mul * Math.pow(v / SAL_REAL.mi
 const ROOKIE_SALARY = [1500, 1200, 1000, 900, 800, 700, 700];
 // 出番がなかった 26 歳以上で、年俸がこれ（万円）を超える選手は、減額制限いっぱい（1 億円を超えると 40%、それ以下は 25%）まで下げる。功績があると下げ幅がゆるむ（仮・AI）
 const HIGH_SAL_CUT_FROM = 3000;
+// 成績の目安額の上のほうはなだらかにする：SAL_SOFT（万円）を超えた分は SAL_SOFT_RATE しか増えない。
+// 30 年回すと一番上が 12〜17 億円まで上がっていたので、本物（6 億円ほど）に近づけた（人の言葉 2026-11-10「上の年俸の上がり方」がやりすぎ。数は仮・AI）
+const SAL_SOFT = 35000, SAL_SOFT_RATE = 0.3; // 3 億円だと 2〜5 位が本物より 1 億円ほど低かったので、3.5 億円に上げた（人の言葉 2026-11-10「ちょっと上げる線で行こうかな」）
 // ゲームを始めたときからいるベテランの功績（通算の記録がないので、年齢と力から推す）。総合 ovr を超えた分 ÷ ovrSpan × age を超えた分 ÷ ageSpan × max（仮・AI）
 const START_MERIT = { ovr: 68, ovrSpan: 16, age: 27, ageSpan: 8, max: 0.9 };
 const MONEY_REAL = 1.45; // 年俸の合計が増えた分。球団の資金・賞金・補強の上限・金銭トレードはこの倍率で大きくした（仮・AI）
