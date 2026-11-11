@@ -75,6 +75,8 @@ const PITCH_STYLE_K = 0.012, PITCH_STYLE_G = -0.006; // 三振の増減がこれ
 // 契約の選択肢。年俸は FA 相場や査定額に掛ける倍率。値は仮（AI）
 const CONTRACT_YEARS_MAX = 6;
 const CONTRACT_MULS = [0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.5, 2];
+// FA の年俸は自分で打つ（人の言葉 2026-11-11「FAの人の交渉の年俸は自分で打てる形にしたらどうだろうか」）。相場のこの倍より低くは出せない（仮・AI）
+const FA_PAY_MIN = 0.8;
 // 契約更改で複数年を結ぶときの選択肢と、受けてもらえる見込み（基本＋忠誠心＋上乗せ。若手は長い契約を嫌い、ベテランは喜ぶ）。値は仮（AI）
 const EXTEND_MULS = [0.9, 1, 1.1, 1.2, 1.3, 1.5], EXTEND_YEARS_MAX = 5;
 const EXTEND_BASE = 0.35, EXTEND_LOYAL = 0.35, EXTEND_PAY = 1.5, EXTEND_YEAR = 0.05;

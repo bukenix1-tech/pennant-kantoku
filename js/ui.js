@@ -456,6 +456,12 @@ function renderTeam() {
   </section>` : ''}`;
 }
 
+// FA の年俸を打つ箱（万円）。横に、相場の何倍かと円の書き方を出す
+function payInput(chg, pid, v, mv) {
+  return `<input type="number" class="pay" data-chg="${chg}" data-pid="${pid}" value="${v}" min="${Math.ceil(mv * FA_PAY_MIN / 10) * 10}" step="100" inputmode="numeric" placeholder="提示しない">万円
+    ${v ? `<span class="muted small">${U.money(v)}・相場×${(v / mv).toFixed(2)}</span>` : ''}`;
+}
+
 // ---------- 年俸の一覧（人の言葉 2026-11-11「年俸を見れる一覧がない」） ----------
 function payTable(t, list) {
   const rank = S.teams.map(x => payroll(x)).sort((a, b) => b - a).indexOf(payroll(t)) + 1;
@@ -786,14 +792,14 @@ function renderFAStep() {
       const mv = faMarket(p);
       return `<tr><td class="l">${nameCell(p)}${isHomeTeam(p, t) ? '<span class="tag">地元</span>' : ''}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${Math.round(ovr(p))}</td>
         <td>${U.money(p.salary)}</td><td>${U.money(faMarket(p))}</td><td>${Math.round(p.loyalty)}</td><td>${Math.round(playShare(p) * 100)}%</td><td><b>${faMood(c)}</b></td>
-        <td class="l nowrap"><select data-chg="retain" data-k="mul" data-pid="${p.id}"><option value="0" ${r ? '' : 'selected'}>提示しない</option>${CONTRACT_MULS.map(v => `<option value="${v}" ${r && r.mul === v ? 'selected' : ''}>相場×${v}（${U.money(Math.round(mv * v / 10) * 10)}）</option>`).join('')}</select>
+        <td class="l nowrap">${payInput('retainPay', p.id, r ? retainSalary(p, r) : '', mv)}
           <select data-chg="retain" data-k="years" data-pid="${p.id}" ${r ? '' : 'disabled'}>${U.range(1, CONTRACT_YEARS_MAX).map(v => `<option value="${v}" ${r && r.years === v ? 'selected' : ''}>${v}年</option>`).join('')}</select></td></tr>`;
     }).join('');
     return `<section class="card"><h2>FA権を持つ選手</h2>
       <p>一軍に登録された年数が、高校出身は 8 年・大学や社会人出身は 7 年になると FA 権が取れます（一度使ったら次は 4 年）。
         FA 権を持つ選手は、ここで FA 宣言するかどうかを決めます。<b>忠誠心が高い選手ほど残りやすく</b>、地元の球団にも少し残りやすくなります。
         <b>今季あまり出られなかった選手（出場が少ない）は、出場機会を求めて出ていきやすく</b>、移籍先もレギュラーになれる球団を選びやすくなります。</p>
-      <p class="muted">残留の条件（年俸と年数）を提示できます。高い年俸・長い年数ほど残りやすく、歳を取った選手ほど長い契約を喜びます。受けてくれたら、その年数のあいだ年俸は変わらず、FA 宣言もしません。他球団では ${others} 人が FA 権を持っています。</p>
+      <p class="muted">残留の条件（年俸と年数）を提示できます。年俸は万円で打ちます（相場の ${FA_PAY_MIN} 倍から。空にすると提示しない）。高い年俸・長い年数ほど残りやすく、歳を取った選手ほど長い契約を喜びます。受けてくれたら、その年数のあいだ年俸は変わらず、FA 宣言もしません。他球団では ${others} 人が FA 権を持っています。</p>
       ${rows ? `<div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>総合</th><th>年俸</th><th>FA相場</th><th>忠誠心</th><th>出場</th><th>意向</th><th>残留の提示</th></tr>${rows}</table></div>` : '<p>あなたのチームには FA 権を持つ選手がいません。</p>'}
       ${mine.some(p => mlbFAOk(p)) ? `<p class="muted">海外 FA の権利（一軍 ${MLB_FA_YEARS} 年）を持つ力のある選手は、メジャーへ行くこともあります（譲渡金はありません）。残留の提示をすると、少し残りやすくなります。</p>` : ''}
       </section>${renderPostingPre(F, t)}
@@ -810,12 +816,12 @@ function renderFAStep() {
       return `<tr class="${my ? 'sel' : ''}"><td class="l">${nameCell(p)}${isHomeTeam(p, t) ? '<span class="tag">地元</span>' : ''}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${Math.round(ovr(p))}</td>
         <td>${d.back ? `<span class="tag">メジャー帰り</span><br><span class="muted small">元</span>` : ''}${teamChip(from)}</td><td>${d.back ? '-' : `${d.rank}${d.no ? `<span class="muted small">（${d.no}位）</span>` : ''}`}</td><td>${U.money(d.mv)}</td><td>${comp}</td><td>${d.bids.length ? `${d.bids.length}球団` : 'なし'}</td>
         <td class="l nowrap">${my ? `<b>年俸${U.money(my.salary)}・${my.years}年</b> <button class="sm" data-act="faBidCancel" data-pid="${d.pid}">取り消す</button>` : `
-          <select data-chg="faMul" data-pid="${d.pid}">${CONTRACT_MULS.map(v => `<option value="${v}" ${dr.mul === v ? 'selected' : ''}>相場×${v}（${U.money(Math.round(d.mv * v / 10) * 10)}）</option>`).join('')}</select>
+          ${payInput('faPay', d.pid, Math.round(d.mv * dr.mul / 10) * 10, d.mv)}
           <select data-chg="faYears" data-pid="${d.pid}">${U.range(1, CONTRACT_YEARS_MAX).map(v => `<option value="${v}" ${dr.years === v ? 'selected' : ''}>${v}年</option>`).join('')}</select>
           <button class="sm primary" data-act="faBid" data-pid="${d.pid}">${d.from === t.id ? '残留を申し込む' : '申し込む'}</button>`}</td></tr>`;
     }).join('');
     return `${renderAbroadList(F, t)}<section class="card"><h2>FA市場（${F.declared.length}人が宣言）</h2>
-      <p>宣言した選手に条件（年俸と年数）を出せます。選手は、年俸・年数・チームの強さと人気・元の球団への忠誠心・地元かどうかを比べて決めます。
+      <p>宣言した選手に条件（年俸と年数）を出せます。年俸は万円で打ちます（相場の ${FA_PAY_MIN} 倍から）。選手は、年俸・年数・チームの強さと人気・元の球団への忠誠心・地元かどうかを比べて決めます。
         年を取った選手ほど長い契約を喜びます。</p>
       <p class="muted">補償：ランクは元の球団の中の年俸の順位で、1〜3 位が A、4〜8 位が B。ほかの球団から取ると、元の球団が<b>翌年のドラフトの指名権</b>か<b>金銭</b>を選んで受け取ります。
         A は 2 巡目の指名権か年俸の 0.8 倍、B（4〜7 位）は 3 巡目の指名権か 0.6 倍、B の 8 位は金銭だけ。翌年の開幕のころに ${FA_COMP_AGE} 歳以上になる選手は補償がいりません。

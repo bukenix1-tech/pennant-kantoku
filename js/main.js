@@ -412,7 +412,21 @@ const CHANGES = {
   },
   extMul(el) { const pid = +el.dataset.pid; UI.extDraft[pid] = { years: 2, ...UI.extDraft[pid], mul: +el.value }; },
   extYears(el) { const pid = +el.dataset.pid; UI.extDraft[pid] = { mul: 1, ...UI.extDraft[pid], years: +el.value }; },
-  faMul(el) { const pid = +el.dataset.pid; UI.faDraft[pid] = { ...(UI.faDraft[pid] || { years: 3 }), mul: +el.value }; return 'keep'; },
+  // FA の年俸を打ったとき。相場の FA_PAY_MIN 倍より低ければ、そこまで上げる
+  retainPay(el) {
+    const pid = +el.dataset.pid, p = S.players[pid], now = retainOffer(S.off.fa.retain[pid]) || { years: 1 };
+    const v = Math.round(+el.value / 10) * 10;
+    if (!v) { setRetain(pid, 0); return; }
+    const mv = faMarket(p);
+    if (v < mv * FA_PAY_MIN) UI.toast = `相場の ${FA_PAY_MIN} 倍（${U.money(Math.ceil(mv * FA_PAY_MIN / 10) * 10)}）より低くは出せません。`;
+    setRetain(pid, Math.max(FA_PAY_MIN, v / mv), now.years);
+  },
+  faPay(el) {
+    const pid = +el.dataset.pid, d = S.off.fa.declared.find(x => x.pid === pid), p = S.players[pid];
+    const v = Math.round(+el.value / 10) * 10 || d.mv;
+    if (v < d.mv * FA_PAY_MIN) UI.toast = `相場の ${FA_PAY_MIN} 倍（${U.money(Math.ceil(d.mv * FA_PAY_MIN / 10) * 10)}）より低くは出せません。`;
+    UI.faDraft[pid] = { years: p.age <= 30 ? 3 : 1, ...UI.faDraft[pid], mul: Math.max(FA_PAY_MIN, v / d.mv) };
+  },
   faYears(el) { const pid = +el.dataset.pid; UI.faDraft[pid] = { ...(UI.faDraft[pid] || { mul: 1 }), years: +el.value }; return 'keep'; },
   viewTeam(el) { UI.viewTeam = +el.value; },
   focus(el) { S.players[+el.dataset.pid].focus = el.value; return 'keep'; },

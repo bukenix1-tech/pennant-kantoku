@@ -487,3 +487,5 @@ details.slim summary { cursor: pointer; font-weight: bold; }
 /* 左打ち・両打ちの印 */
 .ab.traj { white-space: nowrap; }
 .ab.traj .bats { color: #7c3aed; font-weight: bold; margin-right: 3px; }
+/* FA の年俸を打つ箱 */
+input.pay { width: 6.5em; text-align: right; }
