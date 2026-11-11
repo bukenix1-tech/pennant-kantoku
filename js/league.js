@@ -563,6 +563,7 @@ function advanceDay() {
     S.teams.forEach(t => { if (t.id !== S.myTeamId) { autoActive(t); autoRotation(t); } });
   }
   S.day++;
+  if (S.retireYear !== S.year && S.day >= Math.round(S.schedule.length * RETIRE_ANNOUNCE_AT)) announceRetire();
   if (S.day >= S.schedule.length) endRegular();
   return true;
 }
@@ -1526,7 +1527,7 @@ function faMood(c) { return c < 0.2 ? '残留濃厚' : c < 0.4 ? '残留寄り' 
 
 function offFAStart() {
   const eligible = [];
-  S.teams.forEach(t => teamPlayers(t).forEach(p => { if (hasFA(p) && !(p.contractYears > 0)) eligible.push(p.id); })); // 複数年契約の途中は宣言しない
+  S.teams.forEach(t => teamPlayers(t).forEach(p => { if (hasFA(p) && !(p.contractYears > 0) && !p.retireNext) eligible.push(p.id); })); // 複数年契約の途中と、引退を表明した選手は宣言しない
   S.off.fa = { stage: 'pre', eligible, retain: {}, declared: [], myBids: {}, results: [], post: postingRequests(), postOk: {}, abroad: [] };
   S.off.step = 'fa';
 }
@@ -1730,7 +1731,7 @@ function mlbDealChance(p) { return U.clamp(MLB_DEAL_BASE + (ovr(p) - MLB_MIN_OVR
 function postingRequests() {
   const list = [];
   S.teams.forEach(t => teamPlayers(t).forEach(p => {
-    if (isRookie(p) || !mlbWanted(p) || hasMlbFA(p)) return;
+    if (isRookie(p) || p.retireNext || !mlbWanted(p) || hasMlbFA(p)) return;
     const c = POST_WANT * (p.age < POST_MINOR_AGE ? 0.5 : 1) + (p.postDenied ? POST_DENIED_WANT : 0);
     if (U.chance(c)) list.push(p.id);
   }));
@@ -1869,8 +1870,8 @@ function retainPlayer(r) {
   return true;
 }
 
-function retireChance(p, ca, o) {
-  const st = p.stats, scale = Math.max(1, S.games || 143) / 143;
+function retireChance(p, ca, o, part = 1) {
+  const st = p.stats, scale = Math.max(1, S.games || 143) / 143 * part; // part: シーズンの終わりごろに決めるときは、そこまでに出られる試合の割合
   const low = (st.injd || 0) < RETIRE_INJ_DAYS // 長くケガをしていた年は数えない
     && (!canBat(p) || st.g < RETIRE_LOW_G * scale) && (!canPitch(p) || st.pg < RETIRE_LOW_PG * scale);
   if (ca >= RETIRE_MAX_AGE) return 0.9; // 43 歳前後でほぼ全員
@@ -1881,6 +1882,25 @@ function retireChance(p, ca, o) {
 }
 
 function isRookie(p) { return !!p.drafted && p.drafted.year === S.year; }
+// 今季かぎりで引退するか（転生選手は、もとの選手が辞めた年ごろまで続ける。複数年契約が残っているあいだは引退しない）
+function willRetire(p, part) {
+  if (p.contractYears > 0) return false;
+  if (p.retireAge) return p.age >= p.retireAge && U.chance(0.7);
+  return U.chance(retireChance(p, careerAge(p), ovr(p), part));
+}
+// シーズンの終わりごろに、今季かぎりで引退する選手を決めて発表する（外国人の退団はオフのまま）
+function announceRetire() {
+  S.retireYear = S.year;
+  const part = S.day / S.schedule.length, my = [], big = [];
+  S.teams.forEach(t => teamPlayers(t).forEach(p => {
+    if (!willRetire(p, part)) return;
+    p.retireNext = true;
+    if (t.id === S.myTeamId) my.push(p);
+    else if (meritOf(p) >= 0.3) big.push(`${p.name}（${t.short}）`);
+  }));
+  my.forEach(p => addNews(`${p.name}（${p.age}歳）が、今季かぎりでの現役引退を表明しました。オフの契約更改で慰留できます。`, 'big'));
+  if (big.length) addNews(`ほかの球団では、${big.join('・')}が今季かぎりでの引退を表明しました。`);
+}
 function offContract() {
   const my = myTeam();
   const retired = [], raises = [], honor = [];
@@ -1888,12 +1908,9 @@ function offContract() {
     teamPlayers(t).forEach(p => {
       if (isRookie(p)) return; // このオフに指名した新人は、引退も査定も年齢もこれから
       const o = ovr(p);
-      let leave = false;
-      const ca = careerAge(p);
-      if (p.retireAge) leave = p.age >= p.retireAge && U.chance(0.7); // 転生選手は、もとの選手が辞めた年ごろまで続ける
-      else leave = U.chance(retireChance(p, ca, o));
-      if (p.foreign && o < 55) leave = true;
-      if (p.contractYears > 0) leave = false; // 複数年契約が残っているあいだは引退しない
+      let leave = S.retireYear === S.year ? !!p.retireNext : willRetire(p); // シーズン中に表明した選手が引退する（前の版の途中のデータは、ここで決める）
+      delete p.retireNext;
+      if (p.foreign && o < 55 && !(p.contractYears > 0)) leave = true;
       if (leave) {
         const can = t.id === my.id && !(p.foreign && o < 55); // 力が足りずに出ていく外国人選手は引き止めない
         if (t.id === my.id) retired.push({ pid: p.id, name: p.name, age: p.age, why: p.foreign && p.age < 35 ? '退団' : '引退', can, pos: p.isP ? '投' : p.pos, ovr: Math.round(o), abil: abilKeys(p).map(k => [k, Math.round(p.a[k])]), pit: canPitch(p) ? pitchesOf(p).map(t => [t, pitchLevel(p, t)]) : undefined }); // 退団した選手はデータが消えるので、強さを写しておく

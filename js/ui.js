@@ -169,7 +169,7 @@ function nameCell(p) {
   const tw = p.twoWay ? '<span class="tag twoway">二刀流</span>' : '';
   const gn = p.geniusKnown ? '<span class="tag genius">天才</span>' : '';
   const gr = t && t.id === S.myTeamId && grumbling(t, p) ? '<span class="tag bad" title="力はあるのに出番が少なく、忠誠心が下がっています">不満</span>' : '';
-  const rt = p.retiring ? '<span class="tag bad">引退予定</span>' : '';
+  const rt = p.retiring || p.retireNext ? '<span class="tag bad">引退予定</span>' : '';
   return `<a href="#" data-act="player" data-pid="${p.id}">${h(p.name)}</a>${tw}${gn}${fr}${farm}${inj}${gr}${rt}`;
 }
 function teamChip(t) { return `<span class="chip" style="background:${t.color}">${h(t.short)}</span>`; }
@@ -181,6 +181,7 @@ function render() {
   const tabs = [first, ...TABS.slice(1)];
   if (['home', 'off', 'post'].includes(UI.tab)) UI.tab = first[0];
   const scrolled = keepScroll(app);
+  const oldNav = app.querySelector('nav.tabs'), navX = oldNav ? oldNav.scrollLeft : 0; // 上のタブの横の位置（押したら左端に戻らないように）
   app.innerHTML = `
     ${renderHeader()}
     <nav class="tabs">${tabs.map(([k, n]) => `<button class="${UI.tab === k ? 'on' : ''}" data-act="tab" data-tab="${k}">${n}</button>`).join('')}</nav>
@@ -188,6 +189,14 @@ function render() {
     ${UI.toast ? `<div class="toast">${h(UI.toast)}</div>` : ''}`;
   UI.toast = '';
   scrolled();
+  const nav = app.querySelector('nav.tabs'), on = nav && nav.querySelector('button.on');
+  if (nav) {
+    nav.scrollLeft = navX;
+    if (on) { // 選んだタブが見えないときだけ寄せる
+      const a = on.getBoundingClientRect(), b = nav.getBoundingClientRect();
+      if (a.left < b.left || a.right > b.right) nav.scrollLeft += a.left - b.left - 8;
+    }
+  }
 }
 
 // 描き直しても、表の横スクロールの位置を保つ。同じ見出しの表を同じ順番で探して戻す（画面を切り替えたときは戻さない）
