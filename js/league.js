@@ -1440,7 +1440,7 @@ function playedEnough(p) { const st = p.stats; return st.pa >= 100 || st.outs >=
 function perfSalary(p) {
   const w = Math.max(0, seasonWins(p));
   const v = realSal(800 + w * SAL_PER_WIN + w * w * SAL_PER_WIN2);
-  return Math.round((v > SAL_SOFT ? SAL_SOFT + (v - SAL_SOFT) * SAL_SOFT_RATE : v) / 10) * 10;
+  return Math.round(softSal(v) / 10) * 10;
 }
 
 // 契約更改：去年の年俸から、今年の成績で上げ下げする（能力の数字は使わない）
@@ -1463,12 +1463,9 @@ function renewSalary(p) {
   return Math.max(MIN_SALARY, Math.round(now / 10) * 10);
 }
 
-// FA 市場での相場（年俸）。今の年俸と今年の成績の間くらいを、少し上乗せして
+// FA 市場での相場（年俸）。契約更改で決まるはずの額に、FA 権の分を少し上乗せする。衰えた選手は相場も下がる
 function faMarket(p) {
-  const v = playedEnough(p) ? Math.max(p.salary, (p.salary + perfSalary(p)) / 2) : p.salary;
-  let mv = v * 1.2;
-  if (mv > SAL_SOFT) mv = Math.max(p.salary, SAL_SOFT + (mv - SAL_SOFT) * SAL_SOFT_RATE); // SAL_SOFT を超えると、FA のたびに積み上がらないようにする
-  return Math.max(1000, Math.round(mv / 10) * 10);
+  return Math.max(1000, Math.round(renewSalary(p) * FA_PREMIUM / 10) * 10);
 }
 
 // 年俸のチーム内順位で A（上位 3 人）・B（4〜10 位）・C（それ以外）

@@ -434,16 +434,35 @@ function renderTeam() {
   <section class="card">
     <div class="row"><h2>${teamChip(t)} ${h(t.name)}</h2>${sel}</div>
     <p class="muted">支配下 ${ps.length}人（上限${ROSTER_MAX}）・ 一軍 ${t.active.length}人 ・ 年俸総額 ${U.money(payroll(t))} ・ 名前を押すと詳しく見られます</p>
-    <div class="seg">${[['list', '選手一覧'], ['stats', '今季の成績']].map(([k, n]) => `<button class="${UI.teamView === k ? 'on' : ''}" data-act="teamView" data-k="${k}">${n}</button>`).join('')}</div>
+    <div class="seg">${[['list', '選手一覧'], ['stats', '今季の成績'], ['pay', '年俸']].map(([k, n]) => `<button class="${UI.teamView === k ? 'on' : ''}" data-act="teamView" data-k="${k}">${n}</button>`).join('')}</div>
     ${posFilter('team')}
     ${draftYearFilter(ps)}
-    ${UI.teamView === 'stats' ? teamStats(t, g, showBat, showPit) : `${showBat ? `<h3>野手${g ? `（${g}）` : ''}</h3>${batTable(bats.filter(p => posMatch(p, g) && draftYearMatch(p)))}` : ''}
+    ${UI.teamView === 'pay' ? payTable(t, ps.filter(p => (showBat && canBat(p) && posMatch(p, g)) || (showPit && canPitch(p) && posMatch(p, g))).filter(draftYearMatch))
+      : UI.teamView === 'stats' ? teamStats(t, g, showBat, showPit) : `${showBat ? `<h3>野手${g ? `（${g}）` : ''}</h3>${batTable(bats.filter(p => posMatch(p, g) && draftYearMatch(p)))}` : ''}
     ${showPit ? `<h3>投手${g ? `（${g}）` : ''}</h3>${pitTable(pits.filter(p => posMatch(p, g) && draftYearMatch(p)))}` : ''}`}
   </section>
   ${t.id === S.myTeamId ? `<section class="card genius-box"><h2>✨ 天才</h2>
     ${geniuses.length ? `<p>${geniuses.map(p => `${nameCell(p)}（${posBadge(p)}・${p.age}歳・総合${Math.round(ovr(p))}）`).join('　')}</p>`
       : '<p class="muted">いまはいません。天才は伸びが段ちがいの選手で、自分のチームで 1 年過ごすと分かります。</p>'}
   </section>` : ''}`;
+}
+
+// ---------- 年俸の一覧（人の言葉 2026-11-11「年俸を見れる一覧がない」） ----------
+function payTable(t, list) {
+  const rank = S.teams.map(x => payroll(x)).sort((a, b) => b - a).indexOf(payroll(t)) + 1;
+  const avg = U.sum(S.teams, x => payroll(x)) / S.teams.length;
+  const ps = list.slice().sort((a, b) => b.salary - a.salary);
+  const after = S.phase !== 'season'; // 来季の見込みはシーズンが終わってから
+  const rows = ps.map((p, i) => {
+    const left = contractLeft(p);
+    const next = left > 0 ? '<span class="muted">契約で同じ</span>' : after ? (() => { const v = renewSalary(p), d = v - p.salary;
+      return `${U.money(v)} <span class="${d < 0 ? 'neg' : 'muted'} small">${d >= 0 ? '+' : ''}${Math.round(d / p.salary * 100)}%</span>`; })() : '<span class="muted">-</span>';
+    return `<tr><td>${i + 1}</td><td class="l">${nameCell(p)}${rebornTag(p)}</td><td>${posBadge(p)}</td><td>${p.age}</td><td>${Math.round(ovr(p))}</td>
+      <td><b>${U.money(p.salary)}</b></td><td class="nowrap">${left > 0 ? `あと${left}年` : '単年'}</td><td>${hasFA(p) ? 'FA権' : ''}</td><td class="nowrap">${next}</td></tr>`;
+  }).join('');
+  return `<p>年俸総額 <b>${U.money(payroll(t))}</b>（12 球団で ${rank} 位・12 球団の平均 ${U.money(avg)}）・ 1 億円以上 ${ps.filter(p => p.salary >= 10000).length} 人${list.length < teamPlayers(t).length ? '（いま絞り込んでいる選手の中で）' : ''}</p>
+    <div class="scroll"><table class="tbl"><tr><th>#</th><th>名前</th><th>守</th><th>年</th><th>総合</th><th>年俸</th><th>契約</th><th></th><th>来季の見込み</th></tr>${rows}</table></div>
+    <p class="muted small">来季の見込みは、今季の成績で契約更改したときの額です（シーズンが終わると出ます）。複数年契約の途中の選手は、契約が終わるまで同じ年俸です。</p>`;
 }
 
 // ---------- 今季の成績（チームの選手の一覧） ----------
