@@ -45,23 +45,33 @@ function pitchCell(p) { return `<td class="small"><div class="pbrief">${pitchBri
 const DIR_ARROWS = ['→', '↘', '↓', '↙', '←'];
 function pitchArrow(p, t) { return `<span class="parr">${DIR_ARROWS[U.clamp(Math.round(pitchDir(p, t) / 45), 0, 4)]}︎</span>`; }
 // 選手の画面の変化球の図。中心から曲がる向きに矢印をのばし、長さで変化量を見せる
+// 変化球の図（人の言葉 2026-11-11「球種の真ん中の・をボールの形にして」）。真ん中のボールから、曲がる向きに 7 マスの目盛りを並べ、変化量のぶんだけ塗る
+const PCHART_STEP = 11, PCHART_IN = 15, PCHART_MAXLV = 7;
 function pitchChart(p) {
-  const cx = 120, cy = 27, at = (d, r) => [cx + Math.cos(d) * r, cy + Math.sin(d) * r].map(v => v.toFixed(1));
-  const placed = []; // 置いた字の場所。重なったら矢印の向きに少しずつずらす
+  const cx = 130, cy = 30, at = (d, r) => [cx + Math.cos(d) * r, cy + Math.sin(d) * r].map(v => +v.toFixed(1));
+  const placed = []; // 置いた字の場所。重なったら外へ少しずつずらす
   const marks = pitchesOf(p).map(t => {
-    const d = pitchDir(p, t) * Math.PI / 180, lv = pitchLevel(p, t), len = 10 + lv * 11;
-    const [x, y] = at(d, len);
-    let r = len + 15, lx, ly;
+    const d = pitchDir(p, t) * Math.PI / 180, lv = pitchLevel(p, t);
+    let cells = '';
+    for (let i = 0; i < PCHART_MAXLV; i++) {
+      const [x1, y1] = at(d, PCHART_IN + i * PCHART_STEP + 1), [x2, y2] = at(d, PCHART_IN + (i + 1) * PCHART_STEP - 1);
+      cells += `<line class="${i < lv ? 'on' : 'off'}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+    }
+    let r = PCHART_IN + PCHART_MAXLV * PCHART_STEP + 12, lx, ly;
     for (let i = 0; i < 8; i++, r += 8) {
       [lx, ly] = at(d, r);
-      if (!placed.some(([px, py]) => Math.abs(px - lx) < 27 && Math.abs(py - ly) < 17)) break;
+      if (!placed.some(([px, py]) => Math.abs(px - lx) < 30 && Math.abs(py - ly) < 15)) break;
     }
-    placed.push([+lx, +ly]);
-    return `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" marker-end="url(#pah)"/><text x="${lx}" y="${(+ly + 4).toFixed(1)}" text-anchor="middle">${PITCHES[t].short}${lv}</text>`;
+    placed.push([lx, ly]);
+    return `${cells}<text x="${lx}" y="${(ly + 4).toFixed(1)}" text-anchor="middle">${PITCHES[t].short}<tspan class="lv">${lv}</tspan></text>`;
   }).join('');
-  return `<svg class="pchart" viewBox="0 0 240 160" role="img" aria-label="変化球の向きと変化量"><defs><marker id="pah" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M1 1L8 5L1 9z"/></marker></defs>
-    <line class="axis" x1="10" y1="${cy}" x2="230" y2="${cy}"/><line class="axis" x1="${cx}" y1="6" x2="${cx}" y2="150"/><circle cx="${cx}" cy="${cy}" r="4"/>
-    <text class="hand" x="4" y="154">${isLefty(p) ? '左投げ' : '右投げ'}</text>${marks}</svg>`;
+  // 真ん中のボール（白い球に赤い縫い目）
+  const ball = `<circle class="ball" cx="${cx}" cy="${cy}" r="9"/>
+    <path class="seam" d="M${cx - 5} ${cy - 7.4}Q${cx - 1.5} ${cy} ${cx - 5} ${cy + 7.4}M${cx + 5} ${cy - 7.4}Q${cx + 1.5} ${cy} ${cx + 5} ${cy + 7.4}"/>`;
+  return `<svg class="pchart" viewBox="0 0 260 185" role="img" aria-label="変化球の向きと変化量">
+    <line class="axis" x1="6" y1="${cy}" x2="254" y2="${cy}"/><line class="axis" x1="${cx}" y1="4" x2="${cx}" y2="170"/>
+    ${marks}${ball}
+    <text class="hand" x="4" y="180">${isLefty(p) ? '左投げ' : '右投げ'}（捕手から見た向き）</text></svg>`;
 }
 // スカウトの見立ての球のキレ（ドラフト候補の欄で使う）
 function kireTag(p) {
