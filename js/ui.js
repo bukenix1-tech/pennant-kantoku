@@ -666,9 +666,9 @@ function renderPlayerModal(p) {
       ? `<button data-act="dropTwoWay" data-pid="${p.id}">二刀流をやめる</button> <span class="muted">${p.isP ? '打撃' : '投球'}の能力がなくなり、本業に専念します</span>`
       : p.age <= 27 && ovr(p) < TWO_WAY_MIN_OVR ? `<span class="muted">二刀流に挑戦できるのは総合${TWO_WAY_MIN_OVR}以上の選手です（いま${Math.round(ovr(p))}）</span>`
       : p.age <= 27 ? `<button data-act="tryTwoWay" data-pid="${p.id}">二刀流に挑戦させる</button> <span class="muted">${p.isP ? '打撃' : '投球'}の練習を始めます（最初は低い能力から。練習の伸びは両方に分かれます）</span>` : ''}</p>
-    ${underContract(p) ? '<p class="muted">複数年契約の途中なので、自由契約にできません。トレードには出せます。</p>' : faOpen()
+    ${underContract(p) ? '<p class="muted">複数年契約の途中なので、自由契約にできません。トレードには出せます。</p>' : faOpen() || releaseOpen()
       ? `<p><button class="danger" data-act="release" data-pid="${p.id}">自由契約にする</button> <span class="muted">チームから外します。他球団に拾われることもあります</span></p>`
-      : '<p class="muted">自由契約にできるのは、オフの契約更改〜開幕前と、シーズン中の7月末までです。</p>'}` : ''}
+      : '<p class="muted">自由契約にできるのは、オフ（ドラフトの前と、契約更改〜開幕前）と、シーズン中の7月末までです。</p>'}` : ''}
   ${S.freeAgents.includes(p.id) ? `<p><span class="tag">自由契約</span> 前所属 ${h(p.lastTeam || '-')} ・ 希望年俸 ${U.money(p.salary)}</p>` : ''}`;
 }
 
@@ -1653,8 +1653,9 @@ function renderOff() {
       ${pbpButtons('js') ? `<h3>日本シリーズを振り返る</h3>${pbpButtons('js')}` : ''}
     </section>
     <section class="card"><h2>表彰</h2><div class="grid2">${LEAGUES.map(lg => `<div><h3>${LEAGUE_NAME[lg]}</h3><table class="tbl">${O.awards.filter(a => (a.lg || lg) === lg).map(a => `<tr class="${S.players[a.pid] && S.players[a.pid].teamId === S.myTeamId ? 'me' : ''}"><th class="l">${a.title}</th><td class="l">${h(a.name)}（${h(a.team)}）</td><td>${a.val}</td></tr>`).join('')}</table></div>`).join('')}</div>
-      ${posAwards('ベストナイン', O.b9)}${posAwards('ゴールデングラブ', O.gg)}
-      <button class="primary big" data-act="offNext">ドラフトへ ▶</button></section>`;
+      ${posAwards('ベストナイン', O.b9)}${posAwards('ゴールデングラブ', O.gg)}</section>
+    ${renderReleasePanel()}
+    <section class="card"><button class="primary big" data-act="offNext">ドラフトへ ▶</button></section>`;
   } else if (O.step === 'intl') {
     body = renderIntl(O.intl);
   } else if (O.step === 'fa') {
@@ -1954,8 +1955,10 @@ function renderReleasePanel() {
   const over = t.players.length - ROSTER_MAX;
   const list = teamPlayers(t).sort((a, b) => tradeValue(a) - tradeValue(b));
   const rows = list.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${p.type}</td><td class="stars">${potStars(p.pot)}</td>
-    <td>${Math.round(ovr(p))}</td><td>${U.money(p.salary)}</td><td>${underContract(p) ? `<span class="muted small">契約中（あと${contractLeft(p)}年）</span>` : `<button class="sm danger" data-act="release" data-pid="${p.id}">戦力外</button>`}</td></tr>`).join('');
-  return `<section class="card"><h2>戦力外通告</h2>
+    <td>${Math.round(ovr(p))}</td><td>${U.money(p.salary)}</td><td>${underContract(p) ? `<span class="muted small">契約中（あと${contractLeft(p)}年）</span>` : p.retireNext ? '<span class="muted small">引退する</span>' : `<button class="sm danger" data-act="release" data-pid="${p.id}">戦力外</button>`}</td></tr>`).join('');
+  const first = S.off.step === 'awards';
+  return `<section class="card"><h2>戦力外通告（${first ? '第 1 次' : '第 2 次'}）</h2>
+    ${first ? '<p>ドラフトの前に、来季の構想から外れる選手を自由契約にしておけます。ドラフトで指名する枠を空けられます。契約更改のあとにも、もう一度できます（第 2 次）。</p>' : ''}
     <p>支配下 <b>${t.players.length}人</b>（上限${ROSTER_MAX}人）${over > 0 ? ` ・ <span class="neg">あと${over}人減らす必要があります</span>` : ' ・ 上限以内です'}</p>
     <p class="muted">トレード価値の低い順に並んでいます。戦力外にした選手は自由契約選手になり、他球団に拾われることもあります。複数年契約の途中の選手は戦力外にできません（トレードには出せます）。</p>
     <div class="scroll release-list"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>型</th><th>才能</th><th>総合</th><th>年俸</th><th></th></tr>${rows}</table></div>

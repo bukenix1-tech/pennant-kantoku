@@ -2081,7 +2081,21 @@ function rareYears(p) {
 }
 function rareTag(p) { return p.rareYears ? `<span class="tag rare">${p.rareYears}年に一人の逸材</span>` : ''; }
 
+// ほかの球団の第 1 次戦力外通告（ドラフトの前）
+function firstCuts() {
+  S.off.cut1 = true;
+  let n = 0;
+  S.teams.forEach(t => {
+    if (t.id === S.myTeamId) return;
+    const list = teamPlayers(t).filter(p => !underContract(p) && !p.retireNext && careerAge(p) >= CUT1_MIN_AGE)
+      .sort((a, b) => tradeValue(a) - tradeValue(b)).slice(0, U.rint(CUT1_N[0], CUT1_N[1]));
+    list.forEach(p => { toFreeAgent(p); n++; });
+  });
+  if (n) addNews(`第 1 次戦力外通告：ほかの球団から ${n} 人が自由契約になりました（「自由契約」の画面で見られます。契約できるのは契約更改のあとから）。`);
+}
+
 function offDraftStart() {
+  if (!S.off.cut1) firstCuts();
   retireFinish();
   const pool = (S.draftClass || makeDraftClass()).filter(id => S.players[id]);
   S.draftClass = null;
@@ -2460,7 +2474,7 @@ function fillRoster(t, min) {
 
 // ---------- 自由契約 ----------
 // 自由契約にできるのはオフの契約更改〜開幕前だけ（戦力外通告の時期）
-function releaseOpen() { return S.phase === 'off' && ['contract', 'camp'].includes(S.off.step); }
+function releaseOpen() { return S.phase === 'off' && ['awards', 'contract', 'camp'].includes(S.off.step); } // 表彰のあと（ドラフトの前）が第 1 次、契約更改〜キャンプの準備が第 2 次
 
 // 自由契約選手・外国人と契約できるのは、オフの契約更改〜開幕前と、シーズン中の 7 月末まで
 function faOpen() {
@@ -2728,7 +2742,8 @@ function signForeign(pid) {
 function releasePlayer(pid) {
   const p = S.players[pid];
   const t = myTeam();
-  if (!faOpen()) return '自由契約にできるのは、オフの契約更改〜開幕前と、シーズン中の7月末までです。';
+  if (!faOpen() && !releaseOpen()) return '自由契約にできるのは、オフ（ドラフトの前と、契約更改〜開幕前）と、シーズン中の7月末までです。';
+  if (p.retireNext) return `${p.name}は今季かぎりで引退します。`;
   if (underContract(p)) return `${p.name}は複数年契約の途中なので、自由契約にできません。`;
   if (t.players.length <= 20) return 'これ以上は減らせません。';
   toFreeAgent(p);
