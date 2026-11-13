@@ -466,6 +466,9 @@ function renderTeam() {
   </section>` : ''}`;
 }
 
+// 才能の★。隠している選手は「？」（ドラフト候補と入団してまもない選手）
+function potLabel(p) { return potHidden(p) ? '<span class="muted" title="入団して数年は才能が分かりません">？</span>' : potStars(p.pot); }
+
 // FA の年俸を打つ箱（万円）。横に、相場の何倍かと円の書き方を出す
 function payInput(chg, pid, v, mv) {
   return `<input type="number" class="pay" data-chg="${chg}" data-pid="${pid}" value="${v}" min="${Math.ceil(mv * FA_PAY_MIN / 10) * 10}" step="100" inputmode="numeric" placeholder="提示しない">万円
@@ -636,7 +639,7 @@ function renderPlayerModal(p) {
   return `
   <h2>${p.no != null && team ? `<span class="muted">#${p.no}</span> ` : ''}${h(p.name)} ${p.foreign ? '<span class="tag">外国人</span>' : ''}${rebornTag(p)}</h2>
   ${rebornOf(p) ? `<p class="muted">転生選手：${h(rebornOf(p).note)}</p>` : ''}
-  <p>${team ? teamChip(team) : ''} ${p.twoWay ? `二刀流（投手：${p.role || '-'}・野手：${p.isP ? p.pos2 : p.pos}）` : p.isP ? `投手（${p.role}）` : `野手（${p.pos}）`}・${handText(p)} ${posBadge(p)}${canBat(p) ? ` ・ サブポジ ${subsOf(p).length ? subsOf(p).join('・') : 'なし'}` : ''} ・ ${p.age}歳 ・ ${p.type}型 ・ 才能 <span class="stars">${potStars(potSeen(p))}</span>
+  <p>${team ? teamChip(team) : ''} ${p.twoWay ? `二刀流（投手：${p.role || '-'}・野手：${p.isP ? p.pos2 : p.pos}）` : p.isP ? `投手（${p.role}）` : `野手（${p.pos}）`}・${handText(p)} ${posBadge(p)}${canBat(p) ? ` ・ サブポジ ${subsOf(p).length ? subsOf(p).join('・') : 'なし'}` : ''} ・ ${p.age}歳 ・ ${p.type}型 ・ 才能 <span class="stars">${potLabel(p)}</span>${potHidden(p) && p.hint ? `（入団時の講評：${h(p.hint)}）` : ''}
    ・ 調子 ${condCell(p)} ${COND_LABEL[p.cond]} ・ 年俸 ${U.money(p.salary)} ${p.inj ? `<span class="tag bad">故障 残り${p.inj}日</span>` : ''}${p.awakened ? `<span class="tag awaken-tag">覚醒×${p.awakened}</span>` : ''}${p.bigAwakened ? `<span class="tag awaken-tag big">大覚醒×${p.bigAwakened}</span>` : ''}${p.limitBroken ? `<span class="tag awaken-tag">上限解放×${p.limitBroken}</span>` : ''}${p.b9 ? `<span class="tag">ベストナイン×${p.b9}</span>` : ''}${p.gg ? `<span class="tag">GG×${p.gg}</span>` : ''}${p.as ? `<span class="tag">オールスター×${p.as}</span>` : ''}${p.asMvp ? `<span class="tag">球宴MVP×${p.asMvp}</span>` : ''}${p.jp ? `<span class="tag">日本代表×${p.jp}</span>` : ''}${p.intlMvp ? `<span class="tag awaken-tag">国際大会MVP×${p.intlMvp}</span>` : ''}${Object.keys(p.fx || {}).map(k => `<span class="tag awaken-tag">${k === 'k' ? `${FEAT_K}奪三振以上` : FEAT_WORD[k]}×${p.fx[k]}</span>`).join('')}${team && grumbling(team, p) ? '<span class="tag bad">起用に不満</span>' : ''}</p>
   ${p.abroad ? `<p><span class="tag">メジャー</span> ${p.abroad.year}年オフに${h(p.abroad.via)}でメジャーへ（元${h(S.teams[p.abroad.from] ? S.teams[p.abroad.from].short : '-')}）</p>` : ''}
   ${(p.mlb || []).map(m => `<p class="muted">⚾ メジャー：${m.from}〜${m.to}年（${h(m.via)}）</p>`).join('')}
@@ -940,7 +943,7 @@ function renderTrain() {
   <section class="card">
     <h2>選手ごとの重点</h2>
     <div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>型</th><th>才能</th><th>総合</th><th>重点</th></tr>
-    ${ps.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${p.type}</td><td class="stars">${potStars(potSeen(p))}</td><td>${Math.round(ovr(p))}</td>
+    ${ps.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${p.type}</td><td class="stars">${potLabel(p)}</td><td>${Math.round(ovr(p))}</td>
       <td><select data-chg="focus" data-pid="${p.id}">${focusOptions(p).map(f => `<option ${p.focus === f ? 'selected' : ''}>${f}</option>`).join('')}</select></td></tr>`).join('')}
     </table></div>
   </section>`;
@@ -1612,7 +1615,7 @@ function renderFA() {
     const keys = abilKeys(p);
     const fee = Math.round(p.salary * 0.2);
     const can = open && t.players.length < ROSTER_MAX && t.money >= fee;
-    return `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${p.type}</td><td class="stars">${potStars(potSeen(p))}</td>
+    return `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${p.type}</td><td class="stars">${potLabel(p)}</td>
       <td class="l">${keys.map(k => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(p.a.velo) + 'km' : `<span class="g g${U.grade(p.a[k])}">${U.grade(p.a[k])}</span>`}`).join(' ')}${trajTag(p)}</td>
       <td>${Math.round(ovr(p))}</td><td>${h(p.lastTeam || '-')}</td><td>${U.money(p.salary)}</td>
       <td><button class="sm primary" data-act="signFA" data-pid="${p.id}" ${can ? '' : 'disabled'}>契約（契約金${U.money(fee)}）</button></td></tr>`;
@@ -1622,7 +1625,7 @@ function renderFA() {
     ? cardList(arr, p => {
       const fee = Math.round(p.salary * 0.2);
       const can = open && t.players.length < ROSTER_MAX && t.money >= fee;
-      return playerCard(p, { sub: `<span>${p.type}</span><span class="muted">才能</span><span class="stars">${potStars(potSeen(p))}</span>`,
+      return playerCard(p, { sub: `<span>${p.type}</span><span class="muted">才能</span><span class="stars">${potLabel(p)}</span>`,
         lines: `<div class="pc-line">前所属 ${h(p.lastTeam || '-')} ・ 希望年俸 ${U.money(p.salary)}</div>`,
         action: `<button class="sm primary" data-act="signFA" data-pid="${p.id}" ${can ? '' : 'disabled'}>契約（契約金${U.money(fee)}）</button>` });
     })
@@ -1735,7 +1738,7 @@ function prospectTable(ids, mode) {
     const on = watch.includes(p.id);
     return `<tr class="${on ? 'sel' : ''}"><td><button class="star-btn ${on ? 'on' : ''}" data-act="watch" data-pid="${p.id}" title="気になる">${on ? '★' : '☆'}</button></td>
       <td class="l"><b>${h(p.name)}</b>${p.twoWay ? '<span class="tag twoway">二刀流</span>' : ''}${rebornTag(p)}${rareTag(p)}</td><td>${p.kind}</td><td>${posBadge(p)}</td><td>${p.age}</td>
-      <td>${geniusHint(p) ? '<span class="tag genius">天才肌？</span>' : ''}</td><td class="stars">${potStars(scoutView(p, 'pot'))}</td><td class="stars">${visualStars(p.visual)}</td>
+      <td>${geniusHint(p) ? '<span class="tag genius">天才肌？</span>' : ''}</td><td class="stars">${potLabel(p)}</td><td class="stars">${visualStars(p.visual)}</td>
       <td class="l">${keys.map(k => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(scoutView(p, k)) + 'km' : `<span class="g g${U.grade(scoutView(p, k))}">${U.grade(scoutView(p, k))}</span>`}`).join(' ')} ${kireTag(p)}${trajTag(p)}</td>
       <td class="l wrap amateur"><div>${tierTag(p)}</div>${A ? `<div>${h(A.team)}</div><div>${h(A.line)}</div>${A.title ? `<div class="atitle">🏆 ${h(A.title)}</div>` : ''}` : ''}
         <div class="muted">講評：${h(scoutComment(p))}</div></td>
@@ -1748,7 +1751,7 @@ function prospectTable(ids, mode) {
       cls: on ? 'sel' : '', view: true, noCond: true, ovr: Math.round(seen(p)),
       lead: `<button class="star-btn ${on ? 'on' : ''}" data-act="watch" data-pid="${p.id}">${on ? '★' : '☆'}</button>`,
       name: `<b>${h(p.name)}</b>${p.twoWay ? '<span class="tag twoway">二刀流</span>' : ''}${rebornTag(p)}${rareTag(p)}${geniusHint(p) ? '<span class="tag genius">天才肌？</span>' : ''}`,
-      sub: `<span>${p.kind}</span><span class="muted">才能</span><span class="stars">${potStars(scoutView(p, 'pot'))}</span><span class="muted">ビジュアル</span><span class="stars">${visualStars(p.visual)}</span>`,
+      sub: `<span>${p.kind}</span><span class="muted">才能</span><span class="stars">${potLabel(p)}</span><span class="muted">ビジュアル</span><span class="stars">${visualStars(p.visual)}</span>`,
       lines: `<div class="pc-line">${tierTag(p)}</div>${A ? `<div class="pc-line">${h(A.team)}<br>${h(A.line)}</div>${A.title ? `<div class="pc-line atitle">🏆 ${h(A.title)}</div>` : ''}` : ''}<div class="pc-line muted">講評：${h(scoutComment(p))}</div>`,
       action: pickable ? pickBtn(p) : '',
     });
@@ -1972,7 +1975,7 @@ function renderReleasePanel() {
   const t = myTeam();
   const over = t.players.length - ROSTER_MAX;
   const list = teamPlayers(t).sort((a, b) => tradeValue(a) - tradeValue(b));
-  const rows = list.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${p.type}</td><td class="stars">${potStars(potSeen(p))}</td>
+  const rows = list.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${p.type}</td><td class="stars">${potLabel(p)}</td>
     <td>${Math.round(ovr(p))}</td><td>${U.money(p.salary)}</td><td>${underContract(p) ? `<span class="muted small">契約中（あと${contractLeft(p)}年）</span>` : p.retireNext ? '<span class="muted small">引退する</span>' : `<button class="sm danger" data-act="release" data-pid="${p.id}">戦力外</button>`}</td></tr>`).join('');
   const first = S.off.step === 'awards';
   return `<section class="card"><h2>戦力外通告（${first ? '第 1 次' : '第 2 次'}）</h2>

@@ -1998,7 +1998,7 @@ function finishProspect(p, kind) {
   abilKeys(p).forEach(k => { p.noise[k] = miss(); });
   if (canPitch(p)) p.noise.kire = miss(); // 球のキレ
   p.noise.pot = miss();
-  p.noise.aiPot = U.clamp(U.gauss(), -2.5, 2.5); // ほかの球団の見立てのずれ（どの球団も同じ向きの分）
+  p.noise.rep = U.clamp(U.gauss(), -2.5, 2.5); // 才能の評判のずれ（-1〜1 で REP_SD ぶん）
   p.amateur = makeAmateur(p, kind);
   const ry = rareYears(p);
   if (ry) p.rareYears = ry;
@@ -2142,7 +2142,7 @@ function scoutView(p, key) {
   if (!n || typeof n !== 'object') return real;
   const unit = n.unit != null ? n.unit : (n.dev || 0) / 15; // 前の版のセーブにも対応
   const dev = unit * scoutRange();
-  if (key === 'pot') return U.clamp(real + unit * Math.max(scoutRange(), POT_SEEN_MIN) * 0.025, 0.5, 1.7);
+  if (key === 'pot') return U.clamp(real + repOff(p) * SCOUT_REP_W[myTeam().fac.scout] + unit * scoutRange() * POT_SEEN_MUL, 0.5, 1.7); // 評判に引っぱられ、スカウトを上げるほど本当に近づく
   return U.clamp(real + dev, 1, key === 'velo' ? VELO_MAX : ABIL_MAX);
 }
 
@@ -2247,9 +2247,8 @@ function scoutComment(p) {
   const pot = scoutView(p, 'pot');
   if (canBat(p) && trajOf(p) === 4) parts.push('打球が高く上がるアーチスト');
   else if (canBat(p) && trajOf(p) === 1) parts.push('低く鋭い打球のライナー打者');
-  if (pot >= 1.42) parts.push('将来のスター候補');
-  else if (pot >= 1.22) parts.push('伸びしろ十分');
-  else if (pot < 0.85) parts.push('完成度は高いが伸びしろは小さめ');
+  const hint = potHint(p);
+  if (hint) parts.push(hint);
   if (p.kind === '高校' && pot >= 1.15 && ovr(p) < 38) parts.push('じっくり育てたい素材型');
   if (p.kind === '社会人' && ovr(p) >= 52) parts.push('即戦力');
   if (p.kind === '高卒社会人') parts.push(ovr(p) >= 46 ? '社会人の3年で体ができ、まだ若い' : '若さが魅力で、もうひと伸びしそう');
@@ -2269,8 +2268,10 @@ function geniusHint(p) {
 function draftValue(p) { return ovr(p) * 0.6 + p.pot * 40 + (p.age <= 18 ? 5 : 0); }
 // ほかの球団が見る値。才能はスカウトの見立てでずれる（どの球団も同じ向きの分＋球団ごとの分）
 function teamNoise(pid, tid) { const x = Math.sin(pid * 12.9898 + tid * 78.233) * 43758.5453; return ((x - Math.floor(x)) * 2 - 1) * 1.7; } // 球団と選手で決まる -1.7〜1.7（ばらつき 1 ぐらい）
+// 評判と本当の才能の差（前の版の候補は aiPot をそのまま使う）
+function repOff(p) { const n = p.noise || {}; return (n.rep != null ? n.rep : n.aiPot || 0) * REP_SD; }
 function aiDraftValue(p, tid) {
-  const seen = p.pot + ((p.noise && p.noise.aiPot) || 0) * AI_SCOUT_POT[0] + teamNoise(p.id, tid) * AI_SCOUT_POT[1];
+  const seen = p.pot + repOff(p) * AI_SCOUT_POT[0] + teamNoise(p.id, tid) * AI_SCOUT_POT[1];
   return ovr(p) * 0.6 + seen * 40 + (p.age <= 18 ? 5 : 0);
 }
 // 入団してまもない選手の才能。毎年オフに少し動き、まれに大きく伸びる
@@ -2280,13 +2281,31 @@ function potDrift(p) {
   p.pot = U.clamp(p.pot + U.gauss() * POT_DRIFT_SD + (bloom ? LATE_BLOOM[1] : 0), 0.6, 1.7);
   if (bloom && p.teamId === S.myTeamId) addNews(`${p.name}が一皮むけた様子です。コーチ陣は「伸びしろがまだまだある」と話しています。`, 'good');
 }
-// 画面に出す才能。入団してまもないうちは、スカウトの見立てのまま（年ごとにずれが小さくなる）
-function potSeen(p) {
-  if (!p.drafted || p.reborn || p.potNoise == null) return p.pot;
-  const fade = Math.max(0, 1 - (S.year - p.drafted.year) / POT_CLEAR_YEARS);
-  if (!fade) { delete p.potNoise; return p.pot; }
-  const unit = p.potNoise;
-  return U.clamp(p.pot + unit * Math.max(scoutRange(), POT_SEEN_MIN) * 0.025 * fade, 0.5, 1.7);
+// 才能の★を隠すか。ドラフト候補と、入団してまもない選手（転生選手はのぞく）
+function potHidden(p) {
+  if (p.reborn) return false;
+  if (p.noise) return true; // ドラフト候補
+  return !!p.drafted && S.year - p.drafted.year < POT_CLEAR_YEARS;
+}
+// 才能のありそうな選手への、講評のひとこと。見立て（スカウトの段階でずれる）で決めるので、外れることもある。出ない選手もいる
+function potHint(p) {
+  if (p.hint != null) return p.hint; // 入団したら、ドラフトのときのひとことのまま
+  if (p.hintRoll == null) p.hintRoll = Math.random();
+  const pot = scoutView(p, 'pot'), r = p.hintRoll;
+  if (pot >= POT_HINT[0] && r < POT_HINT[1]) {
+    const where = p.kind === '高校' ? '高校の3年間' : p.kind === '大学' ? '大学の4年間' : '社会人の3年間';
+    const km = Math.round(6 + (pot - POT_HINT[0]) * 25 + r * 8);
+    const list = [
+      canPitch(p) ? `${where}で球速を${km}km上げた` : `${where}で本塁打の数を毎年増やしてきた`,
+      'まだ体が細く、伸びしろがある',
+      '野球を本格的に始めたのが遅く、まだまだ伸びそう',
+      '練習の虫で、監督も「まだまだ伸びる」と話す',
+    ];
+    if (pot >= 1.42) list.push('将来のスター候補との声も');
+    return list[Math.floor(r / POT_HINT[1] * list.length)];
+  }
+  if (pot < 0.85 && r < 0.4) return '完成度は高いが、伸びしろは小さめ';
+  return '';
 }
 
 // 交渉権を得た選手を球団に入れる
@@ -2447,7 +2466,8 @@ function offDraftFinish() {
   S.off.draft.pool.forEach(id => delete S.players[id]);
   S.off.draft.pool = [];
   // 才能の見立てのずれだけは残す（入団してしばらくは、才能の★が見立てのまま）
-  Object.values(S.players).forEach(p => { if (p.noise && p.noise.pot) p.potNoise = p.noise.pot.unit != null ? p.noise.pot.unit : (p.noise.pot.dev || 0) / 15; delete p.noise; });
+  // 入団した選手は、ドラフトのときの講評のひとことを残す（才能の★が出るまで、選手の画面に出す）
+  Object.values(S.players).forEach(p => { if (p.noise && p.drafted) p.hint = potHint(p); delete p.noise; delete p.hintRoll; });
 }
 
 function offCampStart() {
