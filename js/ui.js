@@ -636,7 +636,7 @@ function renderPlayerModal(p) {
   return `
   <h2>${p.no != null && team ? `<span class="muted">#${p.no}</span> ` : ''}${h(p.name)} ${p.foreign ? '<span class="tag">外国人</span>' : ''}${rebornTag(p)}</h2>
   ${rebornOf(p) ? `<p class="muted">転生選手：${h(rebornOf(p).note)}</p>` : ''}
-  <p>${team ? teamChip(team) : ''} ${p.twoWay ? `二刀流（投手：${p.role || '-'}・野手：${p.isP ? p.pos2 : p.pos}）` : p.isP ? `投手（${p.role}）` : `野手（${p.pos}）`}・${handText(p)} ${posBadge(p)}${canBat(p) ? ` ・ サブポジ ${subsOf(p).length ? subsOf(p).join('・') : 'なし'}` : ''} ・ ${p.age}歳 ・ ${p.type}型 ・ 才能 <span class="stars">${potStars(p.pot)}</span>
+  <p>${team ? teamChip(team) : ''} ${p.twoWay ? `二刀流（投手：${p.role || '-'}・野手：${p.isP ? p.pos2 : p.pos}）` : p.isP ? `投手（${p.role}）` : `野手（${p.pos}）`}・${handText(p)} ${posBadge(p)}${canBat(p) ? ` ・ サブポジ ${subsOf(p).length ? subsOf(p).join('・') : 'なし'}` : ''} ・ ${p.age}歳 ・ ${p.type}型 ・ 才能 <span class="stars">${potStars(potSeen(p))}</span>
    ・ 調子 ${condCell(p)} ${COND_LABEL[p.cond]} ・ 年俸 ${U.money(p.salary)} ${p.inj ? `<span class="tag bad">故障 残り${p.inj}日</span>` : ''}${p.awakened ? `<span class="tag awaken-tag">覚醒×${p.awakened}</span>` : ''}${p.bigAwakened ? `<span class="tag awaken-tag big">大覚醒×${p.bigAwakened}</span>` : ''}${p.limitBroken ? `<span class="tag awaken-tag">上限解放×${p.limitBroken}</span>` : ''}${p.b9 ? `<span class="tag">ベストナイン×${p.b9}</span>` : ''}${p.gg ? `<span class="tag">GG×${p.gg}</span>` : ''}${p.as ? `<span class="tag">オールスター×${p.as}</span>` : ''}${p.asMvp ? `<span class="tag">球宴MVP×${p.asMvp}</span>` : ''}${p.jp ? `<span class="tag">日本代表×${p.jp}</span>` : ''}${p.intlMvp ? `<span class="tag awaken-tag">国際大会MVP×${p.intlMvp}</span>` : ''}${Object.keys(p.fx || {}).map(k => `<span class="tag awaken-tag">${k === 'k' ? `${FEAT_K}奪三振以上` : FEAT_WORD[k]}×${p.fx[k]}</span>`).join('')}${team && grumbling(team, p) ? '<span class="tag bad">起用に不満</span>' : ''}</p>
   ${p.abroad ? `<p><span class="tag">メジャー</span> ${p.abroad.year}年オフに${h(p.abroad.via)}でメジャーへ（元${h(S.teams[p.abroad.from] ? S.teams[p.abroad.from].short : '-')}）</p>` : ''}
   ${(p.mlb || []).map(m => `<p class="muted">⚾ メジャー：${m.from}〜${m.to}年（${h(m.via)}）</p>`).join('')}
@@ -940,7 +940,7 @@ function renderTrain() {
   <section class="card">
     <h2>選手ごとの重点</h2>
     <div class="scroll"><table class="tbl"><tr><th>名前</th><th>守</th><th>年</th><th>型</th><th>才能</th><th>総合</th><th>重点</th></tr>
-    ${ps.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${p.type}</td><td class="stars">${potStars(p.pot)}</td><td>${Math.round(ovr(p))}</td>
+    ${ps.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${p.type}</td><td class="stars">${potStars(potSeen(p))}</td><td>${Math.round(ovr(p))}</td>
       <td><select data-chg="focus" data-pid="${p.id}">${focusOptions(p).map(f => `<option ${p.focus === f ? 'selected' : ''}>${f}</option>`).join('')}</select></td></tr>`).join('')}
     </table></div>
   </section>`;
@@ -1523,10 +1523,26 @@ function extendCell(r, p) {
 
 // ---------- トレード ----------
 // 相手から来たトレードの話
+// いまチームでどこにいるか（人の言葉 2026-11-13「トレードの打診が来た時に、今スタメンかベンチか二軍かを出してほしい」）
+function teamSpot(p) {
+  const t = p.teamId != null ? S.teams[p.teamId] : null;
+  if (!t) return '';
+  if (t.active && !t.active.includes(p.id)) return '二軍';
+  const parts = [];
+  const i = (t.lineup || []).findIndex(s => s.pid === p.id);
+  if (i >= 0) parts.push(`スタメン（${i + 1}番・${t.lineup[i].pos}）`);
+  if (canPitch(p)) {
+    if (t.rotation.includes(p.id)) parts.push('先発ローテ');
+    else if (t.closer === p.id) parts.push('抑え');
+    else if (t.setup === p.id) parts.push('セットアッパー');
+    else if (i < 0) parts.push('一軍の中継ぎ');
+  } else if (i < 0) parts.push('一軍ベンチ');
+  return parts.join('・');
+}
 function tradeOfferCard() {
   const list = tradeOffers();
   if (!list.length) return '';
-  const who = p => `${nameCell(p)} ${posBadge(p)} ${p.age}歳 総合${Math.round(ovr(p))} 年俸${U.money(p.salary)}`;
+  const who = p => `${nameCell(p)} ${posBadge(p)} <b>${teamSpot(p)}</b> ${p.age}歳 総合${Math.round(ovr(p))} 年俸${U.money(p.salary)}`;
   const rows = list.map((o, i) => {
     const t = S.teams[o.team], give = o.give.map(id => S.players[id]), get = o.get.map(id => S.players[id]);
     const head = o.kind === 'free' ? `${teamChip(t)} 「うちの選手を無償で譲ります。年俸はそちらでお願いします。」` : `${teamChip(t)} 「そちらの選手を譲ってもらえませんか。」`;
@@ -1553,17 +1569,18 @@ function renderTrade() {
   const vGet = U.sum(T.get.map(id => S.players[id]).filter(Boolean), tradeValue) + (cash < 0 ? cashValue(cash) : 0);
   const core = tradeCore(other);
   const coreMark = (p, side) => side === 'get' && core.includes(p.id) ? ' <span class="tag">主力</span>' : '';
-  const ratio = vGet ? vGive / vGet : (vGive ? 2 : 0);
   const giveP = T.give.map(id => S.players[id]).filter(Boolean), getP = T.get.map(id => S.players[id]).filter(Boolean);
+  const cr = cashTradeRatio(giveP, getP, cash);
+  const ratio = cr != null ? cr : vGet ? vGive / vGet : (vGive ? 2 : 0);
   const freeErr = giveP.length && !getP.length && cash <= 0 ? freeTradeError(other, giveP) : null;
   const mood = !T.give.length && !T.get.length ? '選手を選んでください' : freeErr ? `😠 ${freeErr}` : ratio >= 1.08 ? (giveP.length && !getP.length && !cash ? '😊 無償で引き取ってくれそうです' : '😊 相手は乗り気です') : ratio >= 0.9 ? '🤔 もう一声…' : '😠 話になりません';
   // お金だけで取るときに要る金額
   const buyOnly = getP.length && !giveP.length;
   const buyCore = buyOnly && getP.some(p => core.includes(p.id));
-  const buyNeed = buyOnly ? Math.ceil(U.sum(getP, tradeValue) * 1.08 * CASH_PER_VALUE / 100) * 100 : 0;
+  const buyNeed = buyOnly ? Math.ceil(U.sum(getP, cashPrice) * 1.08 / 100) * 100 : 0;
   // お金をもらって売るときの上限（相手の資金まで）
   const sellOnly = giveP.length && !getP.length;
-  const sellMax = sellOnly ? Math.floor(Math.min(U.sum(giveP, tradeValue) / 1.08 * CASH_PER_VALUE, other.money) / 100) * 100 : 0;
+  const sellMax = sellOnly ? Math.floor(Math.min(U.sum(giveP, cashPrice) / 1.08, other.money) / 100) * 100 : 0;
   const head = '<tr><th></th><th>名前</th><th>守</th><th>年</th><th>総合</th><th>価値</th></tr>';
   return `${tradeOfferCard()}
   <section class="card">
@@ -1571,7 +1588,8 @@ function renderTrade() {
       <select data-chg="tteam">${LEAGUES.map(lg => `<optgroup label="${LEAGUE_NAME[lg]}">${S.teams.filter(t => t.lg === lg && t.id !== S.myTeamId).map(t => `<option value="${t.id}" ${t.id === T.team ? 'selected' : ''}>${h(t.name)}</option>`).join('')}</optgroup>`).join('')}</select></div>
     <p>お金 <select data-chg="tcash" data-k="dir"><option value="1" ${cash >= 0 ? 'selected' : ''}>こちらが払う</option><option value="-1" ${cash < 0 ? 'selected' : ''}>こちらがもらう</option></select>
       <input type="number" data-chg="tcash" data-k="amt" min="0" step="1000" value="${Math.abs(cash)}" style="width:7em"> 万円
-      <span class="muted">（資金 ${U.money(me.money)} ・ 相手 ${U.money(other.money)}。${CASH_PER_VALUE}万円で価値 1）</span></p>
+      <span class="muted">（資金 ${U.money(me.money)} ・ 相手 ${U.money(other.money)}。選手とまぜるときは ${CASH_PER_VALUE}万円で価値 1）</span></p>
+    <p class="muted">お金だけの売り買いの値段は、いまの力に見合う年俸と年齢に、若手なら才能と伸びしろのぶんを足して決まります。</p>
     <p class="muted">選手をお金だけで買うこともできます（金銭トレード）。ただし相手の主力（総合で上から${TRADE_CORE_N}人）はお金だけでは出してくれません。</p>
     <p class="muted">出す選手だけを選び、「こちらがもらう」で金額を入れると、選手をお金で売れます。お金を 0 にすると無償トレードです。どちらも、年俸が高すぎる選手や、相手のいちばん下の選手より力が劣る選手は断られます。</p>
     ${sellOnly && sellMax > 0 && !freeErr ? `<p>お金で売るなら <b>${U.money(sellMax)}</b> まで。 <button class="sm" data-act="tcashNeed" data-v="${-sellMax}">この金額にする</button></p>` : ''}
@@ -1594,7 +1612,7 @@ function renderFA() {
     const keys = abilKeys(p);
     const fee = Math.round(p.salary * 0.2);
     const can = open && t.players.length < ROSTER_MAX && t.money >= fee;
-    return `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${p.type}</td><td class="stars">${potStars(p.pot)}</td>
+    return `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${p.type}</td><td class="stars">${potStars(potSeen(p))}</td>
       <td class="l">${keys.map(k => `${SHORT_LABEL[k]}${k === 'velo' ? veloKmh(p.a.velo) + 'km' : `<span class="g g${U.grade(p.a[k])}">${U.grade(p.a[k])}</span>`}`).join(' ')}${trajTag(p)}</td>
       <td>${Math.round(ovr(p))}</td><td>${h(p.lastTeam || '-')}</td><td>${U.money(p.salary)}</td>
       <td><button class="sm primary" data-act="signFA" data-pid="${p.id}" ${can ? '' : 'disabled'}>契約（契約金${U.money(fee)}）</button></td></tr>`;
@@ -1604,7 +1622,7 @@ function renderFA() {
     ? cardList(arr, p => {
       const fee = Math.round(p.salary * 0.2);
       const can = open && t.players.length < ROSTER_MAX && t.money >= fee;
-      return playerCard(p, { sub: `<span>${p.type}</span><span class="muted">才能</span><span class="stars">${potStars(p.pot)}</span>`,
+      return playerCard(p, { sub: `<span>${p.type}</span><span class="muted">才能</span><span class="stars">${potStars(potSeen(p))}</span>`,
         lines: `<div class="pc-line">前所属 ${h(p.lastTeam || '-')} ・ 希望年俸 ${U.money(p.salary)}</div>`,
         action: `<button class="sm primary" data-act="signFA" data-pid="${p.id}" ${can ? '' : 'disabled'}>契約（契約金${U.money(fee)}）</button>` });
     })
@@ -1954,7 +1972,7 @@ function renderReleasePanel() {
   const t = myTeam();
   const over = t.players.length - ROSTER_MAX;
   const list = teamPlayers(t).sort((a, b) => tradeValue(a) - tradeValue(b));
-  const rows = list.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${p.type}</td><td class="stars">${potStars(p.pot)}</td>
+  const rows = list.map(p => `<tr><td class="l">${nameCell(p)}</td><td>${posBadge(p)}</td><td class="nowrap">${p.age}${phaseMark(p)}</td><td>${p.type}</td><td class="stars">${potStars(potSeen(p))}</td>
     <td>${Math.round(ovr(p))}</td><td>${U.money(p.salary)}</td><td>${underContract(p) ? `<span class="muted small">契約中（あと${contractLeft(p)}年）</span>` : p.retireNext ? '<span class="muted small">引退する</span>' : `<button class="sm danger" data-act="release" data-pid="${p.id}">戦力外</button>`}</td></tr>`).join('');
   const first = S.off.step === 'awards';
   return `<section class="card"><h2>戦力外通告（${first ? '第 1 次' : '第 2 次'}）</h2>

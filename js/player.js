@@ -405,6 +405,7 @@ function growthPhase(p) {
 // 年を取ったときの衰え
 function agePlayer(p) {
   p.age++;
+  potDrift(p);
   growTraj(p);
   // よく投げる順は、いま切れている球から（決めてある転生選手はそのまま）
   if (canPitch(p) && !rebornPitches(p) && p.pitches) p.pitches = p.pitches.slice().sort((x, y) => pitchVal(p, y) - pitchVal(p, x));

@@ -1998,6 +1998,7 @@ function finishProspect(p, kind) {
   abilKeys(p).forEach(k => { p.noise[k] = miss(); });
   if (canPitch(p)) p.noise.kire = miss(); // 球のキレ
   p.noise.pot = miss();
+  p.noise.aiPot = U.clamp(U.gauss(), -2.5, 2.5); // ほかの球団の見立てのずれ（どの球団も同じ向きの分）
   p.amateur = makeAmateur(p, kind);
   const ry = rareYears(p);
   if (ry) p.rareYears = ry;
@@ -2141,7 +2142,7 @@ function scoutView(p, key) {
   if (!n || typeof n !== 'object') return real;
   const unit = n.unit != null ? n.unit : (n.dev || 0) / 15; // 前の版のセーブにも対応
   const dev = unit * scoutRange();
-  if (key === 'pot') return U.clamp(real + dev * 0.025, 0.5, 1.7);
+  if (key === 'pot') return U.clamp(real + unit * Math.max(scoutRange(), POT_SEEN_MIN) * 0.025, 0.5, 1.7);
   return U.clamp(real + dev, 1, key === 'velo' ? VELO_MAX : ABIL_MAX);
 }
 
@@ -2266,6 +2267,27 @@ function geniusHint(p) {
 }
 
 function draftValue(p) { return ovr(p) * 0.6 + p.pot * 40 + (p.age <= 18 ? 5 : 0); }
+// ほかの球団が見る値。才能はスカウトの見立てでずれる（どの球団も同じ向きの分＋球団ごとの分）
+function teamNoise(pid, tid) { const x = Math.sin(pid * 12.9898 + tid * 78.233) * 43758.5453; return ((x - Math.floor(x)) * 2 - 1) * 1.7; } // 球団と選手で決まる -1.7〜1.7（ばらつき 1 ぐらい）
+function aiDraftValue(p, tid) {
+  const seen = p.pot + ((p.noise && p.noise.aiPot) || 0) * AI_SCOUT_POT[0] + teamNoise(p.id, tid) * AI_SCOUT_POT[1];
+  return ovr(p) * 0.6 + seen * 40 + (p.age <= 18 ? 5 : 0);
+}
+// 入団してまもない選手の才能。毎年オフに少し動き、まれに大きく伸びる
+function potDrift(p) {
+  if (!p.drafted || p.reborn || S.year - p.drafted.year >= POT_DRIFT_YEARS) return;
+  const bloom = U.chance(LATE_BLOOM[0]);
+  p.pot = U.clamp(p.pot + U.gauss() * POT_DRIFT_SD + (bloom ? LATE_BLOOM[1] : 0), 0.6, 1.7);
+  if (bloom && p.teamId === S.myTeamId) addNews(`${p.name}が一皮むけた様子です。コーチ陣は「伸びしろがまだまだある」と話しています。`, 'good');
+}
+// 画面に出す才能。入団してまもないうちは、スカウトの見立てのまま（年ごとにずれが小さくなる）
+function potSeen(p) {
+  if (!p.drafted || p.reborn || p.potNoise == null) return p.pot;
+  const fade = Math.max(0, 1 - (S.year - p.drafted.year) / POT_CLEAR_YEARS);
+  if (!fade) { delete p.potNoise; return p.pot; }
+  const unit = p.potNoise;
+  return U.clamp(p.pot + unit * Math.max(scoutRange(), POT_SEEN_MIN) * 0.025 * fade, 0.5, 1.7);
+}
 
 // 交渉権を得た選手を球団に入れる
 function assignPick(teamId, pid, round, note) {
@@ -2286,9 +2308,9 @@ function assignPick(teamId, pid, round, note) {
 
 // ---------- 1 巡目：入札と抽選 ----------
 // 他球団の入札。いちばん評価の高い選手に集まりやすいが、少しばらける（競合や一本釣りが生まれる）
-function aiBid(taken) {
+function aiBid(taken, tid) {
   const cands = S.off.draft.pool.map(id => S.players[id]).filter(p => !taken.has(p.id))
-    .sort((a, b) => draftValue(b) - draftValue(a)).slice(0, 7);
+    .sort((a, b) => aiDraftValue(b, tid) - aiDraftValue(a, tid)).slice(0, 7);
   const w = [0.28, 0.2, 0.16, 0.12, 0.1, 0.08, 0.06];
   let r = Math.random();
   for (let i = 0; i < cands.length; i++) { r -= w[i]; if (r < 0) return cands[i].id; }
@@ -2304,7 +2326,7 @@ function draftBidRound(myPid) {
   R.sub++;
   const bids = {};
   bidders.forEach(id => {
-    const pid = id === S.myTeamId ? myPid : aiBid(new Set());
+    const pid = id === S.myTeamId ? myPid : aiBid(new Set(), id);
     (bids[pid] = bids[pid] || []).push(id);
   });
   const logs = [];
@@ -2349,7 +2371,7 @@ function draftRunAI() {
     const tid = D.order[D.idx];
     if (tid === S.myTeamId && !D.myDone) break;
     if (tid === S.myTeamId) { D.idx++; continue; } // 選択終了したあとは飛ばす
-    const best = D.pool.map(id => S.players[id]).sort((a, b) => draftValue(b) - draftValue(a))[0];
+    const best = D.pool.map(id => S.players[id]).sort((a, b) => aiDraftValue(b, tid) - aiDraftValue(a, tid))[0];
     if (!best) { D.idx++; continue; }
     draftPick(tid, best.id);
   }
@@ -2424,7 +2446,8 @@ function offDraftFinish() {
   // 指名されなかった候補は消える
   S.off.draft.pool.forEach(id => delete S.players[id]);
   S.off.draft.pool = [];
-  Object.values(S.players).forEach(p => { delete p.noise; });
+  // 才能の見立てのずれだけは残す（入団してしばらくは、才能の★が見立てのまま）
+  Object.values(S.players).forEach(p => { if (p.noise && p.noise.pot) p.potNoise = p.noise.pot.unit != null ? p.noise.pot.unit : (p.noise.pot.dev || 0) / 15; delete p.noise; });
 }
 
 function offCampStart() {
@@ -2567,8 +2590,30 @@ function tradeOpen() {
   return S.schedule[Math.min(S.day, S.schedule.length - 1)].m <= TRADE_DEADLINE_MONTH;
 }
 
-// お金をトレード価値に直す
+// お金をトレード価値に直す（選手とお金をまぜたトレード）
 function cashValue(cash) { return Math.round(Math.abs(cash || 0) / CASH_PER_VALUE); }
+// 総合の力に見合う年俸（calcSalary と同じ式）
+function salOfOvr(o) { return realSal(500 + Math.pow(Math.max(0, o - 46), 2.5) * 3); }
+// お金だけで売り買いするときの値段（万円）。球団は本当の才能を知っている
+function cashPrice(p) {
+  const o = ovr(p), ca = careerAge(p);
+  const ageMul = CASH_AGE_MUL.find(x => ca <= x[0])[1];
+  let price = salOfOvr(o) * ageMul;
+  const gf = CASH_GROW_F.find(x => ca <= x[0]);
+  if (gf && growthPhase(p).k !== 'decline') {
+    const ceil = p.reborn ? o : CEIL_BASE + p.pot * CEIL_PER_POT + (p.genius ? 10 : 0);
+    const fut = o + Math.max(0, ceil - o) * gf[1];
+    price += (salOfOvr(fut) - salOfOvr(o)) * CASH_GROW_MUL;
+  }
+  if (p.foreign) price *= 1.3;
+  return Math.max(MIN_SALARY, Math.round(price / 100) * 100);
+}
+// お金だけのトレードなら、出す側から見た「釣り合い」（1 で値段どおり）。選手どうしのトレードなら null
+function cashTradeRatio(give, get, cash) {
+  if (!give.length && get.length && cash > 0) return cash / U.sum(get, cashPrice);
+  if (give.length && !get.length && cash < 0) return U.sum(give, cashPrice) / -cash;
+  return null;
+}
 
 // 相手チームの主力（総合で上から TRADE_CORE_N 人）
 function tradeCore(t) { return teamPlayers(t).sort((a, b) => ovr(b) - ovr(a)).slice(0, TRADE_CORE_N).map(p => p.id); }
@@ -2591,7 +2636,8 @@ function proposeTrade(otherId, giveIds, getIds, cash = 0) {
     if (err) return { ok: false, msg: err };
   }
   const vGive = U.sum(give, tradeValue) + (cash > 0 ? cashValue(cash) : 0), vGet = U.sum(get, tradeValue) + (cash < 0 ? cashValue(cash) : 0);
-  if (vGive < vGet * 1.08) return { ok: false, msg: `${other.short}「その条件では受けられませんね。」` };
+  const cr = cashTradeRatio(give, get, cash);
+  if (cr != null ? cr < 1.08 : vGive < vGet * 1.08) return { ok: false, msg: `${other.short}「その条件では受けられませんね。」` };
   doTrade(other, give, get, cash);
   return { ok: true, msg: 'トレード成立！' };
 }
@@ -2679,7 +2725,7 @@ function makeWantOffer(t) {
   const core = tradeCore(t);
   const swaps = teamPlayers(t).filter(q => q.isP === p.isP && !core.includes(q.id) && tradeValue(q) >= v * 1.05 && tradeValue(q) <= v * 1.4);
   if (swaps.length && U.chance(0.5)) return { kind: 'want', team: t.id, give: [p.id], get: [U.pick(swaps).id], cash: 0, w: TRADE_OFFER_WEEKS };
-  const cash = Math.round(v * CASH_PER_VALUE * U.rnd(1.1, 1.4) / 100) * 100;
+  const cash = Math.round(cashPrice(p) * U.rnd(1.1, 1.4) / 100) * 100;
   if (cash <= 0 || t.money < cash) return null;
   return { kind: 'want', team: t.id, give: [p.id], get: [], cash: -cash, w: TRADE_OFFER_WEEKS };
 }
