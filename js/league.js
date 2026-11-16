@@ -426,7 +426,7 @@ function startSeason() {
     t.fin = newFin();
     t.goods.forEach(g => { g.season = 0; });
     t.promoUsed = [];
-    const sponsor = Math.round((SPONSOR_BASE + t.pop * SPONSOR_PER_POP) * S.games / 143);
+    const sponsor = Math.round((SPONSOR_BASE + t.pop * SPONSOR_PER_POP) * S.games / 143 * incomeMul());
     t.money += sponsor; t.fin.sponsor += sponsor;
     if (t.id !== S.myTeamId) { autoActive(t); autoLineup(t); autoRotation(t); }
     else {
@@ -439,16 +439,29 @@ function startSeason() {
 }
 
 function payroll(t) { return U.sum(teamPlayers(t), p => p.salary); }
+// 樽募金ができるか（表彰の画面で、借金が大きいとき。1 年に 1 回）
+function taruOpen() { return S.phase === 'off' && S.off.step === 'awards' && !S.off.taru && myTeam().money <= -TARU_MIN_DEBT; }
+function taruBokin() {
+  if (!taruOpen()) return;
+  const t = myTeam(), debt = -t.money, pop0 = t.pop;
+  t.money = 0; // 収支の表には入れない（募金は球団の収入ではないので）
+  t.pop = Math.round(t.pop * TARU_POP_MUL * 10) / 10;
+  S.off.taru = true;
+  (S.taruHist = S.taruHist || []).push({ year: S.year, debt });
+  addNews(`樽募金：ファンの募金で借金 ${U.money(debt)} を返しました。ただ、球団の経営への不安から人気が ${Math.round(pop0)} から ${Math.round(t.pop)} に下がりました。`, 'big');
+}
+function incomeMul() { return (INCOME_LEVELS[S.income] || INCOME_LEVELS.high).mul; }
 
 function capacity(t) { return 20000 + t.fac.stadium * 6000; }
 
 function homeGate(t) {
   const fill = U.clamp(0.62 + (t.pop - 50) / 250 + U.rnd(-0.03, 0.03), 0.4, 1);
   const att = Math.round(capacity(t) * fill / 10) * 10;
-  const gate = att * TICKET_PRICE / 10000;
-  const food = att * FOOD_PER_FAN;
+  const im = incomeMul();
+  const gate = att * TICKET_PRICE / 10000 * im;
+  const food = att * FOOD_PER_FAN * im;
   const ops = OPS_PER_GAME + t.fac.stadium * OPS_PER_STADIUM;
-  const tv = TV_PER_GAME; // 放映権（ホーム 1 試合ごと）
+  const tv = TV_PER_GAME * im; // 放映権（ホーム 1 試合ごと）
   t.money += gate + food + tv - ops;
   t.fin.gate += gate; t.fin.food += food; t.fin.tv += tv; t.fin.ops += ops;
   return att;
@@ -2877,7 +2890,7 @@ function goodsRate(t, g) {
     r *= 0.1 + p.fame / 45;
     r *= 1 + (p.visual * 0.2 - 0.4) * ty.visual;
   }
-  return r * goodsFresh(g) * goodsPromoMul(t);
+  return r * goodsFresh(g) * goodsPromoMul(t) * incomeMul();
 }
 
 function sellGoods(t, isHome) {

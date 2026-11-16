@@ -1675,6 +1675,10 @@ function renderOff() {
     </section>
     <section class="card"><h2>表彰</h2><div class="grid2">${LEAGUES.map(lg => `<div><h3>${LEAGUE_NAME[lg]}</h3><table class="tbl">${O.awards.filter(a => (a.lg || lg) === lg).map(a => `<tr class="${S.players[a.pid] && S.players[a.pid].teamId === S.myTeamId ? 'me' : ''}"><th class="l">${a.title}</th><td class="l">${h(a.name)}（${h(a.team)}）</td><td>${a.val}</td></tr>`).join('')}</table></div>`).join('')}</div>
       ${posAwards('ベストナイン', O.b9)}${posAwards('ゴールデングラブ', O.gg)}</section>
+    ${taruOpen() ? `<section class="card"><h2>🛢️ 樽募金</h2>
+      <p>資金が <b class="neg">${U.money(myTeam().money)}</b> の赤字です。ファンに募金を呼びかけると、借金を 0 にできます。</p>
+      <p>ただし、経営への不安から人気が大きく下がります（いまの ${Math.round(myTeam().pop)} → <b>${Math.round(myTeam().pop * TARU_POP_MUL)}</b>）。人気が下がると、入場料・スポンサー・グッズの収入が減ります。</p>
+      <p><button class="danger" data-act="taru">樽募金をする</button> <span class="muted small">このオフのうち、ドラフトの前まで。</span></p></section>` : ''}
     ${renderReleasePanel()}
     <section class="card"><button class="primary big" data-act="offNext">ドラフトへ ▶</button></section>`;
   } else if (O.step === 'intl') {
@@ -2073,6 +2077,10 @@ function renderMenu() {
        <p><button class="sm" data-act="clearPass">この端末から合言葉を消す</button></p>`
     : `<p class="muted">家族の合言葉を入れると、ドラフト候補に転生選手が現れるようになります（この端末に覚えます）。</p>
        <p><input id="passIn" type="password" autocomplete="off" placeholder="合言葉"> <button data-act="setPass">入れる</button></p>`}
+  <h3>収入の多さ</h3>
+  <p><label>このデータ（スロット${currentSlot}）の収入
+    <select data-chg="incomeLv">${Object.keys(INCOME_LEVELS).map(k => `<option value="${k}" ${(S.income || 'high') === k ? 'selected' : ''}>${INCOME_LEVELS[k].name}</option>`).join('')}</select></label></p>
+  <p class="muted small">入場料・飲食・放映権・スポンサー・グッズの売上が、大を 100% として 中は ${Math.round(INCOME_LEVELS.mid.mul * 100)}%、小は ${Math.round(INCOME_LEVELS.low.mul * 100)}% になります。年俸や運営費は変わりません。12 球団みんなに効き、変えた日から効きます（スポンサーは次の開幕から）。</p>
   <h3>そのほか</h3>
   <p><button data-act="toTitle">タイトルへ戻る</button></p>
   <p><button class="danger" data-act="reset">スロット${currentSlot}のデータを消す</button></p>`;

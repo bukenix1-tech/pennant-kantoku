@@ -226,6 +226,12 @@ const ACTIONS = {
     UI.toast = r.msg;
     if (r.ok) { T.give = []; T.get = []; T.cash = 0; }
   },
+  taru() {
+    const t = myTeam();
+    if (!confirm(`樽募金をしますか？
+借金 ${U.money(-t.money)} が 0 になり、人気が ${Math.round(t.pop)} から ${Math.round(t.pop * TARU_POP_MUL)} に下がります。`)) return 'keep';
+    taruBokin();
+  },
   offNext() {
     const step = S.off.step;
     // 表彰 → ドラフト → FA → 契約更改 → キャンプ →（国際大会）→ 開幕。前の版の順番の途中で保存したデータは、終わっていないほうへ進める
@@ -377,6 +383,7 @@ const CHANGES = {
     openModal(renderMenu());
     return 'keep';
   },
+  incomeLv(el) { S.income = el.value; saveGame(); openModal(renderMenu()); return 'keep'; },
   games(el) { UI.newGames = +el.value; },
   watchOnly(el) { UI.watchOnly = el.checked; },
   noBackupAsk(el) { setBackupAskOff(el.checked); return 'keep'; },
